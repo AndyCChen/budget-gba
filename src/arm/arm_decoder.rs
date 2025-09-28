@@ -14,11 +14,11 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     }
 }
 
-pub fn branch_and_link(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let mut offset = (opcode & 0xFFFFFF) << 2;
 
     // branch with link, save r15 (pc) to r14 (link register)
-    if (opcode & (1 << 24)) != 0 {
+    if LINK {
         cpu.set_register_arm(14, cpu.registers.r15 - 4);
     }
 
@@ -34,4 +34,8 @@ pub fn branch_and_link(cpu: &mut Arm7tdmi, opcode: u32) {
     }
 
     cpu.pipeline_refill_arm();
+}
+
+pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
+    panic!("undefined opcode! {opcode}");
 }

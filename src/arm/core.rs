@@ -1,4 +1,5 @@
-use crate::arm::arm_decoder;
+use crate::arm::{arm_decoder, instruction_lut::ARM_TABLE};
+
 use bitfield_struct::bitfield;
 
 pub struct Arm7tdmi {
@@ -91,7 +92,8 @@ impl Arm7tdmi {
                     return;
                 }
 
-                arm_decoder::branch_and_exchange(self, opcode);
+                let arm_table_hash: usize = (((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4)).try_into().unwrap();
+                ARM_TABLE[arm_table_hash](self, opcode);
             }
         }
     }
@@ -419,67 +421,76 @@ mod arm7tdmi_tests {
         serde_json::from_str(&data).unwrap()
     }
 
-    fn verify_state(cpu: &Arm7tdmi, final_state: &State) {
-        assert_eq!(cpu.status.cpsr.into_bits(), final_state.CPSR);
+    #[rustfmt::skip]
+    fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates) {
+        let final_state = &input_state.r#final;
 
-        assert_eq!(cpu.registers.r0, final_state.R[0], "r0");
-        assert_eq!(cpu.registers.r1, final_state.R[1], "r1");
-        assert_eq!(cpu.registers.r2, final_state.R[2], "r2");
-        assert_eq!(cpu.registers.r3, final_state.R[3], "r3");
-        assert_eq!(cpu.registers.r4, final_state.R[4], "r4");
-        assert_eq!(cpu.registers.r5, final_state.R[5], "r5");
-        assert_eq!(cpu.registers.r6, final_state.R[6], "r6");
-        assert_eq!(cpu.registers.r7, final_state.R[7], "r7");
-        assert_eq!(cpu.registers.r8, final_state.R[8], "r8");
-        assert_eq!(cpu.registers.r9, final_state.R[9], "r9");
-        assert_eq!(cpu.registers.r10, final_state.R[10], "r10");
-        assert_eq!(cpu.registers.r11, final_state.R[11], "r11");
-        assert_eq!(cpu.registers.r12, final_state.R[12], "r12");
-        assert_eq!(cpu.registers.r13, final_state.R[13], "r13");
-        assert_eq!(cpu.registers.r14, final_state.R[14], "r14");
-        assert_eq!(cpu.registers.r15, final_state.R[15], "r15");
+        assert_eq!(cpu.status.cpsr.into_bits(), final_state.CPSR, "{:#?} cspr", input_state);
 
-        assert_eq!(cpu.registers.r8_fiq, final_state.R_fiq[0], "r8_fiq");
-        assert_eq!(cpu.registers.r9_fiq, final_state.R_fiq[1], "r9_fiq");
-        assert_eq!(cpu.registers.r10_fiq, final_state.R_fiq[2], "r10_fiq");
-        assert_eq!(cpu.registers.r11_fiq, final_state.R_fiq[3], "r11_fiq");
-        assert_eq!(cpu.registers.r12_fiq, final_state.R_fiq[4], "r12_fiq");
-        assert_eq!(cpu.registers.r13_fiq, final_state.R_fiq[5], "r13_fiq");
-        assert_eq!(cpu.registers.r14_fiq, final_state.R_fiq[6], "r14_fiq");
+        assert_eq!(cpu.status.spsr_fiq.into_bits(), final_state.SPSR[0], "{:#?} spsr_fiq", input_state);
+        assert_eq!(cpu.status.spsr_svc.into_bits(), final_state.SPSR[1], "{:#?} spsr_svc", input_state);
+        assert_eq!(cpu.status.spsr_abt.into_bits(), final_state.SPSR[2], "{:#?} spsr_abt", input_state);
+        assert_eq!(cpu.status.spsr_irq.into_bits(), final_state.SPSR[3], "{:#?} spsr_irq", input_state);
+        assert_eq!(cpu.status.spsr_und.into_bits(), final_state.SPSR[4], "{:#?} spsr_und", input_state);
 
-        assert_eq!(cpu.registers.r13_svc, final_state.R_svc[0], "r13_svc");
-        assert_eq!(cpu.registers.r14_svc, final_state.R_svc[1], "r14_svc");
+        assert_eq!(cpu.registers.r0, final_state.R[0], "{:#?} r0", input_state);
+        assert_eq!(cpu.registers.r1, final_state.R[1], "{:#?} r1", input_state);
+        assert_eq!(cpu.registers.r2, final_state.R[2], "{:#?} r2", input_state);
+        assert_eq!(cpu.registers.r3, final_state.R[3], "{:#?} r3", input_state);
+        assert_eq!(cpu.registers.r4, final_state.R[4], "{:#?} r4", input_state);
+        assert_eq!(cpu.registers.r5, final_state.R[5], "{:#?} r5", input_state);
+        assert_eq!(cpu.registers.r6, final_state.R[6], "{:#?} r6", input_state);
+        assert_eq!(cpu.registers.r7, final_state.R[7], "{:#?} r7", input_state);
+        assert_eq!(cpu.registers.r8, final_state.R[8], "{:#?} r8", input_state);
+        assert_eq!(cpu.registers.r9, final_state.R[9], "{:#?} r9", input_state);
+        assert_eq!(cpu.registers.r10, final_state.R[10], "{:#?} r10", input_state);
+        assert_eq!(cpu.registers.r11, final_state.R[11], "{:#?} r11", input_state);
+        assert_eq!(cpu.registers.r12, final_state.R[12], "{:#?} r12", input_state);
+        assert_eq!(cpu.registers.r13, final_state.R[13], "{:#?} r13", input_state);
+        assert_eq!(cpu.registers.r14, final_state.R[14], "{:#?} r14", input_state);
+        assert_eq!(cpu.registers.r15, final_state.R[15], "{:#?} r15", input_state);
 
-        assert_eq!(cpu.registers.r13_abt, final_state.R_abt[0], "r13_abt");
-        assert_eq!(cpu.registers.r14_abt, final_state.R_abt[1], "r14_abt");
+        assert_eq!(cpu.registers.r8_fiq, final_state.R_fiq[0], "{:#?} r8_fiq", input_state);
+        assert_eq!(cpu.registers.r9_fiq, final_state.R_fiq[1], "{:#?} r9_fiq", input_state);
+        assert_eq!(cpu.registers.r10_fiq, final_state.R_fiq[2], "{:#?} r10_fiq", input_state);
+        assert_eq!(cpu.registers.r11_fiq, final_state.R_fiq[3], "{:#?} r11_fiq", input_state);
+        assert_eq!(cpu.registers.r12_fiq, final_state.R_fiq[4], "{:#?} r12_fiq", input_state);
+        assert_eq!(cpu.registers.r13_fiq, final_state.R_fiq[5], "{:#?} r13_fiq", input_state);
+        assert_eq!(cpu.registers.r14_fiq, final_state.R_fiq[6], "{:#?} r14_fiq", input_state);
 
-        assert_eq!(cpu.registers.r13_irq, final_state.R_irq[0], "r13_irq");
-        assert_eq!(cpu.registers.r14_irq, final_state.R_irq[1], "r14_irq");
+        assert_eq!(cpu.registers.r13_svc, final_state.R_svc[0], "{:#?} r13_svc", input_state);
+        assert_eq!(cpu.registers.r14_svc, final_state.R_svc[1], "{:#?} r14_svc", input_state);
 
-        assert_eq!(cpu.registers.r13_und, final_state.R_und[0], "r13_und");
-        assert_eq!(cpu.registers.r14_und, final_state.R_und[1], "r14_und");
+        assert_eq!(cpu.registers.r13_abt, final_state.R_abt[0], "{:#?} r13_abt", input_state);
+        assert_eq!(cpu.registers.r14_abt, final_state.R_abt[1], "{:#?} r14_abt", input_state);
+
+        assert_eq!(cpu.registers.r13_irq, final_state.R_irq[0], "{:#?} r13_irq", input_state);
+        assert_eq!(cpu.registers.r14_irq, final_state.R_irq[1], "{:#?} r14_irq", input_state);
+
+        assert_eq!(cpu.registers.r13_und, final_state.R_und[0], "{:#?} r13_und", input_state);
+        assert_eq!(cpu.registers.r14_und, final_state.R_und[1], "{:#?} r14_und", input_state);
     }
 
     #[test]
+    #[ignore]
     fn test_branch_and_exchange() {
         let items = load_test("ARM7TDMI/v1/arm_bx.json");
 
         for item in items {
             let mut cpu = Arm7tdmi::new(&item);
             cpu.run();
-            verify_state(&cpu, &item.r#final);
+            verify_state(&cpu, &item);
         }
     }
 
     #[test]
-    #[ignore]
     fn test_branch_and_link() {
         let items = load_test("ARM7TDMI/v1/arm_b_bl.json");
 
         for item in items {
             let mut cpu = Arm7tdmi::new(&item);
             cpu.run();
-            verify_state(&cpu, &item.r#final);
+            verify_state(&cpu, &item);
         }
     }
 }
