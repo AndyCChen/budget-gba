@@ -102,8 +102,8 @@ pub mod data_op {
     }
 
     pub fn sub<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
-        let result = op1.wrapping_add(!op2 + 1);
-        let carry = op2 <= op1;
+        let result = op1.wrapping_add((!op2).wrapping_add(1));
+        let carry = (result as i32) >= 0;
         let overflow = ((result ^ op1) & (result ^ !op2) & 0x8000_0000) != 0;
 
         if SET_COND {
@@ -120,17 +120,97 @@ pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>
 ) {
     use self::data_op::*;
 
+    let carry_from_shift: bool;
+
     let op1 = cpu.get_register_arm((opcode >> 16) & 0xF);
     let op2 = if IMM {
         let rotate = (opcode >> 8) & 0xF;
         let imm_u8 = opcode & 0xFF;
 
-        imm_u8.rotate_right(rotate * 2)
-    } else {
-        todo!();
-    };
+        let result = imm_u8.rotate_right(rotate * 2);
+        carry_from_shift = (result & 0x8000_0000) != 0;
 
-    let shifter_carry = (op2 & 0x8000_0000) != 0;
+        result
+    } else {
+        let rm = cpu.get_register_arm(opcode & 0xF); // register value to shift
+        let shift = (opcode >> 4) & 0xFF;
+
+        // shift via 5-bit unsigned value
+        let shift_amount = if (shift & 0x1) == 0 {
+            shift >> 3
+        }
+        // shift via bottom byte in register Rs
+        else {
+            assert_ne!(
+                shift >> 4,
+                15,
+                "r15 should not be used as Rs to specify shift amount!"
+            );
+            cpu.get_register_arm(shift >> 4) & 0xFF
+        };
+
+        match (shift >> 1) & 0x3 {
+            // LSL
+            0b00 => {
+                if shift_amount == 0 {
+                    carry_from_shift = cpu.status.cpsr.c();
+                    rm
+                } else if shift_amount <= 32 {
+                    carry_from_shift = (rm & (1 << (32 - shift_amount))) != 0;
+                    rm.checked_shl(shift_amount).unwrap_or(0)
+                } else {
+                    carry_from_shift = false;
+                    0
+                }
+            }
+            // LSR
+            0b01 => {
+                //assert_ne!(shift_amount, 0, "shift amount cannot be zero for shift ops that are not LSL!");
+
+                if shift_amount == 0 {
+                    carry_from_shift = cpu.status.cpsr.c();
+                    rm
+                } else if shift_amount <= 32 {
+                    carry_from_shift = (rm & (1 << (shift_amount - 1))) != 0;
+                    rm.checked_shr(shift_amount).unwrap_or(0)
+                } else {
+                    carry_from_shift = false;
+                    0
+                }
+            }
+            // ASR
+            0b10 => {
+                if shift_amount == 0 {
+                    carry_from_shift = cpu.status.cpsr.c();
+                    rm
+                } else if shift_amount < 32 {
+                    carry_from_shift = (rm & (1 << (shift_amount - 1))) != 0;
+                    ((rm as i32) >> shift_amount) as u32
+                } else {
+                    carry_from_shift = (rm & 0x8000_0000) != 0;
+                    if (rm as i32).is_negative() {
+                        u32::MAX
+                    } else {
+                        0
+                    }
+                }
+            }
+            // ROR
+            0b11 => {
+                if shift_amount == 0 {
+                    carry_from_shift = cpu.status.cpsr.c();
+                    rm
+                }
+                else {
+                    let shift_amount = shift_amount - (u32::BITS * (shift_amount.div_ceil(u32::BITS) - 1));
+
+                    carry_from_shift = (rm & (1 << (shift_amount - 1))) != 0;
+                    rm.rotate_right(shift_amount)
+                }
+            }
+            _ => panic!("Invalid shift type!"),
+        }
+    };
 
     // 0b0000_0000_0000_0000_0000_0000_0000_0000
 
@@ -138,8 +218,8 @@ pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>
 
     if register_dest == 0xF {
         let result = match OP_CODE {
-            AND => and::<false>(cpu, op1, op2, shifter_carry),
-            EOR => eor::<false>(cpu, op1, op2, shifter_carry),
+            AND => and::<false>(cpu, op1, op2, carry_from_shift),
+            EOR => eor::<false>(cpu, op1, op2, carry_from_shift),
             SUB => sub::<false>(cpu, op1, op2),
             RSB => sub::<false>(cpu, op2, op1),
             ADD => todo!("add"),
@@ -159,15 +239,15 @@ pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>
         };
 
         if SET_COND {
-            todo!("using pc as register dest not handled!");
+            todo!("using pc as register dest with S flag set not handled!");
         }
 
         cpu.set_register_arm(register_dest, result);
         cpu.pipeline_refill_arm(); // pc updated, so refill pipeline
     } else {
         let result = match OP_CODE {
-            AND => and::<SET_COND>(cpu, op1, op2, shifter_carry),
-            EOR => eor::<SET_COND>(cpu, op1, op2, shifter_carry),
+            AND => and::<SET_COND>(cpu, op1, op2, carry_from_shift),
+            EOR => eor::<SET_COND>(cpu, op1, op2, carry_from_shift),
             SUB => sub::<SET_COND>(cpu, op1, op2),
             RSB => sub::<SET_COND>(cpu, op2, op1),
             ADD => todo!("add"),
