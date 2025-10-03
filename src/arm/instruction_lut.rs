@@ -5,7 +5,7 @@ const ARM_TABLE_LENGTH: usize = 0x1000;
 pub static ARM_TABLE: [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] = generate_arm_table();
 
 const fn generate_arm_table() -> [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] {
-    use crate::arm::arm_decoder::*;
+    use crate::arm::arm_handlers::*;
 
     macro_rules! data_processing {
         ($imm:expr, $data_opcode:expr, $set_cond:expr) => {

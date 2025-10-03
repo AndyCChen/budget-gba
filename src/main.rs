@@ -1,12 +1,25 @@
 fn main() {
-    // let num: u8 = 0b1000_0000;
-    // let shift_amount: u8 = 16;
+    let op1: u8 = 0x01;
+    let op2: u8 = 0x00;
+    //let result = op1.wrapping_add((!op2).wrapping_add(1));
 
-    // let shift_amount = 7;
-    // println!("num: {num:08b}");
-    // println!("left: {:08b}", num.rotate_left(shift_amount));
-    // println!("right: {:08b}", num.rotate_right(8 - shift_amount));
-    // let shift_amount = shift_amount - (8 * (shift_amount.div_ceil(u8::BITS as u8) - 1));
-    // let carry = (num & (1 << (shift_amount - 1))) != 0;
-    // println!("{shift_amount}, {carry}");
+    //let overflow = ((result ^ op1) & (result ^ !op2) & 0x8) != 0;
+    // println!("{result}, {overflow}");
+
+    {
+        let (result, carry) = op1.overflowing_sub(op2);
+        println!("1. {result:08b} {}", !carry);
+    }
+
+    {
+        let (op2, carry0) = (!op2).overflowing_add(u8::from(true));
+        let (result, carry1) = op1.overflowing_add(op2);
+
+        println!("2. {result:08b} {}", carry0 || carry1);
+    }
+
+    {
+        let (result, carry) = op1.overflowing_add(op2);
+        println!("3. {result:08b} {carry}");
+    }
 }
