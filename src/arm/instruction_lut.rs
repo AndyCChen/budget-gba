@@ -45,7 +45,7 @@ const fn generate_arm_table() -> [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] {
                 } else if (i & 0b0010_0000_0000) != 0 {
                     let data_opcode = (i >> 5) & 0xF;
 
-                    if (i & 0b0010_0000_0000) == 0 {
+                    if (i & 0b0000_0001_0000) == 0 {
                         data_processing!(true, data_opcode, false)
                     } else {
                         data_processing!(true, data_opcode, true)
@@ -53,7 +53,7 @@ const fn generate_arm_table() -> [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] {
                 } else if (i & 0b0010_0000_0000) == 0 && (i & 0b1001) != 0b1001 {
                     let data_opcode = (i >> 5) & 0xF;
 
-                    if (i & 0b0010_0000_0000) == 0 {
+                    if (i & 0b0010_0001_0000) == 0 {
                         data_processing!(false, data_opcode, false)
                     } else {
                         data_processing!(false, data_opcode, true)

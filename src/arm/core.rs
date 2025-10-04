@@ -3,7 +3,7 @@ use crate::arm::instruction_lut::ARM_TABLE;
 use bitfield_struct::bitfield;
 
 pub struct Arm7tdmi {
-    mode: Mode,
+    //mode: Mode,
     cycle: usize,
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
@@ -13,8 +13,8 @@ pub struct Arm7tdmi {
 
 impl Arm7tdmi {
     pub fn new(input_state: &InputStates) -> Self {
-        let mut cpu = Self {
-            mode: Mode::User,
+        Self {
+            //mode: Mode::User,
             cycle: 1,
             registers: GeneralRegisters {
                 r0: input_state.initial.R[0],
@@ -71,10 +71,7 @@ impl Arm7tdmi {
                 None,
             ],
             transactions: input_state.transactions.clone(),
-        };
-        cpu.mode = get_mode_from_bits(cpu.status.cpsr.mode_bits());
-
-        cpu
+        }
     }
 
     pub fn run(&mut self) {
@@ -103,7 +100,7 @@ impl Arm7tdmi {
 
     /// Retrieve register in arm mode
     pub fn get_register_arm(&self, register_id: u32) -> u32 {
-        match (register_id, &self.mode) {
+        match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0,
             (1, _) => self.registers.r1,
             (2, _) => self.registers.r2,
@@ -128,14 +125,14 @@ impl Arm7tdmi {
             (12, Mode::Fiq) => self.registers.r12_fiq,
             (12, _) => self.registers.r12,
 
-            (13, Mode::User) => self.registers.r13,
+            (13, Mode::User | Mode::System) => self.registers.r13,
             (13, Mode::Fiq) => self.registers.r13_fiq,
             (13, Mode::Supervisor) => self.registers.r13_svc,
             (13, Mode::Abort) => self.registers.r13_abt,
             (13, Mode::Irq) => self.registers.r13_irq,
             (13, Mode::Undefined) => self.registers.r13_und,
 
-            (14, Mode::User) => self.registers.r14,
+            (14, Mode::User | Mode::System) => self.registers.r14,
             (14, Mode::Fiq) => self.registers.r14_fiq,
             (14, Mode::Supervisor) => self.registers.r14_svc,
             (14, Mode::Abort) => self.registers.r14_abt,
@@ -146,13 +143,13 @@ impl Arm7tdmi {
 
             _ => panic!(
                 "Register id must be in range 1-15! {register_id} {:?}",
-                self.mode
+                self.status.cpsr.mode_bits()
             ),
         }
     }
 
     pub fn set_register_arm(&mut self, register_id: u32, value: u32) {
-        match (register_id, &self.mode) {
+        match (register_id, &self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0 = value,
             (1, _) => self.registers.r1 = value,
             (2, _) => self.registers.r2 = value,
@@ -162,29 +159,29 @@ impl Arm7tdmi {
             (6, _) => self.registers.r6 = value,
             (7, _) => self.registers.r7 = value,
 
-            (8, Mode::User) => self.registers.r8 = value,
             (8, Mode::Fiq) => self.registers.r8_fiq = value,
+            (8, _) => self.registers.r8 = value,
 
-            (9, Mode::User) => self.registers.r9 = value,
             (9, Mode::Fiq) => self.registers.r9_fiq = value,
+            (9, _) => self.registers.r9 = value,
 
-            (10, Mode::User) => self.registers.r10 = value,
             (10, Mode::Fiq) => self.registers.r10_fiq = value,
+            (10, _) => self.registers.r10 = value,
 
-            (11, Mode::User) => self.registers.r11 = value,
             (11, Mode::Fiq) => self.registers.r11_fiq = value,
+            (11, _) => self.registers.r11 = value,
 
-            (12, Mode::User) => self.registers.r12 = value,
             (12, Mode::Fiq) => self.registers.r12_fiq = value,
+            (12, _) => self.registers.r12 = value,
 
-            (13, Mode::User) => self.registers.r13 = value,
+            (13, Mode::User | Mode::System) => self.registers.r13 = value,
             (13, Mode::Fiq) => self.registers.r13_fiq = value,
             (13, Mode::Supervisor) => self.registers.r13_svc = value,
             (13, Mode::Abort) => self.registers.r13_abt = value,
             (13, Mode::Irq) => self.registers.r13_irq = value,
             (13, Mode::Undefined) => self.registers.r13_und = value,
 
-            (14, Mode::User) => self.registers.r14 = value,
+            (14, Mode::User | Mode::System) => self.registers.r14 = value,
             (14, Mode::Fiq) => self.registers.r14_fiq = value,
             (14, Mode::Supervisor) => self.registers.r14_svc = value,
             (14, Mode::Abort) => self.registers.r14_abt = value,
@@ -193,20 +190,53 @@ impl Arm7tdmi {
 
             (15, _) => self.registers.r15 = value,
 
-            _ => panic!("Register id must be in range 1-15!"),
+            _ => panic!(
+                "Register id must be in range 1-15! {register_id} {:?}",
+                self.status.cpsr.mode_bits()
+            ),
         }
     }
 
-    pub fn read_word(&mut self, _address: u32) -> u32 {
-        let index = self.cycle - 1;
-        self.tick();
-        self.transactions[index].data
+    // retrieve banked spsr from current corresponding mode.
+    // if mode is user/system, returns the cpsr
+    pub fn get_spsr(&self) -> u32 {
+        match self.status.cpsr.mode_bits() {
+            Mode::User | Mode::System => self.status.cpsr.into_bits(),
+            Mode::Fiq => self.status.spsr_fiq.into_bits(),
+            Mode::Irq => self.status.spsr_irq.into_bits(),
+            Mode::Supervisor => self.status.spsr_svc.into_bits(),
+            Mode::Abort => self.status.spsr_abt.into_bits(),
+            Mode::Undefined => self.status.spsr_und.into_bits(),
+        }
     }
 
-    pub fn read_halfworld(&mut self, _address: u32) -> u16 {
-        let index = self.cycle - 1;
+    // set banked spsr of the current corresponding mode.
+    // if mode is user/system, sets the cpsr
+    pub fn set_spsr(&mut self, value: u32) {
+        match self.status.cpsr.mode_bits() {
+            Mode::User | Mode::System => self.status.cpsr = StatusRegister::from_bits(value),
+            Mode::Fiq => self.status.spsr_fiq = StatusRegister::from_bits(value),
+            Mode::Irq => self.status.spsr_irq = StatusRegister::from_bits(value),
+            Mode::Supervisor => self.status.spsr_svc = StatusRegister::from_bits(value),
+            Mode::Abort => self.status.spsr_abt = StatusRegister::from_bits(value),
+            Mode::Undefined => self.status.spsr_und = StatusRegister::from_bits(value),
+        };
+    }
+
+    pub fn read_word(&mut self, address: u32) -> u32 {
+        let address = address & !3; // align 4 byte boundary
+        let data = self.transactions[self.cycle - 1].clone();
         self.tick();
-        self.transactions[index].data as u16
+        assert_eq!(data.addr, address, "mismatched address!");
+        data.data
+    }
+
+    pub fn read_halfworld(&mut self, address: u32) -> u16 {
+        let address = address & !1;
+        let data = self.transactions[self.cycle - 1].clone();
+        self.tick();
+        assert_eq!(data.addr, address, "mismatched address!");
+        data.data as u16
     }
 
     fn tick(&mut self) {
@@ -215,20 +245,18 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for arm mode
     pub fn pipeline_refill_arm(&mut self) {
-        self.registers.r15 &= !0x3;
         self.pipeline[0] = Some(self.read_word(self.registers.r15));
-        self.registers.r15 += 4;
+        self.registers.r15 = self.registers.r15.wrapping_add(4);
         self.pipeline[1] = Some(self.read_word(self.registers.r15));
-        self.registers.r15 += 4;
+        self.registers.r15 = self.registers.r15.wrapping_add(4);
     }
 
     /// Flush and refills the pipeline for thumb mode
     pub fn pipeline_refill_thumb(&mut self) {
-        self.registers.r15 &= !0x1;
         self.pipeline[0] = Some(self.read_halfworld(self.registers.r15).into());
-        self.registers.r15 += 2;
+        self.registers.r15 = self.registers.r15.wrapping_add(2);
         self.pipeline[1] = Some(self.read_halfworld(self.registers.r15).into());
-        self.registers.r15 += 2;
+        self.registers.r15 = self.registers.r15.wrapping_add(2);
     }
 
     /// fetch opcode and push into pipeline
@@ -326,33 +354,41 @@ pub struct GeneralRegisters {
 }
 
 #[allow(dead_code)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u8)]
 enum Mode {
-    User,
-    Fiq,
-    Supervisor,
-    Abort,
-    Irq,
-    Undefined,
+    User = 0b10000,
+    Fiq = 0b10001,
+    Irq = 0b10010,
+    Supervisor = 0b10011,
+    Abort = 0b10111,
+    Undefined = 0b11011,
+    System = 0b11111,
 }
 
-fn get_mode_from_bits(value: u8) -> Mode {
-    match value {
-        0b10000 => Mode::User,
-        0b10001 => Mode::Fiq,
-        0b10010 => Mode::Irq,
-        0b10011 => Mode::Supervisor,
-        0b10111 => Mode::Abort,
-        0b11011 => Mode::Undefined,
-        0b11111 => Mode::User,
-        _ => panic!("invalue mode"),
+impl Mode {
+    const fn into_bits(self) -> u8 {
+        self as u8
+    }
+
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0b10000 => Mode::User,
+            0b10001 => Mode::Fiq,
+            0b10010 => Mode::Irq,
+            0b10011 => Mode::Supervisor,
+            0b10111 => Mode::Abort,
+            0b11011 => Mode::Undefined,
+            0b11111 => Mode::System,
+            _ => panic!("invalid mode"),
+        }
     }
 }
 
 #[bitfield(u32)]
 pub struct StatusRegister {
-    #[bits(5)]
-    pub mode_bits: u8,
+    #[bits(5, default = Mode::User, from = Mode::from_bits)]
+    pub mode_bits: Mode,
 
     // 0: arm mode, 1: thumb mode,
     pub t: bool,
@@ -481,7 +517,6 @@ mod arm7tdmi_tests {
     }
 
     #[test]
-    #[ignore]
     fn test_arm_branch_and_exchange() {
         load_test("ARM7TDMI/v1/arm_bx.json");
     }
@@ -492,7 +527,6 @@ mod arm7tdmi_tests {
     }
 
     #[test]
-    #[ignore]
     fn test_arm_data_proc_immediate() {
         load_test("ARM7TDMI/v1/arm_data_proc_immediate.json");
     }

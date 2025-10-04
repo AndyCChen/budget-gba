@@ -1,4 +1,4 @@
-use crate::arm::core::Arm7tdmi;
+use crate::arm::core::{Arm7tdmi, StatusRegister};
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     let branch_address = cpu.get_register_arm(opcode & 0xF);
@@ -8,6 +8,7 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.registers.r15 = branch_address; // pc is updated so we need to refill instruction pipeline
 
     if is_thumb_mode {
+        cpu.registers.r15 &= !1;
         cpu.pipeline_refill_thumb();
     } else {
         cpu.pipeline_refill_arm();
@@ -71,37 +72,57 @@ pub mod data_op {
         cpu.status.cpsr.set_n((result & 0x8000_0000) != 0);
     }
 
-    pub fn and<const SET_COND: bool>(
+    // rd: destination register for instruction that write back a result
+    // op1: 1st operand
+    // op2: 2nd operand if any
+    // carry_from_shift: carry bit from barrel shifter for logical bit ops
+
+    pub fn and<const SET_COND: bool, const WRITE_BACK: bool>(
         cpu: &mut Arm7tdmi,
+        rd: u32,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
-    ) -> u32 {
+    ) -> bool {
         let result = op1 & op2;
 
         if SET_COND {
             update_flags_logical(cpu, result, carry_from_shift);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn eor<const SET_COND: bool>(
+    pub fn eor<const SET_COND: bool, const WRITE_BACK: bool>(
         cpu: &mut Arm7tdmi,
+        rd: u32,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
-    ) -> u32 {
+    ) -> bool {
         let result = op1 ^ op2;
 
         if SET_COND {
             update_flags_logical(cpu, result, carry_from_shift);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn sub<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn sub<const SET_COND: bool, const WRITE_BACK: bool>(
+        cpu: &mut Arm7tdmi,
+        rd: u32,
+        op1: u32,
+        op2: u32,
+    ) -> bool {
         let (result, carry) = op1.overflowing_sub(op2);
         let overflow = ((result ^ op1) & (result ^ !op2) & 0x8000_0000) != 0;
 
@@ -109,10 +130,19 @@ pub mod data_op {
             update_flags_arithmetic(cpu, result, !carry, overflow);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn add<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn add<const SET_COND: bool, const WRITE_BACK: bool>(
+        cpu: &mut Arm7tdmi,
+        rd: u32,
+        op1: u32,
+        op2: u32,
+    ) -> bool {
         let (result, carry) = op1.overflowing_add(op2);
         let overflow = ((result ^ op1) & (result ^ op2) & 0x8000_0000) != 0;
 
@@ -120,10 +150,19 @@ pub mod data_op {
             update_flags_arithmetic(cpu, result, carry, overflow);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn adc<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn adc<const SET_COND: bool, const WRITE_BACK: bool>(
+        cpu: &mut Arm7tdmi,
+        rd: u32,
+        op1: u32,
+        op2: u32,
+    ) -> bool {
         let (op2, carry0) = op2.overflowing_add(u32::from(cpu.status.cpsr.c()));
         let (result, carry1) = op1.overflowing_add(op2);
         let overflow = ((result ^ op1) & (result ^ op2) & 0x8000_0000) != 0;
@@ -132,10 +171,19 @@ pub mod data_op {
             update_flags_arithmetic(cpu, result, carry0 || carry1, overflow);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn sbc<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn sbc<const SET_COND: bool, const WRITE_BACK: bool>(
+        cpu: &mut Arm7tdmi,
+        rd: u32,
+        op1: u32,
+        op2: u32,
+    ) -> bool {
         let (op2, carry0) = (!op2).overflowing_add(u32::from(cpu.status.cpsr.c()));
         let (result, carry1) = op1.overflowing_add(op2);
         let overflow = ((result ^ op1) & (result ^ !op2) & 0x8000_0000) != 0;
@@ -144,30 +192,48 @@ pub mod data_op {
             update_flags_arithmetic(cpu, result, carry0 || carry1, overflow);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn orr<const SET_COND: bool>(
+    pub fn orr<const SET_COND: bool, const WRITE_BACK: bool>(
         cpu: &mut Arm7tdmi,
+        rd: u32,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
-    ) -> u32 {
+    ) -> bool {
         let result = op1 | op2;
 
         if SET_COND {
             update_flags_logical(cpu, result, carry_from_shift);
         }
 
-        result
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, result);
+        }
+
+        WRITE_BACK
     }
 
-    pub fn mov<const SET_COND: bool>(cpu: &mut Arm7tdmi, op2: u32, carry_from_shift: bool) -> u32 {
+    pub fn mov<const SET_COND: bool, const WRITE_BACK: bool>(
+        cpu: &mut Arm7tdmi,
+        rd: u32,
+        op2: u32,
+        carry_from_shift: bool,
+    ) -> bool {
         if SET_COND {
             update_flags_logical(cpu, op2, carry_from_shift);
         }
 
-        op2
+        if WRITE_BACK {
+            cpu.set_register_arm(rd, op2);
+        }
+
+        WRITE_BACK
     }
 }
 
@@ -184,8 +250,13 @@ pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>
         let shift_amount = ((opcode >> 8) & 0xF) * 2;
         let value_to_shift = opcode & 0xFF;
 
-        carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
-        value_to_shift.rotate_right(shift_amount)
+        if shift_amount == 0 {
+            carry_from_shift = cpu.status.cpsr.c();
+            value_to_shift
+        } else {
+            carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
+            value_to_shift.rotate_right(shift_amount)
+        }
     } else {
         let rm = cpu.get_register_arm(opcode & 0xF); // register value to shift
         let shift = (opcode >> 4) & 0xFF;
@@ -265,86 +336,42 @@ pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>
         }
     };
 
-    // 0b0000_0000_0000_0000_0000_0000_0000_0000
+    cpu.registers.r15 += 4;
 
-    let register_dest = (opcode >> 12) & 0xF;
+    // destination register of result
+    let rd = (opcode >> 12) & 0xF;
 
-    if register_dest == 15 {
+    let is_write_back = match OP_CODE {
+        AND => and::<SET_COND, true>(cpu, rd, op1, op2, carry_from_shift),
+        EOR => eor::<SET_COND, true>(cpu, rd, op1, op2, carry_from_shift),
+        SUB => sub::<SET_COND, true>(cpu, rd, op1, op2),
+        RSB => sub::<SET_COND, true>(cpu, rd, op2, op1),
+        ADD => add::<SET_COND, true>(cpu, rd, op1, op2),
+        ADC => adc::<SET_COND, true>(cpu, rd, op1, op2),
+        SBC => adc::<SET_COND, true>(cpu, rd, op1, !op2),
+        RSC => adc::<SET_COND, true>(cpu, rd, op2, !op1),
+        TST => and::<true, false>(cpu, rd, op1, op2, carry_from_shift),
+        TEQ => eor::<true, false>(cpu, rd, op1, op2, carry_from_shift),
+        CMP => sub::<true, false>(cpu, rd, op1, op2),
+        CMN => add::<true, false>(cpu, rd, op1, op2),
+        ORR => orr::<SET_COND, true>(cpu, rd, op1, op2, carry_from_shift),
+        MOV => mov::<SET_COND, true>(cpu, rd, op2, carry_from_shift),
+        BIC => and::<SET_COND, true>(cpu, rd, op1, !op2, carry_from_shift),
+        MVN => mov::<SET_COND, true>(cpu, rd, !op2, carry_from_shift),
+
+        _ => panic!("Invalid data op! {OP_CODE}"),
+    };
+
+    if rd == 15 {
+        // move spsr into cpsr if r15 is used as a destination and S is set
         if SET_COND {
-            todo!("using pc as register dest with S flag set not handled!");
+            cpu.status.cpsr = StatusRegister::from_bits(cpu.get_spsr());
         }
 
-        let result = match OP_CODE {
-            AND => and::<false>(cpu, op1, op2, carry_from_shift),
-            EOR => eor::<false>(cpu, op1, op2, carry_from_shift),
-            SUB => sub::<false>(cpu, op1, op2),
-            RSB => sub::<false>(cpu, op2, op1),
-            ADD => add::<false>(cpu, op1, op2),
-            ADC => adc::<false>(cpu, op1, op2),
-            SBC => adc::<false>(cpu, op1, !op2),
-            RSC => adc::<false>(cpu, op2, !op1),
-            TST => {
-                and::<false>(cpu, op1, op2, carry_from_shift);
-                return;
-            }
-            TEQ => {
-                eor::<false>(cpu, op1, op2, carry_from_shift);
-                return;
-            }
-            CMP => {
-                sub::<false>(cpu, op1, op2);
-                return;
-            }
-            CMN => {
-                add::<false>(cpu, op1, op2);
-                return;
-            }
-            ORR => orr::<false>(cpu, op1, op2, carry_from_shift),
-            MOV => mov::<false>(cpu, op2, carry_from_shift),
-            BIC => and::<false>(cpu, op1, !op2, carry_from_shift),
-            MVN => mov::<false>(cpu, !op2, carry_from_shift),
-
-            _ => panic!("Invalid data op! {OP_CODE}"),
-        };
-
-        cpu.set_register_arm(register_dest, result);
-        cpu.pipeline_refill_arm(); // pc updated, so refill pipeline
-    } else {
-        let result = match OP_CODE {
-            AND => and::<SET_COND>(cpu, op1, op2, carry_from_shift),
-            EOR => eor::<SET_COND>(cpu, op1, op2, carry_from_shift),
-            SUB => sub::<SET_COND>(cpu, op1, op2),
-            RSB => sub::<SET_COND>(cpu, op2, op1),
-            ADD => add::<SET_COND>(cpu, op1, op2),
-            ADC => adc::<SET_COND>(cpu, op1, op2),
-            SBC => adc::<SET_COND>(cpu, op1, !op2),
-            RSC => adc::<SET_COND>(cpu, op2, !op1),
-            TST => {
-                and::<true>(cpu, op1, op2, carry_from_shift);
-                return;
-            }
-            TEQ => {
-                eor::<true>(cpu, op1, op2, carry_from_shift);
-                return;
-            }
-            CMP => {
-                sub::<true>(cpu, op1, op2);
-                return;
-            }
-            CMN => {
-                add::<true>(cpu, op1, op2);
-                return;
-            }
-            ORR => orr::<SET_COND>(cpu, op1, op2, carry_from_shift),
-            MOV => mov::<SET_COND>(cpu, op2, carry_from_shift),
-            BIC => and::<SET_COND>(cpu, op1, !op2, carry_from_shift),
-            MVN => mov::<SET_COND>(cpu, !op2, carry_from_shift),
-
-            _ => panic!("Invalid data op! {OP_CODE}"),
-        };
-
-        cpu.set_register_arm(register_dest, result);
-    };
+        if is_write_back {
+            cpu.pipeline_refill_arm(); // pc updated, so refill pipeline
+        }
+    }
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
