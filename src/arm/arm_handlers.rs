@@ -72,6 +72,107 @@ pub mod data_op {
         cpu.status.cpsr.set_n((result & 0x8000_0000) != 0);
     }
 
+    #[inline]
+    pub fn lsl(cpu: &Arm7tdmi, value_to_shift: u32, shift_amount: u32) -> (u32, bool) {
+        if shift_amount == 0 {
+            let carry_from_shift = cpu.status.cpsr.c();
+            (value_to_shift, carry_from_shift)
+        } else if shift_amount <= 32 {
+            let carry_from_shift = (value_to_shift & (1 << (32 - shift_amount))) != 0;
+            (
+                value_to_shift.checked_shl(shift_amount).unwrap_or(0),
+                carry_from_shift,
+            )
+        } else {
+            (0, false)
+        }
+    }
+
+    #[inline]
+    pub fn lsr(
+        cpu: &Arm7tdmi,
+        is_immediate: bool,
+        value_to_shift: u32,
+        mut shift_amount: u32,
+    ) -> (u32, bool) {
+        if is_immediate && shift_amount == 0 {
+            shift_amount = 32;
+        }
+
+        if shift_amount == 0 {
+            let carry_from_shift = cpu.status.cpsr.c();
+            (value_to_shift, carry_from_shift)
+        } else if shift_amount <= 32 {
+            let carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
+            (
+                value_to_shift.checked_shr(shift_amount).unwrap_or(0),
+                carry_from_shift,
+            )
+        } else {
+            (0, false)
+        }
+    }
+
+    #[inline]
+    pub fn asr(
+        cpu: &Arm7tdmi,
+        is_immediate: bool,
+        value_to_shift: u32,
+        mut shift_amount: u32,
+    ) -> (u32, bool) {
+        if is_immediate && shift_amount == 0 {
+            shift_amount = 32;
+        }
+
+        if shift_amount == 0 {
+            let carry_from_shift = cpu.status.cpsr.c();
+            (value_to_shift, carry_from_shift)
+        } else if shift_amount < 32 {
+            let carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
+            let result = ((value_to_shift as i32) >> shift_amount) as u32;
+            (result, carry_from_shift)
+        } else {
+            let carry_from_shift = (value_to_shift & 0x8000_0000) != 0;
+            let result = if (value_to_shift as i32).is_negative() {
+                u32::MAX
+            } else {
+                0
+            };
+            (result, carry_from_shift)
+        }
+    }
+
+    #[inline]
+    pub fn ror(
+        cpu: &Arm7tdmi,
+        is_immediate: bool,
+        value_to_shift: u32,
+        shift_amount: u32,
+    ) -> (u32, bool) {
+        if shift_amount == 0 {
+            if is_immediate {
+                rrx(cpu, value_to_shift)
+            } else {
+                let carry_from_shift = cpu.status.cpsr.c();
+                (value_to_shift, carry_from_shift)
+            }
+        } else {
+            let shift_amount = shift_amount - (u32::BITS * (shift_amount.div_ceil(u32::BITS) - 1));
+            let carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
+
+            (value_to_shift.rotate_right(shift_amount), carry_from_shift)
+        }
+    }
+
+    #[inline]
+    pub fn rrx(cpu: &Arm7tdmi, value_to_shift: u32) -> (u32, bool) {
+        let carry_in = u32::from(cpu.status.cpsr.c()) << 31;
+        let carry_out = (value_to_shift & 1) != 0;
+        let result = carry_in | (value_to_shift >> 1);
+
+        (result, carry_out)
+    }
+
     // rd: destination register for instruction that write back a result
     // op1: 1st operand
     // op2: 2nd operand if any
@@ -163,12 +264,15 @@ pub mod data_op {
         op1: u32,
         op2: u32,
     ) -> bool {
-        let (op2, carry0) = op2.overflowing_add(u32::from(cpu.status.cpsr.c()));
-        let (result, carry1) = op1.overflowing_add(op2);
+        let (result, carry) = {
+            let (op2_with_carry, carry0) = op2.overflowing_add(u32::from(cpu.status.cpsr.c()));
+            let (result, carry1) = op1.overflowing_add(op2_with_carry);
+            (result, carry0 || carry1)
+        };
         let overflow = ((result ^ op1) & (result ^ op2) & 0x8000_0000) != 0;
 
         if SET_COND {
-            update_flags_arithmetic(cpu, result, carry0 || carry1, overflow);
+            update_flags_arithmetic(cpu, result, carry, overflow);
         }
 
         if WRITE_BACK {
@@ -237,111 +341,68 @@ pub mod data_op {
     }
 }
 
-pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>(
+pub fn data_processing<const IMM: bool, const DATA_OP: u8, const SET_COND: bool>(
     cpu: &mut Arm7tdmi,
     opcode: u32,
 ) {
     use self::data_op::*;
 
-    let carry_from_shift: bool;
+    let rn = (opcode >> 16) & 0xF; // 1st operand register
+    let rd = (opcode >> 12) & 0xF; // destination register of result
 
-    let op1 = cpu.get_register_arm((opcode >> 16) & 0xF);
-    let op2 = if IMM {
+    // shift amount for operand 2 is specified by a register
+    let register_specified_shift = !IMM && (opcode & 0x10) != 0;
+
+    let (op2, carry_from_shift) = if IMM {
         let shift_amount = ((opcode >> 8) & 0xF) * 2;
         let value_to_shift = opcode & 0xFF;
 
         if shift_amount == 0 {
-            carry_from_shift = cpu.status.cpsr.c();
-            value_to_shift
+            let carry_from_shift = cpu.status.cpsr.c();
+            (value_to_shift, carry_from_shift)
         } else {
-            carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
-            value_to_shift.rotate_right(shift_amount)
+            let carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
+            (value_to_shift.rotate_right(shift_amount), carry_from_shift)
         }
     } else {
-        let rm = cpu.get_register_arm(opcode & 0xF); // register value to shift
-        let shift = (opcode >> 4) & 0xFF;
+        let rm = opcode & 0xF; // register to apply shift operation on
+        let shift_field = (opcode >> 4) & 0xFF;
+        let is_immediate = !register_specified_shift;
 
         // shift via 5-bit unsigned value
-        let shift_amount = if (shift & 0x1) == 0 {
-            shift >> 3
+        let shift_amount = if is_immediate {
+            shift_field >> 3
         }
         // shift via bottom byte in register Rs
         else {
-            assert_ne!(
-                shift >> 4,
-                15,
-                "r15 should not be used as Rs to specify shift amount!"
-            );
-            cpu.get_register_arm(shift >> 4) & 0xFF
+            let rs_value = cpu.get_register_arm(shift_field >> 4) & 0xFF;
+
+            // pc is ahead by 12 when a register specified shift is used
+            if register_specified_shift {
+                // todo handle extra I cycle
+
+                cpu.registers.r15 += 4;
+            }
+
+            rs_value
         };
 
-        match (shift >> 1) & 0x3 {
-            // LSL
-            0b00 => {
-                if shift_amount == 0 {
-                    carry_from_shift = cpu.status.cpsr.c();
-                    rm
-                } else if shift_amount <= 32 {
-                    carry_from_shift = (rm & (1 << (32 - shift_amount))) != 0;
-                    rm.checked_shl(shift_amount).unwrap_or(0)
-                } else {
-                    carry_from_shift = false;
-                    0
-                }
-            }
-            // LSR
-            0b01 => {
-                if shift_amount == 0 {
-                    carry_from_shift = cpu.status.cpsr.c();
-                    rm
-                } else if shift_amount <= 32 {
-                    carry_from_shift = (rm & (1 << (shift_amount - 1))) != 0;
-                    rm.checked_shr(shift_amount).unwrap_or(0)
-                } else {
-                    carry_from_shift = false;
-                    0
-                }
-            }
-            // ASR
-            0b10 => {
-                if shift_amount == 0 {
-                    carry_from_shift = cpu.status.cpsr.c();
-                    rm
-                } else if shift_amount < 32 {
-                    carry_from_shift = (rm & (1 << (shift_amount - 1))) != 0;
-                    ((rm as i32) >> shift_amount) as u32
-                } else {
-                    carry_from_shift = (rm & 0x8000_0000) != 0;
-                    if (rm as i32).is_negative() {
-                        u32::MAX
-                    } else {
-                        0
-                    }
-                }
-            }
-            // ROR
-            0b11 => {
-                if shift_amount == 0 {
-                    carry_from_shift = cpu.status.cpsr.c();
-                    rm
-                } else {
-                    let shift_amount =
-                        shift_amount - (u32::BITS * (shift_amount.div_ceil(u32::BITS) - 1));
-
-                    carry_from_shift = (rm & (1 << (shift_amount - 1))) != 0;
-                    rm.rotate_right(shift_amount)
-                }
-            }
+        let rm_value = cpu.get_register_arm(rm);
+        match (shift_field >> 1) & 0x3 {
+            0b00 => lsl(cpu, rm_value, shift_amount),
+            0b01 => lsr(cpu, is_immediate, rm_value, shift_amount),
+            0b10 => asr(cpu, is_immediate, rm_value, shift_amount),
+            0b11 => ror(cpu, is_immediate, rm_value, shift_amount),
             _ => panic!("Invalid shift type!"),
         }
     };
+    let op1 = cpu.get_register_arm(rn);
 
-    cpu.registers.r15 += 4;
+    if !register_specified_shift {
+        cpu.registers.r15 += 4;
+    }
 
-    // destination register of result
-    let rd = (opcode >> 12) & 0xF;
-
-    let is_write_back = match OP_CODE {
+    let is_write_back = match DATA_OP {
         AND => and::<SET_COND, true>(cpu, rd, op1, op2, carry_from_shift),
         EOR => eor::<SET_COND, true>(cpu, rd, op1, op2, carry_from_shift),
         SUB => sub::<SET_COND, true>(cpu, rd, op1, op2),
@@ -359,7 +420,7 @@ pub fn data_processing<const IMM: bool, const OP_CODE: u8, const SET_COND: bool>
         BIC => and::<SET_COND, true>(cpu, rd, op1, !op2, carry_from_shift),
         MVN => mov::<SET_COND, true>(cpu, rd, !op2, carry_from_shift),
 
-        _ => panic!("Invalid data op! {OP_CODE}"),
+        _ => panic!("Invalid data op! {DATA_OP}"),
     };
 
     if rd == 15 {

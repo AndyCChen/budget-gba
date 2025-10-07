@@ -56,6 +56,7 @@ const fn generate_arm_table() -> [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] {
                     if (i & 0b0010_0001_0000) == 0 {
                         data_processing!(false, data_opcode, false)
                     } else {
+                        //data_processing::<false, { data_opcode as u8 }, true>
                         data_processing!(false, data_opcode, true)
                     }
                 } else {
