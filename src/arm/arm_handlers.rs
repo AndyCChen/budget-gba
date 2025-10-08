@@ -40,6 +40,8 @@ pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
 pub mod data_op {
     use crate::arm::core::Arm7tdmi;
 
+    // data op constants
+
     pub const AND: u8 = 0;
     pub const EOR: u8 = 1;
     pub const SUB: u8 = 2;
@@ -56,6 +58,13 @@ pub mod data_op {
     pub const MOV: u8 = 13;
     pub const BIC: u8 = 14;
     pub const MVN: u8 = 15;
+
+    // shift type constants
+
+    pub const LSL: u8 = 0;
+    pub const LSR: u8 = 1;
+    pub const ASR: u8 = 2;
+    pub const ROR: u8 = 3;
 
     #[inline]
     fn update_flags_logical(cpu: &mut Arm7tdmi, result: u32, carry_from_shift: bool) {
@@ -341,7 +350,12 @@ pub mod data_op {
     }
 }
 
-pub fn data_processing<const IMM: bool, const DATA_OP: u8, const SET_COND: bool>(
+pub fn data_processing<
+    const IMM: bool,
+    const DATA_OP: u8,
+    const SET_COND: bool,
+    const SHIFT: u8,
+>(
     cpu: &mut Arm7tdmi,
     opcode: u32,
 ) {
@@ -351,7 +365,7 @@ pub fn data_processing<const IMM: bool, const DATA_OP: u8, const SET_COND: bool>
     let rd = (opcode >> 12) & 0xF; // destination register of result
 
     // shift amount for operand 2 is specified by a register
-    let register_specified_shift = !IMM && (opcode & 0x10) != 0;
+    let register_specified_shift = const { !IMM && (SHIFT & 1) != 0 };
 
     let (op2, carry_from_shift) = if IMM {
         let shift_amount = ((opcode >> 8) & 0xF) * 2;
@@ -388,11 +402,12 @@ pub fn data_processing<const IMM: bool, const DATA_OP: u8, const SET_COND: bool>
         };
 
         let rm_value = cpu.get_register_arm(rm);
-        match (shift_field >> 1) & 0x3 {
-            0b00 => lsl(cpu, rm_value, shift_amount),
-            0b01 => lsr(cpu, is_immediate, rm_value, shift_amount),
-            0b10 => asr(cpu, is_immediate, rm_value, shift_amount),
-            0b11 => ror(cpu, is_immediate, rm_value, shift_amount),
+        let shift_type = const { (SHIFT >> 1) & 0x3 };
+        match shift_type {
+            LSL => lsl(cpu, rm_value, shift_amount),
+            LSR => lsr(cpu, is_immediate, rm_value, shift_amount),
+            ASR => asr(cpu, is_immediate, rm_value, shift_amount),
+            ROR => ror(cpu, is_immediate, rm_value, shift_amount),
             _ => panic!("Invalid shift type!"),
         }
     };
@@ -419,7 +434,6 @@ pub fn data_processing<const IMM: bool, const DATA_OP: u8, const SET_COND: bool>
         MOV => mov::<SET_COND, true>(cpu, rd, op2, carry_from_shift),
         BIC => and::<SET_COND, true>(cpu, rd, op1, !op2, carry_from_shift),
         MVN => mov::<SET_COND, true>(cpu, rd, !op2, carry_from_shift),
-
         _ => panic!("Invalid data op! {DATA_OP}"),
     };
 
@@ -433,6 +447,58 @@ pub fn data_processing<const IMM: bool, const DATA_OP: u8, const SET_COND: bool>
             cpu.pipeline_refill_arm(); // pc updated, so refill pipeline
         }
     }
+}
+
+// poor man's macro to help generate instructions for the arm lookup table at compile time
+
+#[macro_export]
+macro_rules! data_processing {
+    ($imm:expr, $data_opcode:expr, $set_cond:expr, $shift:expr) => {
+        match $data_opcode {
+            data_op::AND => _data_processing_inner!($imm, { data_op::AND }, $set_cond, $shift),
+            data_op::EOR => _data_processing_inner!($imm, { data_op::EOR }, $set_cond, $shift),
+            data_op::SUB => _data_processing_inner!($imm, { data_op::SUB }, $set_cond, $shift),
+            data_op::RSB => _data_processing_inner!($imm, { data_op::RSB }, $set_cond, $shift),
+            data_op::ADD => _data_processing_inner!($imm, { data_op::ADD }, $set_cond, $shift),
+            data_op::ADC => _data_processing_inner!($imm, { data_op::ADC }, $set_cond, $shift),
+            data_op::SBC => _data_processing_inner!($imm, { data_op::SBC }, $set_cond, $shift),
+            data_op::RSC => _data_processing_inner!($imm, { data_op::RSC }, $set_cond, $shift),
+            data_op::TST => _data_processing_inner!($imm, { data_op::TST }, $set_cond, $shift),
+            data_op::TEQ => _data_processing_inner!($imm, { data_op::TEQ }, $set_cond, $shift),
+            data_op::CMP => _data_processing_inner!($imm, { data_op::CMP }, $set_cond, $shift),
+            data_op::CMN => _data_processing_inner!($imm, { data_op::CMN }, $set_cond, $shift),
+            data_op::ORR => _data_processing_inner!($imm, { data_op::ORR }, $set_cond, $shift),
+            data_op::MOV => _data_processing_inner!($imm, { data_op::MOV }, $set_cond, $shift),
+            data_op::BIC => _data_processing_inner!($imm, { data_op::BIC }, $set_cond, $shift),
+            data_op::MVN => _data_processing_inner!($imm, { data_op::MVN }, $set_cond, $shift),
+            _ => panic!("Invalid data op!"),
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! _data_processing_inner {
+    ($imm:expr, $data_opcode:expr, $set_cond:expr, $shift:expr) => {
+        match $shift {
+            0 => data_processing::<$imm, $data_opcode, $set_cond, 0>,
+            1 => data_processing::<$imm, $data_opcode, $set_cond, 1>,
+            2 => data_processing::<$imm, $data_opcode, $set_cond, 2>,
+            3 => data_processing::<$imm, $data_opcode, $set_cond, 3>,
+            4 => data_processing::<$imm, $data_opcode, $set_cond, 4>,
+            5 => data_processing::<$imm, $data_opcode, $set_cond, 5>,
+            6 => data_processing::<$imm, $data_opcode, $set_cond, 6>,
+            7 => data_processing::<$imm, $data_opcode, $set_cond, 7>,
+            8 => data_processing::<$imm, $data_opcode, $set_cond, 8>,
+            9 => data_processing::<$imm, $data_opcode, $set_cond, 9>,
+            10 => data_processing::<$imm, $data_opcode, $set_cond, 10>,
+            11 => data_processing::<$imm, $data_opcode, $set_cond, 11>,
+            12 => data_processing::<$imm, $data_opcode, $set_cond, 12>,
+            13 => data_processing::<$imm, $data_opcode, $set_cond, 13>,
+            14 => data_processing::<$imm, $data_opcode, $set_cond, 14>,
+            15 => data_processing::<$imm, $data_opcode, $set_cond, 15>,
+            _ => panic!("shift field must be in range 0-15!"),
+        }
+    };
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
