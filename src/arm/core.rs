@@ -1,9 +1,7 @@
 use crate::arm::instruction_lut::ARM_TABLE;
-
 use bitfield_struct::bitfield;
 
 pub struct Arm7tdmi {
-    //mode: Mode,
     cycle: usize,
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
@@ -214,7 +212,7 @@ impl Arm7tdmi {
     // if mode is user/system, sets the cpsr
     pub fn set_spsr(&mut self, value: u32) {
         match self.status.cpsr.mode_bits() {
-            Mode::User | Mode::System => self.status.cpsr = StatusRegister::from_bits(value),
+            Mode::User | Mode::System => (),
             Mode::Fiq => self.status.spsr_fiq = StatusRegister::from_bits(value),
             Mode::Irq => self.status.spsr_irq = StatusRegister::from_bits(value),
             Mode::Supervisor => self.status.spsr_svc = StatusRegister::from_bits(value),
@@ -356,7 +354,7 @@ pub struct GeneralRegisters {
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
-enum Mode {
+pub enum Mode {
     User = 0b10000,
     Fiq = 0b10001,
     Irq = 0b10010,
@@ -550,4 +548,21 @@ mod arm7tdmi_tests {
     fn test_arm_data_proc_register_shift() {
         load_test("ARM7TDMI/v1/arm_data_proc_register_shift.json", 0);
     }
+
+    #[test]
+    //#[ignore]
+    fn test_arm_mrs() {
+        load_test("ARM7TDMI/v1/arm_mrs.json", 0);
+    }
+
+    #[test]
+    //#[ignore]
+    fn test_arm_msr_imm() {
+        load_test("ARM7TDMI/v1/arm_msr_imm.json", 0);
+    }   
+
+    #[test]
+    fn test_arm_msr_reg() {
+        load_test("ARM7TDMI/v1/arm_msr_reg.json", 0);
+    } 
 }

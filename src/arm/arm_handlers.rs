@@ -1,4 +1,4 @@
-use crate::arm::core::{Arm7tdmi, StatusRegister};
+use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     let branch_address = cpu.get_register_arm(opcode & 0xF);
@@ -449,7 +449,7 @@ pub fn data_processing<
     }
 }
 
-// poor man's macro to help generate instructions for the arm lookup table at compile time
+// poor man's macro to help generate data proc instructions for the arm lookup table at compile time
 
 #[macro_export]
 macro_rules! data_processing {
@@ -499,6 +499,94 @@ macro_rules! _data_processing_inner {
             _ => panic!("shift field must be in range 0-15!"),
         }
     };
+}
+
+pub fn mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+    let rd = (opcode >> 12) & 0xF; // destination register
+
+    if SPSR_DEST {
+        cpu.set_register_arm(rd, cpu.get_spsr());
+    } else {
+        cpu.set_register_arm(rd, cpu.status.cpsr.into_bits());
+    }
+
+    cpu.registers.r15 += 4;
+}
+
+pub fn msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+    let mode = cpu.status.cpsr.mode_bits();
+    let set_control = ((opcode >> 16) & 1) != 0; // bits 7-0
+    let set_extension = ((opcode >> 17) & 1) != 0; // bits 15-8
+    let set_status = ((opcode >> 18) & 1) != 0; // bits 23-16
+    let set_flag = ((opcode >> 19) & 1) != 0; // bits 31-24
+
+    let mut transfer_value = if IMM {
+        let immediate_value = opcode & 0xFF;
+        let rotate_by = ((opcode >> 8) & 0xF) * 2;
+
+        immediate_value.rotate_right(rotate_by)
+    } else {
+        let rm = opcode & 0xF; // source register
+        cpu.get_register_arm(rm)
+    };
+
+    let mut psr_value = if SPSR_DEST {
+        cpu.get_spsr()
+    } else {
+        cpu.status.cpsr.into_bits()
+    };
+
+    if !SPSR_DEST {
+        transfer_value |= 0b1_0000;
+
+        if set_control && mode != Mode::User {
+            psr_value &= 0xFFFF_FF00;
+            psr_value |= transfer_value & 0x0000_00FF;
+        }
+
+        if set_extension && mode != Mode::User {
+            psr_value &= 0xFFFF_00FF;
+            psr_value |= transfer_value & 0x0000_FF00;
+        }
+
+        if set_status && mode != Mode::User {
+            psr_value &= 0xFF00_FFFF;
+            psr_value |= transfer_value & 0x00FF_0000;
+        }
+
+        if set_flag {
+            psr_value &= 0x00FF_FFFF;
+            psr_value |= transfer_value & 0xFF00_0000;
+        }
+    } else {
+        if set_control {
+            psr_value &= 0xFFFF_FF00;
+            psr_value |= transfer_value & 0x0000_00FF;
+        }
+
+        if set_extension {
+            psr_value &= 0xFFFF_00FF;
+            psr_value |= transfer_value & 0x0000_FF00;
+        }
+
+        if set_status {
+            psr_value &= 0xFF00_FFFF;
+            psr_value |= transfer_value & 0x00FF_0000;
+        }
+
+        if set_flag {
+            psr_value &= 0x00FF_FFFF;
+            psr_value |= transfer_value & 0xFF00_0000;
+        }
+    }
+
+    if SPSR_DEST {
+        cpu.set_spsr(psr_value);
+    } else {
+        cpu.status.cpsr = StatusRegister::from_bits(psr_value);
+    }
+
+    cpu.registers.r15 += 4;
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
