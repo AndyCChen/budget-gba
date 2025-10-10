@@ -514,11 +514,27 @@ pub fn mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
 }
 
 pub fn msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
-    let mode = cpu.status.cpsr.mode_bits();
-    let set_control = ((opcode >> 16) & 1) != 0; // bits 7-0
-    let set_extension = ((opcode >> 17) & 1) != 0; // bits 15-8
-    let set_status = ((opcode >> 18) & 1) != 0; // bits 23-16
-    let set_flag = ((opcode >> 19) & 1) != 0; // bits 31-24
+    let mut mask: u32 = 0;
+
+    // control field: bits 7-0
+    if ((opcode >> 16) & 1) != 0 {
+        mask |= 0x0000_00FF;
+    }
+
+    // extension field: bits 15-8
+    if ((opcode >> 17) & 1) != 0 {
+        mask |= 0x0000_FF00;
+    }
+
+    // status field: bits 23-16
+    if ((opcode >> 18) & 1) != 0 {
+        mask |= 0x00FF_0000;
+    }
+
+    // flag field: bits 31-24
+    if ((opcode >> 19) & 1) != 0 {
+        mask |= 0xFF00_0000;
+    }
 
     let mut transfer_value = if IMM {
         let immediate_value = opcode & 0xFF;
@@ -537,48 +553,16 @@ pub fn msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u
     };
 
     if !SPSR_DEST {
+        // bit 4 of control field is always 1, this isn't documented in the arm7tdmi data sheet for some reason
         transfer_value |= 0b1_0000;
 
-        if set_control && mode != Mode::User {
-            psr_value &= 0xFFFF_FF00;
-            psr_value |= transfer_value & 0x0000_00FF;
-        }
-
-        if set_extension && mode != Mode::User {
-            psr_value &= 0xFFFF_00FF;
-            psr_value |= transfer_value & 0x0000_FF00;
-        }
-
-        if set_status && mode != Mode::User {
-            psr_value &= 0xFF00_FFFF;
-            psr_value |= transfer_value & 0x00FF_0000;
-        }
-
-        if set_flag {
-            psr_value &= 0x00FF_FFFF;
-            psr_value |= transfer_value & 0xFF00_0000;
-        }
-    } else {
-        if set_control {
-            psr_value &= 0xFFFF_FF00;
-            psr_value |= transfer_value & 0x0000_00FF;
-        }
-
-        if set_extension {
-            psr_value &= 0xFFFF_00FF;
-            psr_value |= transfer_value & 0x0000_FF00;
-        }
-
-        if set_status {
-            psr_value &= 0xFF00_FFFF;
-            psr_value |= transfer_value & 0x00FF_0000;
-        }
-
-        if set_flag {
-            psr_value &= 0x00FF_FFFF;
-            psr_value |= transfer_value & 0xFF00_0000;
+        // when in user mode, only flag field of cpsr can be updated
+        if cpu.status.cpsr.mode_bits() == Mode::User {
+            mask &= 0xFF00_0000;
         }
     }
+
+    psr_value = (psr_value & !mask) | (transfer_value & mask);
 
     if SPSR_DEST {
         cpu.set_spsr(psr_value);
@@ -590,5 +574,5 @@ pub fn msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
-    panic!("undefined opcode! {opcode}");
+    todo!("handle undefined opcode: {opcode}");
 }

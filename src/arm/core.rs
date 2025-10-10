@@ -520,43 +520,36 @@ mod arm7tdmi_tests {
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_branch_and_exchange() {
         load_test("ARM7TDMI/v1/arm_bx.json", 0);
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_branch_and_link() {
         load_test("ARM7TDMI/v1/arm_b_bl.json", 0);
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_data_proc_immediate() {
         load_test("ARM7TDMI/v1/arm_data_proc_immediate.json", 0);
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_data_proc_immediate_shift() {
         load_test("ARM7TDMI/v1/arm_data_proc_immediate_shift.json", 0);
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_data_proc_register_shift() {
         load_test("ARM7TDMI/v1/arm_data_proc_register_shift.json", 0);
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_mrs() {
         load_test("ARM7TDMI/v1/arm_mrs.json", 0);
     }
 
     #[test]
-    //#[ignore]
     fn test_arm_msr_imm() {
         load_test("ARM7TDMI/v1/arm_msr_imm.json", 0);
     }   
