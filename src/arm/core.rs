@@ -473,7 +473,15 @@ mod arm7tdmi_tests {
 
     // ignore checking carry flag, useful for checking muliply instruction as the carry flag result is not emulated
     fn verify_state_no_carry(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
-        assert_eq!(cpu.status.cpsr.into_bits() & 0xDFFF_FFFF, input_state.r#final.CPSR & 0xDFFF_FFFF, "{input_state:#?} cspr, test: {test_num}");
+        let mask = 0xDFFF_FFFF;
+        assert_eq!(cpu.status.cpsr.into_bits() & mask, input_state.r#final.CPSR & mask, "{input_state:#?} cspr, test: {test_num}");
+        verify_state_core(cpu, input_state, test_num);
+    }
+
+    fn verify_state_no_carry_overflow(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+        let mask = 0xCFFF_FFFF;
+        assert_eq!(cpu.status.cpsr.into_bits() & mask, input_state.r#final.CPSR & mask, "{input_state:#?} cspr, test: {test_num}");
+        verify_state_core(cpu, input_state, test_num);
     }
 
     fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
@@ -574,5 +582,10 @@ mod arm7tdmi_tests {
     #[test]
     fn test_arm_mul_mla() {
         load_test("ARM7TDMI/v1/arm_mul_mla.json", verify_state_no_carry, 0);
+    }
+
+    #[test]
+    fn test_arm_mull_mlal() {
+        load_test("ARM7TDMI/v1/arm_mull_mlal.json", verify_state_no_carry_overflow, 0);
     }
 }

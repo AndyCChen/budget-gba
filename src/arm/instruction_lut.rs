@@ -74,10 +74,25 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
                 let set_condition = (instruction >> 4) & 1 != 0;
 
                 match (accumulate, set_condition) {
-                    (true, true) => multiply_and_accumulate::<true, true>,
-                    (true, false) => multiply_and_accumulate::<true, false>,
-                    (false, true) => multiply_and_accumulate::<false, true>,
-                    (false, false) => multiply_and_accumulate::<false, false>,
+                    (true, true) => multiply::<true, true>,
+                    (true, false) => multiply::<true, false>,
+                    (false, true) => multiply::<false, true>,
+                    (false, false) => multiply::<false, false>,
+                }
+            } else if (instruction & 0b1111_1000_1001) == 0b0000_1000_1001 {
+                let signed = (instruction >> 6) & 1 != 0;
+                let accumulate = (instruction >> 5) & 1 != 0;
+                let set_condition = (instruction >> 4) & 1 != 0;
+
+                match (signed, accumulate, set_condition) {
+                    (true, true, true) => multiply_long::<true, true, true>,
+                    (true, true, false) => multiply_long::<true, true, false>,
+                    (true, false, true) => multiply_long::<true, false, true>,
+                    (true, false, false) => multiply_long::<true, false, false>,
+                    (false, true, true) => multiply_long::<false, true, true>,
+                    (false, true, false) => multiply_long::<false, true, false>,
+                    (false, false, true) => multiply_long::<false, false, true>,
+                    (false, false, false) => multiply_long::<false, false, false>,
                 }
             } else {
                 undefined_arm

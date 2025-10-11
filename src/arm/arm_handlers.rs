@@ -70,7 +70,7 @@ pub mod data_op {
     fn update_flags_logical(cpu: &mut Arm7tdmi, result: u32, carry_from_shift: bool) {
         cpu.status.cpsr.set_c(carry_from_shift);
         cpu.status.cpsr.set_z(result == 0);
-        cpu.status.cpsr.set_n((result & 0x8000_0000) != 0);
+        cpu.status.cpsr.set_n((result as i32).is_negative());
     }
 
     #[inline]
@@ -78,7 +78,7 @@ pub mod data_op {
         cpu.status.cpsr.set_c(carry);
         cpu.status.cpsr.set_v(overflow);
         cpu.status.cpsr.set_z(result == 0);
-        cpu.status.cpsr.set_n((result & 0x8000_0000) != 0);
+        cpu.status.cpsr.set_n((result as i32).is_negative());
     }
 
     #[inline]
@@ -573,10 +573,7 @@ pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7td
     cpu.registers.r15 += 4;
 }
 
-pub fn multiply_and_accumulate<const ACCUMULATE: bool, const SET_COND: bool>(
-    cpu: &mut Arm7tdmi,
-    opcode: u32,
-) {
+pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.registers.r15 += 4;
 
     let rm = opcode & 0xF; // op1 reg value
@@ -591,22 +588,24 @@ pub fn multiply_and_accumulate<const ACCUMULATE: bool, const SET_COND: bool>(
 
     // todo handle extra i cycles
     let _i_cycles = 'block: {
+        let add_cycle = if ACCUMULATE { 1 } else { 0 };
+
         match op2 & 0xFFFF_FF00 {
-            0xFFFF_FF00 | 0x0000_0000 => break 'block 1,
+            0xFFFF_FF00 | 0x0000_0000 => break 'block 1 + add_cycle,
             _ => (),
         }
 
         match op2 & 0xFFFF_0000 {
-            0xFFFF_0000 | 0x0000_0000 => break 'block 2,
+            0xFFFF_0000 | 0x0000_0000 => break 'block 2 + add_cycle,
             _ => (),
         }
 
         match op2 & 0xFF00_0000 {
-            0xFF00_0000 | 0x0000_0000 => break 'block 3,
+            0xFF00_0000 | 0x0000_0000 => break 'block 3 + add_cycle,
             _ => (),
         }
 
-        4
+        4 + add_cycle
     };
 
     let mut result = op1.wrapping_mul(op2);
@@ -624,6 +623,73 @@ pub fn multiply_and_accumulate<const ACCUMULATE: bool, const SET_COND: bool>(
     cpu.set_register_arm(rd, result);
 
     if rd == 15 {
+        cpu.pipeline_refill_arm();
+    }
+}
+
+pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND: bool>(
+    cpu: &mut Arm7tdmi,
+    opcode: u32,
+) {
+    cpu.registers.r15 += 4;
+
+    let rm = opcode & 0xF;
+    let rs = (opcode >> 8) & 0xF;
+    let rd_lo = (opcode >> 12) & 0xF;
+    let rd_hi = (opcode >> 16) & 0xF;
+
+    let op1: u32 = cpu.get_register_arm(rm);
+    let op2: u32 = cpu.get_register_arm(rs);
+
+    let _i_cycles = 'block: {
+        let add_cycle = if ACCUMULATE { 1 } else { 0 };
+
+        match (SIGNED, op2 & 0xFFFF_FF00) {
+            (true, 0xFFFF_FF00 | 0) => break 'block 2 + add_cycle,
+            (false, 0) => break 'block 2 + add_cycle,
+            _ => (),
+        }
+
+        match (SIGNED, op2 & 0xFFFF_0000) {
+            (true, 0xFFFF_0000 | 0) => break 'block 3 + add_cycle,
+            (false, 0) => break 'block 3 + add_cycle,
+            _ => (),
+        }
+
+        match (SIGNED, op2 & 0xFF00_0000) {
+            (true, 0xFF00_0000 | 0) => break 'block 4 + add_cycle,
+            (false, 0) => break 'block 4 + add_cycle,
+            _ => (),
+        }
+
+        5 + add_cycle
+    };
+
+    let mut result = if SIGNED {
+        ((op1 as i32 as i64) * (op2 as i32 as i64)) as u64
+    } else {
+        op1 as u64 * op2 as u64
+    };
+
+    if ACCUMULATE {
+        let op3: u64 = {
+            let lo: u64 = cpu.get_register_arm(rd_lo).into();
+            let hi: u64 = cpu.get_register_arm(rd_hi).into();
+            (hi << 32) | lo
+        };
+
+        result = result.wrapping_add(op3);
+    }
+
+    if SET_COND {
+        cpu.status.cpsr.set_n((result as i64).is_negative());
+        cpu.status.cpsr.set_z(result == 0);
+    }
+
+    cpu.set_register_arm(rd_lo, result as u32);
+    cpu.set_register_arm(rd_hi, (result >> 32) as u32);
+
+    if rd_lo == 15 || rd_hi == 15 {
         cpu.pipeline_refill_arm();
     }
 }
