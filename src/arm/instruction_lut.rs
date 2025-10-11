@@ -28,25 +28,24 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
         0b00 => {
             if instruction == 0b0001_0010_0001 {
                 branch_and_exchange
-            } 
-            else if (instruction & 0b0001_1011_0000) == 0b0001_0000_0000 {
+            } else if (instruction & 0b0001_1011_0000) == 0b0001_0000_0000 {
                 let is_source_spsr = (instruction & 0b0000_0100_0000) != 0;
 
                 match is_source_spsr {
-                    true => mrs::<true>,
-                    false => mrs::<false>,
+                    true => read_status_mrs::<true>,
+                    false => read_status_mrs::<false>,
                 }
             } else if (instruction & 0b0001_1011_0000) == 0b0001_0010_0000 {
                 let is_immediate = (instruction & 0b0010_0000_0000) != 0;
                 let is_source_spsr = (instruction & 0b0000_0100_0000) != 0;
 
                 match (is_immediate, is_source_spsr) {
-                    (true, true) => msr::<true, true>,
-                    (true, false) => msr::<true, false>,
-                    (false, true) => msr::<false, true>,
-                    (false, false) => msr::<false, false>,
+                    (true, true) => write_status_msr::<true, true>,
+                    (true, false) => write_status_msr::<true, false>,
+                    (false, true) => write_status_msr::<false, true>,
+                    (false, false) => write_status_msr::<false, false>,
                 }
-            } 
+            }
             // data proc immediate mode
             else if (instruction & 0b0010_0000_0000) != 0 {
                 let data_opcode: u8 = ((instruction >> 5) & 0xF) as u8;
@@ -59,7 +58,7 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
                     data_processing!(true, data_opcode, false, shift_field)
                 }
             }
-            // data proc non-immediate mode 
+            // data proc non-immediate mode
             else if (instruction & 0b0010_0000_0000) == 0 && (instruction & 0b1001) != 0b1001 {
                 let data_opcode: u8 = ((instruction >> 5) & 0xF) as u8;
                 let shift_field: u8 = (instruction & 0xF) as u8;
@@ -69,6 +68,16 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
                     data_processing!(false, data_opcode, true, shift_field)
                 } else {
                     data_processing!(false, data_opcode, false, shift_field)
+                }
+            } else if (instruction & 0b1111_1100_1001) == 0b0000_0000_1001 {
+                let accumulate = (instruction >> 5) & 1 != 0;
+                let set_condition = (instruction >> 4) & 1 != 0;
+
+                match (accumulate, set_condition) {
+                    (true, true) => multiply_and_accumulate::<true, true>,
+                    (true, false) => multiply_and_accumulate::<true, false>,
+                    (false, true) => multiply_and_accumulate::<false, true>,
+                    (false, false) => multiply_and_accumulate::<false, false>,
                 }
             } else {
                 undefined_arm

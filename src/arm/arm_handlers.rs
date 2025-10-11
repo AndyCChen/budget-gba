@@ -501,7 +501,7 @@ macro_rules! _data_processing_inner {
     };
 }
 
-pub fn mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn read_status_mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let rd = (opcode >> 12) & 0xF; // destination register
 
     if SPSR_DEST {
@@ -513,7 +513,7 @@ pub fn mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.registers.r15 += 4;
 }
 
-pub fn msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let mut mask: u32 = 0;
 
     // control field: bits 7-0
@@ -571,6 +571,61 @@ pub fn msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u
     }
 
     cpu.registers.r15 += 4;
+}
+
+pub fn multiply_and_accumulate<const ACCUMULATE: bool, const SET_COND: bool>(
+    cpu: &mut Arm7tdmi,
+    opcode: u32,
+) {
+    cpu.registers.r15 += 4;
+
+    let rm = opcode & 0xF; // op1 reg value
+    let rs = (opcode >> 8) & 0xF; // op 2 reg value
+    let rn = (opcode >> 12) & 0xF; // accumulate reg value
+    let rd = (opcode >> 16) & 0xF; // dest reg
+
+    // multiply: rd = rm * rs;
+
+    let op1 = cpu.get_register_arm(rm);
+    let op2 = cpu.get_register_arm(rs);
+
+    // todo handle extra i cycles
+    let _i_cycles = 'block: {
+        match op2 & 0xFFFF_FF00 {
+            0xFFFF_FF00 | 0x0000_0000 => break 'block 1,
+            _ => (),
+        }
+
+        match op2 & 0xFFFF_0000 {
+            0xFFFF_0000 | 0x0000_0000 => break 'block 2,
+            _ => (),
+        }
+
+        match op2 & 0xFF00_0000 {
+            0xFF00_0000 | 0x0000_0000 => break 'block 3,
+            _ => (),
+        }
+
+        4
+    };
+
+    let mut result = op1.wrapping_mul(op2);
+
+    if ACCUMULATE {
+        let op3 = cpu.get_register_arm(rn);
+        result = result.wrapping_add(op3);
+    }
+
+    if SET_COND {
+        cpu.status.cpsr.set_n((result as i32).is_negative());
+        cpu.status.cpsr.set_z(result == 0);
+    }
+
+    cpu.set_register_arm(rd, result);
+
+    if rd == 15 {
+        cpu.pipeline_refill_arm();
+    }
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {

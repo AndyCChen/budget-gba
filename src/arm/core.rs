@@ -446,12 +446,17 @@ pub struct InputStates {
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
 mod arm7tdmi_tests {
     use super::*;
     use std::fs;
     use std::path::Path;
 
-    fn load_test<P: AsRef<Path>>(path: P, skip: usize) {
+    fn load_test<P: AsRef<Path>>(
+        path: P,
+        check_state: fn(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize),
+        skip: usize,
+    ) {
         let Ok(data) = fs::read_to_string(path) else {
             panic!("Failed to load test file!");
         };
@@ -462,15 +467,22 @@ mod arm7tdmi_tests {
         for (count, item) in it {
             let mut cpu = Arm7tdmi::new(&item);
             cpu.run();
-            verify_state(&cpu, &item, count);
+            check_state(&cpu, &item, count);
         }
     }
 
-    #[rustfmt::skip]
-    fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
-        let final_state = &input_state.r#final;
+    // ignore checking carry flag, useful for checking muliply instruction as the carry flag result is not emulated
+    fn verify_state_no_carry(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+        assert_eq!(cpu.status.cpsr.into_bits() & 0xDFFF_FFFF, input_state.r#final.CPSR & 0xDFFF_FFFF, "{input_state:#?} cspr, test: {test_num}");
+    }
 
-        assert_eq!(cpu.status.cpsr.into_bits(), final_state.CPSR, "{input_state:#?} cspr, test: {test_num}");
+    fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+        assert_eq!(cpu.status.cpsr.into_bits(), input_state.r#final.CPSR, "{input_state:#?} cspr, test: {test_num}");
+        verify_state_core(cpu, input_state, test_num);
+    }
+    
+    fn verify_state_core(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+        let final_state = &input_state.r#final;
 
         assert_eq!(cpu.status.spsr_fiq.into_bits(), final_state.SPSR[0], "{input_state:#?} spsr_fiq, test: {test_num}");
         assert_eq!(cpu.status.spsr_svc.into_bits(), final_state.SPSR[1], "{input_state:#?} spsr_svc, test: {test_num}");
@@ -521,41 +533,46 @@ mod arm7tdmi_tests {
 
     #[test]
     fn test_arm_branch_and_exchange() {
-        load_test("ARM7TDMI/v1/arm_bx.json", 0);
+        load_test("ARM7TDMI/v1/arm_bx.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_branch_and_link() {
-        load_test("ARM7TDMI/v1/arm_b_bl.json", 0);
+        load_test("ARM7TDMI/v1/arm_b_bl.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_data_proc_immediate() {
-        load_test("ARM7TDMI/v1/arm_data_proc_immediate.json", 0);
+        load_test("ARM7TDMI/v1/arm_data_proc_immediate.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_data_proc_immediate_shift() {
-        load_test("ARM7TDMI/v1/arm_data_proc_immediate_shift.json", 0);
+        load_test("ARM7TDMI/v1/arm_data_proc_immediate_shift.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_data_proc_register_shift() {
-        load_test("ARM7TDMI/v1/arm_data_proc_register_shift.json", 0);
+        load_test("ARM7TDMI/v1/arm_data_proc_register_shift.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_mrs() {
-        load_test("ARM7TDMI/v1/arm_mrs.json", 0);
+        load_test("ARM7TDMI/v1/arm_mrs.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_msr_imm() {
-        load_test("ARM7TDMI/v1/arm_msr_imm.json", 0);
-    }   
+        load_test("ARM7TDMI/v1/arm_msr_imm.json", verify_state, 0);
+    }
 
     #[test]
     fn test_arm_msr_reg() {
-        load_test("ARM7TDMI/v1/arm_msr_reg.json", 0);
-    } 
+        load_test("ARM7TDMI/v1/arm_msr_reg.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_arm_mul_mla() {
+        load_test("ARM7TDMI/v1/arm_mul_mla.json", verify_state_no_carry, 0);
+    }
 }
