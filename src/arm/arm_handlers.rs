@@ -668,7 +668,7 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
     let mut result = if SIGNED {
         ((op1 as i32 as i64) * (op2 as i32 as i64)) as u64
     } else {
-        op1 as u64 * op2 as u64
+        (op1 as u64) * (op2 as u64)
     };
 
     if ACCUMULATE {
@@ -692,6 +692,28 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
     if rd_lo == 15 || rd_hi == 15 {
         cpu.pipeline_refill_arm();
     }
+}
+
+pub fn single_data_transfer<
+    const IMM: bool,           // 0: offset is immediate value, 1: offset is a register
+    const PRE_INDEX: bool,     // 0: post indexing, 1: pre indexing
+    const INC: bool,           // 0: decrement, 1: increment
+    const TRANSFER_BYTE: bool, // 0: transfer work size, 1: transfer byte size
+    const WRITE_BACK: bool,    // 0: no write back, 1: write address to base
+    const LOAD: bool,          // 0: store op, 1: load op
+>(
+    _cpu: &mut Arm7tdmi,
+    opcode: u32,
+) {
+    let _rd = (opcode >> 12) & 0xF; // destination/source register
+    let _rn = (opcode >> 16) & 0xF; // base register
+    let _offset = if IMM {
+        opcode & 0xFFF
+    } else {
+        todo!("register specified offset")
+    };
+
+
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {

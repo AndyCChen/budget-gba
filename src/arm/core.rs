@@ -1,4 +1,6 @@
+use crate::arm::constants::{access_code, kind_code};
 use crate::arm::instruction_lut::ARM_TABLE;
+use crate::arm::json_test_states::*;
 use bitfield_struct::bitfield;
 
 pub struct Arm7tdmi {
@@ -6,13 +8,13 @@ pub struct Arm7tdmi {
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
     pub pipeline: [Option<u32>; 3], // [execute, decode, fetch]
+    pub pipeline_state: u8,
     pub transactions: Vec<Transactions>,
 }
 
 impl Arm7tdmi {
     pub fn new(input_state: &InputStates) -> Self {
         Self {
-            //mode: Mode::User,
             cycle: 1,
             registers: GeneralRegisters {
                 r0: input_state.initial.R[0],
@@ -68,6 +70,7 @@ impl Arm7tdmi {
                 Some(input_state.initial.pipeline[1]),
                 None,
             ],
+            pipeline_state: input_state.initial.access,
             transactions: input_state.transactions.clone(),
         }
     }
@@ -221,19 +224,63 @@ impl Arm7tdmi {
         };
     }
 
-    pub fn read_word(&mut self, address: u32) -> u32 {
+    fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
         let address = address & !3; // align 4 byte boundary
         let data = self.transactions[self.cycle - 1].clone();
         self.tick();
+
         assert_eq!(data.addr, address, "mismatched address!");
+        assert_eq!(data.access, access, "mismatch access code!");
+        assert_eq!(
+            data.kind,
+            kind_code::INSTRUCTION_READ,
+            "mismatch kind code!"
+        );
+
         data.data
     }
 
-    pub fn read_halfworld(&mut self, address: u32) -> u16 {
+    pub fn read_word(&mut self, address: u32, access: u8) -> u32 {
+        let address = address & !3; // align 4 byte boundary
+        let data = self.transactions[self.cycle - 1].clone();
+        self.tick();
+
+        assert_eq!(data.addr, address, "mismatched address!");
+        assert_eq!(data.access, access, "mismatch access code!");
+        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
+
+        data.data
+    }
+
+    fn pipeline_read_half_world(&mut self, address: u32, access: u8) -> u16 {
         let address = address & !1;
         let data = self.transactions[self.cycle - 1].clone();
         self.tick();
+
         assert_eq!(data.addr, address, "mismatched address!");
+        assert_eq!(data.access, access, "mismatch access code!");
+        assert_eq!(
+            data.kind,
+            kind_code::INSTRUCTION_READ,
+            "mismatch kind code!"
+        );
+
+        data.data as u16
+    }
+
+    pub fn read_halfworld(&mut self, address: u32, access: u8) -> u16 {
+        let address = address & !1;
+        let data = self.transactions[self.cycle - 1].clone();
+        self.tick();
+
+        assert_eq!(data.addr, address, "mismatched address!");
+        assert_eq!(data.access, access, "mismatch access code!");
+        assert_eq!(
+            data.kind,
+            kind_code::GENERAL_READ,
+            "mismatch kind code!"
+        );
+
         data.data as u16
     }
 
@@ -243,18 +290,34 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for arm mode
     pub fn pipeline_refill_arm(&mut self) {
-        self.pipeline[0] = Some(self.read_word(self.registers.r15));
-        self.registers.r15 = self.registers.r15.wrapping_add(4);
-        self.pipeline[1] = Some(self.read_word(self.registers.r15));
-        self.registers.r15 = self.registers.r15.wrapping_add(4);
+        self.pipeline[0] = Some(self.pipeline_read_word(
+            self.registers.r15,
+            access_code::CODE | access_code::NONSEQUENTIAL,
+        ));
+        self.pipeline[1] = Some(self.pipeline_read_word(
+            self.registers.r15.wrapping_add(4),
+            access_code::CODE | access_code::SEQUENTIAL,
+        ));
+        self.registers.r15 = self.registers.r15.wrapping_add(8);
     }
 
     /// Flush and refills the pipeline for thumb mode
     pub fn pipeline_refill_thumb(&mut self) {
-        self.pipeline[0] = Some(self.read_halfworld(self.registers.r15).into());
-        self.registers.r15 = self.registers.r15.wrapping_add(2);
-        self.pipeline[1] = Some(self.read_halfworld(self.registers.r15).into());
-        self.registers.r15 = self.registers.r15.wrapping_add(2);
+        self.pipeline[0] = Some(
+            self.pipeline_read_half_world(
+                self.registers.r15,
+                access_code::CODE | access_code::NONSEQUENTIAL,
+            )
+            .into(),
+        );
+        self.pipeline[1] = Some(
+            self.pipeline_read_half_world(
+                self.registers.r15.wrapping_add(2),
+                access_code::CODE | access_code::SEQUENTIAL,
+            )
+            .into(),
+        );
+        self.registers.r15 = self.registers.r15.wrapping_add(4);
     }
 
     /// fetch opcode and push into pipeline
@@ -264,7 +327,7 @@ impl Arm7tdmi {
             panic!("no thumb for pipeline prefetch yet!");
         } else {
             self.registers.r15 &= !0x3;
-            self.pipeline[2] = Some(self.read_word(self.registers.r15));
+            self.pipeline[2] = Some(self.pipeline_read_word(self.registers.r15, self.pipeline_state));
         }
         self.pipeline.copy_within(1..3, 0);
     }
@@ -273,7 +336,7 @@ impl Arm7tdmi {
     /// ### Returns
     /// True if opcode can be executed, else False
     fn condition_check(&self, cond: u8) -> bool {
-        use crate::arm::arm_condition_codes::*;
+        use crate::arm::constants::arm_condition_code::*;
 
         match cond {
             EQ => self.status.cpsr.z(),
@@ -351,7 +414,6 @@ pub struct GeneralRegisters {
     pub r15: u32, // program counter (pc)
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Mode {
@@ -412,37 +474,6 @@ pub struct StatusRegister {
 
     // negative flag
     pub n: bool,
-}
-
-use serde::{Deserialize, Serialize};
-
-#[allow(non_snake_case)]
-#[derive(Serialize, Deserialize, Debug)]
-pub struct State {
-    pub R: [u32; 16],
-    pub R_fiq: [u32; 7],
-    pub R_svc: [u32; 2],
-    pub R_abt: [u32; 2],
-    pub R_irq: [u32; 2],
-    pub R_und: [u32; 2],
-    pub CPSR: u32,
-    pub SPSR: [u32; 5],
-    pub pipeline: [u32; 2],
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Transactions {
-    pub addr: u32,
-    pub data: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct InputStates {
-    pub initial: State,
-    pub r#final: State,
-    pub transactions: Vec<Transactions>,
-    pub opcode: u32,
-    pub base_addr: u32,
 }
 
 #[cfg(test)]
@@ -587,5 +618,11 @@ mod arm7tdmi_tests {
     #[test]
     fn test_arm_mull_mlal() {
         load_test("ARM7TDMI/v1/arm_mull_mlal.json", verify_state_no_carry_overflow, 0);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_arm_ldr_str_immediate_offset() {
+        load_test("ARM7TDMI/v1/arm_ldr_str_immediate_offset.json", verify_state, 0);
     }
 }

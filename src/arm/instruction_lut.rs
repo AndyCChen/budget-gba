@@ -1,14 +1,15 @@
 use crate::arm::core::Arm7tdmi;
 
+type ArmHandler = fn(&mut Arm7tdmi, u32);
+
 const ARM_TABLE_LENGTH: usize = 0x1000;
 
-pub static ARM_TABLE: [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] = generate_arm_table();
+pub static ARM_TABLE: [ArmHandler; ARM_TABLE_LENGTH] = generate_arm_table();
 
-const fn generate_arm_table() -> [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] {
+const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_LENGTH] {
     use crate::arm::arm_handlers::*;
 
-    let mut arm_table: [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] =
-        [undefined_arm; ARM_TABLE_LENGTH];
+    let mut arm_table: [ArmHandler; ARM_TABLE_LENGTH] = [undefined_arm; ARM_TABLE_LENGTH];
 
     let mut i = 0;
 
@@ -20,7 +21,7 @@ const fn generate_arm_table() -> [fn(&mut Arm7tdmi, u32); ARM_TABLE_LENGTH] {
     arm_table
 }
 
-const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) {
+const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
     use crate::arm::arm_handlers::*;
     use crate::{_data_processing_inner, data_processing};
 
@@ -52,10 +53,9 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
                 let shift_field: u8 = (instruction & 0xF) as u8;
                 let set_condition = (instruction & 0b0000_0001_0000) != 0;
 
-                if set_condition {
-                    data_processing!(true, data_opcode, true, shift_field)
-                } else {
-                    data_processing!(true, data_opcode, false, shift_field)
+                match set_condition {
+                    true => data_processing!(true, data_opcode, true, shift_field),
+                    false => data_processing!(true, data_opcode, false, shift_field),
                 }
             }
             // data proc non-immediate mode
@@ -64,10 +64,9 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
                 let shift_field: u8 = (instruction & 0xF) as u8;
                 let set_condition = (instruction & 0b0000_0001_0000) != 0;
 
-                if set_condition {
-                    data_processing!(false, data_opcode, true, shift_field)
-                } else {
-                    data_processing!(false, data_opcode, false, shift_field)
+                match set_condition {
+                    true => data_processing!(false, data_opcode, true, shift_field),
+                    false => data_processing!(false, data_opcode, false, shift_field),
                 }
             } else if (instruction & 0b1111_1100_1001) == 0b0000_0000_1001 {
                 let accumulate = (instruction >> 5) & 1 != 0;
@@ -98,7 +97,89 @@ const fn generate_arm_instruction(instruction: usize) -> fn(&mut Arm7tdmi, u32) 
                 undefined_arm
             }
         }
-        0b01 => undefined_arm,
+        0b01 => {
+            if (instruction & 0b1110_0000_0001) == 0b0110_0000_0001 {
+                undefined_arm
+            } else if (instruction & 0b1110_0000_0000) == 0b0100_0000_0000 {
+                // 01IP_UBWL_****
+
+                let is_immediate = (instruction >> 9) & 1 == 0;
+                let pre_indexing = (instruction >> 8) & 1 == 1;
+                let increment = (instruction >> 7) & 1 == 1;
+                let byte_quantity = (instruction >> 6) & 1 == 1;
+                let write_back = (instruction >> 5) & 1 == 1;
+                let load = (instruction >> 4) & 1 == 1;
+
+                match (is_immediate, pre_indexing, increment, byte_quantity, write_back, load) {
+                    (true, true, true, true, true, true) => single_data_transfer::<true, true, true, true, true, true>,
+                    (true, true, true, true, true, false) => single_data_transfer::<true, true, true, true, true, false>,
+                    (true, true, true, true, false, true) => single_data_transfer::<true, true, true, true, false, true>,
+                    (true, true, true, true, false, false) => single_data_transfer::<true, true, true, true, false, false>,
+                    (true, true, true, false, true, true) => single_data_transfer::<true, true, true, false, true, true>,
+                    (true, true, true, false, true, false) => single_data_transfer::<true, true, true, false, true, false>,
+                    (true, true, true, false, false, true) => single_data_transfer::<true, true, true, false, false, true>,
+                    (true, true, true, false, false, false) => single_data_transfer::<true, true, true, false, false, false>,
+                    (true, true, false, true, true, true) => single_data_transfer::<true, true, false, true, true, true>,
+                    (true, true, false, true, true, false) => single_data_transfer::<true, true, false, true, true, false>,
+                    (true, true, false, true, false, true) => single_data_transfer::<true, true, false, true, false, true>,
+                    (true, true, false, true, false, false) => single_data_transfer::<true, true, false, true, false, false>,
+                    (true, true, false, false, true, true) => single_data_transfer::<true, true, false, false, true, true>,
+                    (true, true, false, false, true, false) => single_data_transfer::<true, true, false, false, true, false>,
+                    (true, true, false, false, false, true) => single_data_transfer::<true, true, false, false, false, true>,
+                    (true, true, false, false, false, false) => single_data_transfer::<true, true, false, false, false, false>,
+                    (true, false, true, true, true, true) => single_data_transfer::<true, false, true, true, true, true>,
+                    (true, false, true, true, true, false) => single_data_transfer::<true, false, true, true, true, false>,
+                    (true, false, true, true, false, true) => single_data_transfer::<true, false, true, true, false, true>,
+                    (true, false, true, true, false, false) => single_data_transfer::<true, false, true, true, false, false>,
+                    (true, false, true, false, true, true) => single_data_transfer::<true, false, true, false, true, true>,
+                    (true, false, true, false, true, false) => single_data_transfer::<true, false, true, false, true, false>,
+                    (true, false, true, false, false, true) => single_data_transfer::<true, false, true, false, false, true>,
+                    (true, false, true, false, false, false) => single_data_transfer::<true, false, true, false, false, false>,
+                    (true, false, false, true, true, true) => single_data_transfer::<true, false, false, true, true, true>,
+                    (true, false, false, true, true, false) => single_data_transfer::<true, false, false, true, true, false>,
+                    (true, false, false, true, false, true) => single_data_transfer::<true, false, false, true, false, true>,
+                    (true, false, false, true, false, false) => single_data_transfer::<true, false, false, true, false, false>,
+                    (true, false, false, false, true, true) => single_data_transfer::<true, false, false, false, true, true>,
+                    (true, false, false, false, true, false) => single_data_transfer::<true, false, false, false, true, false>,
+                    (true, false, false, false, false, true) => single_data_transfer::<true, false, false, false, false, true>,
+                    (true, false, false, false, false, false) => single_data_transfer::<true, false, false, false, false, false>,
+                    (false, true, true, true, true, true) => single_data_transfer::<false, true, true, true, true, true>,
+                    (false, true, true, true, true, false) => single_data_transfer::<false, true, true, true, true, false>,
+                    (false, true, true, true, false, true) => single_data_transfer::<false, true, true, true, false, true>,
+                    (false, true, true, true, false, false) => single_data_transfer::<false, true, true, true, false, false>,
+                    (false, true, true, false, true, true) => single_data_transfer::<false, true, true, false, true, true>,
+                    (false, true, true, false, true, false) => single_data_transfer::<false, true, true, false, true, false>,
+                    (false, true, true, false, false, true) => single_data_transfer::<false, true, true, false, false, true>,
+                    (false, true, true, false, false, false) => single_data_transfer::<false, true, true, false, false, false>,
+                    (false, true, false, true, true, true) => single_data_transfer::<false, true, false, true, true, true>,
+                    (false, true, false, true, true, false) => single_data_transfer::<false, true, false, true, true, false>,
+                    (false, true, false, true, false, true) => single_data_transfer::<false, true, false, true, false, true>,
+                    (false, true, false, true, false, false) => single_data_transfer::<false, true, false, true, false, false>,
+                    (false, true, false, false, true, true) => single_data_transfer::<false, true, false, false, true, true>,
+                    (false, true, false, false, true, false) => single_data_transfer::<false, true, false, false, true, false>,
+                    (false, true, false, false, false, true) => single_data_transfer::<false, true, false, false, false, true>,
+                    (false, true, false, false, false, false) => single_data_transfer::<false, true, false, false, false, false>,
+                    (false, false, true, true, true, true) => single_data_transfer::<false, false, true, true, true, true>,
+                    (false, false, true, true, true, false) => single_data_transfer::<false, false, true, true, true, false>,
+                    (false, false, true, true, false, true) => single_data_transfer::<false, false, true, true, false, true>,
+                    (false, false, true, true, false, false) => single_data_transfer::<false, false, true, true, false, false>,
+                    (false, false, true, false, true, true) => single_data_transfer::<false, false, true, false, true, true>,
+                    (false, false, true, false, true, false) => single_data_transfer::<false, false, true, false, true, false>,
+                    (false, false, true, false, false, true) => single_data_transfer::<false, false, true, false, false, true>,
+                    (false, false, true, false, false, false) => single_data_transfer::<false, false, true, false, false, false>,
+                    (false, false, false, true, true, true) => single_data_transfer::<false, false, false, true, true, true>,
+                    (false, false, false, true, true, false) => single_data_transfer::<false, false, false, true, true, false>,
+                    (false, false, false, true, false, true) => single_data_transfer::<false, false, false, true, false, true>,
+                    (false, false, false, true, false, false) => single_data_transfer::<false, false, false, true, false, false>,
+                    (false, false, false, false, true, true) => single_data_transfer::<false, false, false, false, true, true>,
+                    (false, false, false, false, true, false) => single_data_transfer::<false, false, false, false, true, false>,
+                    (false, false, false, false, false, true) => single_data_transfer::<false, false, false, false, false, true>,
+                    (false, false, false, false, false, false) => single_data_transfer::<false, false, false, false, false, false>,
+                }
+            } else {
+                undefined_arm
+            }
+        }
         0b10 => {
             if (instruction & 0xF00) == 0b1010_0000_0000 {
                 branch_and_link::<false>
