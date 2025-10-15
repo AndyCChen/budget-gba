@@ -100,7 +100,7 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
         0b01 => {
             if (instruction & 0b1110_0000_0001) == 0b0110_0000_0001 {
                 undefined_arm
-            } else if (instruction & 0b1110_0000_0000) == 0b0100_0000_0000 {
+            } else  {
                 // 01IP_UBWL_****
 
                 let is_immediate = (instruction >> 9) & 1 == 0;
@@ -176,9 +176,7 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                     (false, false, false, false, false, true) => single_data_transfer::<false, false, false, false, false, true>,
                     (false, false, false, false, false, false) => single_data_transfer::<false, false, false, false, false, false>,
                 }
-            } else {
-                undefined_arm
-            }
+            } 
         }
         0b10 => {
             if (instruction & 0xF00) == 0b1010_0000_0000 {

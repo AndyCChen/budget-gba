@@ -710,10 +710,23 @@ pub fn single_data_transfer<
 ) {
     let rd = (opcode >> 12) & 0xF; // destination/source register
     let rn = (opcode >> 16) & 0xF; // base register
+
     let mut offset = if IMM {
         opcode & 0xFFF
     } else {
-        todo!("register specified offset")
+        let shift_amount = (opcode >> 7) & 0x1F;
+        let shift_type = (opcode >> 5) & 0x3;
+        let value_to_shift = cpu.get_register_arm(opcode & 0xF);
+        let is_immediate = true;
+
+        match shift_type {
+            0b00 => data_op::lsl(cpu, value_to_shift, shift_amount),
+            0b01 => data_op::lsr(cpu, is_immediate, value_to_shift, shift_amount),
+            0b10 => data_op::asr(cpu, is_immediate, value_to_shift, shift_amount),
+            0b11 => data_op::ror(cpu, is_immediate, value_to_shift, shift_amount),
+            _ => panic!("Invalid shift type! {shift_type}"),
+        }
+        .0
     };
 
     if !INC {

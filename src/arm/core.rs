@@ -673,4 +673,9 @@ mod arm7tdmi_tests {
     fn test_arm_ldr_str_immediate_offset() {
         load_test("ARM7TDMI/v1/arm_ldr_str_immediate_offset.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_arm_ldr_str_register_offset() {
+        load_test("ARM7TDMI/v1/arm_ldr_str_register_offset.json", verify_state, 0);
+    }
 }
