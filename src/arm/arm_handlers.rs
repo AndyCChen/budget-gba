@@ -1,3 +1,6 @@
+use std::num::Wrapping;
+
+use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
@@ -5,7 +8,7 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     let is_thumb_mode = (branch_address & 0x1) == 1;
     cpu.status.cpsr.set_t(is_thumb_mode);
 
-    cpu.registers.r15 = branch_address; // pc is updated so we need to refill instruction pipeline
+    cpu.registers.r15 = Wrapping(branch_address); // pc is updated so we need to refill instruction pipeline
 
     if is_thumb_mode {
         cpu.registers.r15 &= !1;
@@ -20,18 +23,18 @@ pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
 
     // branch with link, save r15 (pc) to r14 (link register)
     if LINK {
-        cpu.set_register_arm(14, cpu.registers.r15 - 4);
+        cpu.set_register_arm(14, (cpu.registers.r15 - Wrapping(4)).0);
     }
 
     // positive
     if opcode & (1 << 23) == 0 {
-        cpu.registers.r15 = cpu.registers.r15.wrapping_add(offset);
+        cpu.registers.r15 += offset;
     }
     // negative
     else {
         offset |= 0xFC_000000;
         offset = !offset + 1;
-        cpu.registers.r15 = cpu.registers.r15.wrapping_sub(offset);
+        cpu.registers.r15 -= offset;
     }
 
     cpu.pipeline_refill_arm();
@@ -702,18 +705,62 @@ pub fn single_data_transfer<
     const WRITE_BACK: bool,    // 0: no write back, 1: write address to base
     const LOAD: bool,          // 0: store op, 1: load op
 >(
-    _cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi,
     opcode: u32,
 ) {
-    let _rd = (opcode >> 12) & 0xF; // destination/source register
-    let _rn = (opcode >> 16) & 0xF; // base register
-    let _offset = if IMM {
+    let rd = (opcode >> 12) & 0xF; // destination/source register
+    let rn = (opcode >> 16) & 0xF; // base register
+    let mut offset = if IMM {
         opcode & 0xFFF
     } else {
         todo!("register specified offset")
     };
 
+    if !INC {
+        offset = (!offset).wrapping_add(1); // convert to negative binary representation if subtracting with 2's complement
+    }
 
+    let address = if PRE_INDEX {
+        cpu.get_register_arm(rn).wrapping_add(offset)
+    } else {
+        cpu.get_register_arm(rn)
+    };
+
+    cpu.registers.r15 += 4;
+
+    if LOAD {
+        let load_value: u32 = if TRANSFER_BYTE {
+            cpu.read_byte(address, access_code::NONSEQUENTIAL).into()
+        } else {
+            cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
+        };
+
+        // post index transfer will always do a writeback
+        if WRITE_BACK || !PRE_INDEX {
+            cpu.set_register_arm(rn, cpu.get_register_arm(rn).wrapping_add(offset));
+        }
+
+        // handle extra i cycle from load
+
+        cpu.set_register_arm(rd, load_value);
+    } else {
+        let store_value = cpu.get_register_arm(rd);
+
+        if TRANSFER_BYTE {
+            cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+        } else {
+            cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+        }
+
+        // post index transfer will always do a writeback
+        if WRITE_BACK || !PRE_INDEX {
+            cpu.set_register_arm(rn, cpu.get_register_arm(rn).wrapping_add(offset));
+        }
+    }
+
+    if (LOAD && rd == 15) || ((WRITE_BACK || !PRE_INDEX) && rn == 15) {
+        cpu.pipeline_refill_arm();
+    }
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
