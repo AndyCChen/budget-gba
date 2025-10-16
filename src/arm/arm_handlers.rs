@@ -776,6 +776,90 @@ pub fn single_data_transfer<
     }
 }
 
+pub fn halfword_and_signed_data_transfer<
+    const IMM: bool,
+    const PRE_INDEX: bool,
+    const INC: bool,
+    const WRITE_BACK: bool,
+    const LOAD: bool,
+    const S: bool,
+    const H: bool,
+>(
+    cpu: &mut Arm7tdmi,
+    opcode: u32,
+) {
+    let rn = (opcode >> 16) & 0xF; // base register
+    let rd = (opcode >> 12) & 0xF; // dest/source register
+    let rm = opcode & 0xF; // offset register
+
+    let offset = {
+        let mut temp = if IMM {
+            ((opcode >> 4) & 0xF0) | (opcode & 0xF)
+        } else {
+            cpu.get_register_arm(rm)
+        };
+
+        if !INC {
+            temp = (!temp).wrapping_add(1);
+        }
+
+        temp
+    };
+
+    let address = if PRE_INDEX {
+        cpu.get_register_arm(rn).wrapping_add(offset)
+    } else {
+        cpu.get_register_arm(rn)
+    };
+
+    cpu.registers.r15 += 4;
+
+    if LOAD {
+        let load_value = match (S, H) {
+            (true, true) => {
+                let value = cpu.read_halfword(address, access_code::NONSEQUENTIAL);
+                value as i16 as i32 as u32 // do sign extension 
+            }
+            (true, false) => {
+                let value = cpu.read_byte(address, access_code::NONSEQUENTIAL);
+                value as i8 as i32 as u32 // do sign extension
+            }
+            (false, true) => {
+                let value = cpu.read_halfword(address, access_code::NONSEQUENTIAL) as u32;
+                value.rotate_right((address & 1) * 8)
+            },
+            (false, false) => panic!("Reserved for SWP instruction!"),
+        };
+
+        if WRITE_BACK || !PRE_INDEX {
+            cpu.set_register_arm(rn, cpu.get_register_arm(rn).wrapping_add(offset));
+        }
+
+        // handle extra i cycle from load op
+
+        cpu.set_register_arm(rd, load_value);
+    } else {
+        let store_value = cpu.get_register_arm(rd);
+
+        match (S, H) {
+            (true, true) => panic!("Sign bit should not be set for store operation?"),
+            (true, false) => panic!("Sign bit should not be set for store operation?"),
+            (false, true) => {
+                cpu.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+            }
+            (false, false) => panic!("Reserved for SWP instruction!"),
+        };
+
+        if WRITE_BACK || !PRE_INDEX {
+            cpu.set_register_arm(rn, cpu.get_register_arm(rn).wrapping_add(offset));
+        }
+    }
+
+    if (LOAD && rd == 15) || ((WRITE_BACK || !PRE_INDEX) && rn == 15) {
+        cpu.pipeline_refill_arm();
+    }
+}
+
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
     todo!("handle undefined opcode: {opcode}");
 }

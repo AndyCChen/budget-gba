@@ -29,7 +29,15 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
         0b00 => {
             if instruction == 0b0001_0010_0001 {
                 branch_and_exchange
-            } else if (instruction & 0b0001_1011_0000) == 0b0001_0000_0000 {
+            } else if (instruction & 0b1110_0000_1001) == 0b0000_0000_1001 && (instruction & 0b0110) != 0 {
+                let is_immediate = (instruction >> 6) & 1 == 1;
+
+                match is_immediate {
+                    true => generate_arm_halfword_transfer::<true>(instruction),
+                    false => generate_arm_halfword_transfer::<false>(instruction)
+                }
+            }  
+            else if (instruction & 0b0001_1011_0000) == 0b0001_0000_0000 {
                 let is_source_spsr = (instruction & 0b0000_0100_0000) != 0;
 
                 match is_source_spsr {
@@ -68,7 +76,8 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                     true => data_processing!(false, data_opcode, true, shift_field),
                     false => data_processing!(false, data_opcode, false, shift_field),
                 }
-            } else if (instruction & 0b1111_1100_1001) == 0b0000_0000_1001 {
+            }
+            else if (instruction & 0b1111_1100_1001) == 0b0000_0000_1001 {
                 let accumulate = (instruction >> 5) & 1 != 0;
                 let set_condition = (instruction >> 4) & 1 != 0;
 
@@ -93,7 +102,8 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                     (false, false, true) => multiply_long::<false, false, true>,
                     (false, false, false) => multiply_long::<false, false, false>,
                 }
-            } else {
+            } 
+            else {
                 undefined_arm
             }
         }
@@ -189,5 +199,83 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
         }
         0b11 => undefined_arm,
         _ => panic!("invalid opcode"),
+    }
+}
+
+const fn generate_arm_halfword_transfer<const IS_IMMEDIATE: bool>(instruction: usize) -> ArmHandler {
+    use crate::arm::arm_handlers::halfword_and_signed_data_transfer;
+
+    let pre_indexing = (instruction >> 8) & 1 == 1;
+    let increment = (instruction >> 7) & 1 == 1;
+    let write_back = (instruction >> 5) & 1 == 1;
+    let load = (instruction >> 4) & 1 == 1;
+    let s = (instruction >> 2) & 1 == 1;
+    let h = (instruction >> 1) & 1 == 1;
+
+    match (pre_indexing, increment, write_back, load, s, h) {
+        (true, true, true, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, true, true, true>,
+        (true, true, true, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, true, true, false>,
+        (true, true, true, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, true, false, true>,
+        (true, true, true, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, true, false, false>,
+        (true, true, true, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, false, true, true>,
+        (true, true, true, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, false, true, false>,
+        (true, true, true, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, false, false, true>,
+        (true, true, true, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, true, false, false, false>,
+        (true, true, false, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, true, true, true>,
+        (true, true, false, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, true, true, false>,
+        (true, true, false, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, true, false, true>,
+        (true, true, false, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, true, false, false>,
+        (true, true, false, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, false, true, true>,
+        (true, true, false, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, false, true, false>,
+        (true, true, false, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, false, false, true>,
+        (true, true, false, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, true, false, false, false, false>,
+        (true, false, true, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, true, true, true>,
+        (true, false, true, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, true, true, false>,
+        (true, false, true, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, true, false, true>,
+        (true, false, true, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, true, false, false>,
+        (true, false, true, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, false, true, true>,
+        (true, false, true, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, false, true, false>,
+        (true, false, true, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, false, false, true>,
+        (true, false, true, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, true, false, false, false>,
+        (true, false, false, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, true, true, true>,
+        (true, false, false, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, true, true, false>,
+        (true, false, false, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, true, false, true>,
+        (true, false, false, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, true, false, false>,
+        (true, false, false, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, false, true, true>,
+        (true, false, false, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, false, true, false>,
+        (true, false, false, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, false, false, true>,
+        (true, false, false, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, true, false, false, false, false, false>,
+        (false, true, true, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, true, true, true>,
+        (false, true, true, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, true, true, false>,
+        (false, true, true, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, true, false, true>,
+        (false, true, true, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, true, false, false>,
+        (false, true, true, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, false, true, true>,
+        (false, true, true, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, false, true, false>,
+        (false, true, true, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, false, false, true>,
+        (false, true, true, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, true, false, false, false>,
+        (false, true, false, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, true, true, true>,
+        (false, true, false, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, true, true, false>,
+        (false, true, false, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, true, false, true>,
+        (false, true, false, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, true, false, false>,
+        (false, true, false, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, false, true, true>,
+        (false, true, false, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, false, true, false>,
+        (false, true, false, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, false, false, true>,
+        (false, true, false, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, true, false, false, false, false>,
+        (false, false, true, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, true, true, true>,
+        (false, false, true, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, true, true, false>,
+        (false, false, true, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, true, false, true>,
+        (false, false, true, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, true, false, false>,
+        (false, false, true, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, false, true, true>,
+        (false, false, true, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, false, true, false>,
+        (false, false, true, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, false, false, true>,
+        (false, false, true, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, true, false, false, false>,
+        (false, false, false, true, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, true, true, true>,
+        (false, false, false, true, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, true, true, false>,
+        (false, false, false, true, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, true, false, true>,
+        (false, false, false, true, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, true, false, false>,
+        (false, false, false, false, true, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, false, true, true>,
+        (false, false, false, false, true, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, false, true, false>,
+        (false, false, false, false, false, true) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, false, false, true>,
+        (false, false, false, false, false, false) => halfword_and_signed_data_transfer::<IS_IMMEDIATE, false, false, false, false, false, false>,
     }
 }

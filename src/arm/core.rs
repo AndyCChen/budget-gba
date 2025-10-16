@@ -243,19 +243,6 @@ impl Arm7tdmi {
         data.data
     }
 
-    pub fn read_word(&mut self, address: u32, access: u8) -> u32 {
-        let address = address & !3; // align 4 byte boundary
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 4, "mismatch size!");
-        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
-
-        data.data
-    }
-
     pub fn read_rotate_word(&mut self, address: u32, access: u8) -> u32 {
         let data = self.transactions[self.transaction_index - 1].clone();
         self.transaction_next();
@@ -285,8 +272,7 @@ impl Arm7tdmi {
         data.data as u16
     }
 
-    pub fn read_halfworld(&mut self, address: u32, access: u8) -> u16 {
-        let address = address & !1;
+    pub fn read_halfword(&mut self, address: u32, access: u8) -> u16 {
         let data = self.transactions[self.transaction_index - 1].clone();
         self.transaction_next();
 
@@ -296,6 +282,17 @@ impl Arm7tdmi {
         assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
 
         data.data as u16
+    }
+
+    pub fn write_halfword(&mut self, address: u32, value: u16, access: u8) {
+        let data = self.transactions[self.transaction_index - 1].clone();
+        self.transaction_next();
+
+        assert_eq!(data.addr, address, "mismatched address!");
+        assert_eq!(data.access, access, "mismatch access code!");
+        assert_eq!(data.size, 2, "mismatch size!");
+        assert_eq!(data.kind, kind_code::WRITE, "mismatch kind code!");
+        assert_eq!(data.data, Into::<u32>::into(value), "mismatch write value!");
     }
 
     pub fn write_word(&mut self, address: u32, value: u32, access: u8) {
@@ -677,5 +674,10 @@ mod arm7tdmi_tests {
     #[test]
     fn test_arm_ldr_str_register_offset() {
         load_test("ARM7TDMI/v1/arm_ldr_str_register_offset.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_arm_ldrh_strh() {
+        load_test("ARM7TDMI/v1/arm_ldrh_strh.json", verify_state, 0);
     }
 }
