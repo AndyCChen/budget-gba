@@ -189,11 +189,56 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
             } 
         }
         0b10 => {
-            if (instruction & 0xF00) == 0b1010_0000_0000 {
-                branch_and_link::<false>
-            } else if (instruction & 0xF00) == 0b1011_0000_0000 {
-                branch_and_link::<true>
-            } else {
+            if (instruction & 0b1110_0000_0000) == 0b1010_0000_0000 {
+                let link = (instruction >> 8) & 1 == 1;
+
+                match link {
+                    true =>  branch_and_link::<true>,
+                    false =>  branch_and_link::<false>,
+                }
+            } else if (instruction & 0b1110_0000_0000) == 0b1000_0000_0000 {
+                let pre_index = (instruction >> 8) & 1 == 1;
+                let increment = (instruction >> 7) & 1 == 1;
+                let s_bit = (instruction >> 6) & 1 == 1;
+                let write_back = (instruction >> 5) & 1 == 1;
+                let load = (instruction >> 4) & 1 == 1;
+
+                match (pre_index, increment, s_bit, write_back, load) {
+                    (true, true, true, true, true) => block_data_transfer::<true, true, true, true, true>,
+                    (true, true, true, true, false) => block_data_transfer::<true, true, true, true, false>,
+                    (true, true, true, false, true) => block_data_transfer::<true, true, true, false, true>,
+                    (true, true, true, false, false) => block_data_transfer::<true, true, true, false, false>,
+                    (true, true, false, true, true) => block_data_transfer::<true, true, false, true, true>,
+                    (true, true, false, true, false) => block_data_transfer::<true, true, false, true, false>,
+                    (true, true, false, false, true) => block_data_transfer::<true, true, false, false, true>,
+                    (true, true, false, false, false) => block_data_transfer::<true, true, false, false, false>,
+                    (true, false, true, true, true) => block_data_transfer::<true, false, true, true, true>,
+                    (true, false, true, true, false) => block_data_transfer::<true, false, true, true, false>,
+                    (true, false, true, false, true) => block_data_transfer::<true, false, true, false, true>,
+                    (true, false, true, false, false) => block_data_transfer::<true, false, true, false, false>,
+                    (true, false, false, true, true) => block_data_transfer::<true, false, false, true, true>,
+                    (true, false, false, true, false) => block_data_transfer::<true, false, false, true, false>,
+                    (true, false, false, false, true) => block_data_transfer::<true, false, false, false, true>,
+                    (true, false, false, false, false) => block_data_transfer::<true, false, false, false, false>,
+                    (false, true, true, true, true) => block_data_transfer::<false, true, true, true, true>,
+                    (false, true, true, true, false) => block_data_transfer::<false, true, true, true, false>,
+                    (false, true, true, false, true) => block_data_transfer::<false, true, true, false, true>,
+                    (false, true, true, false, false) => block_data_transfer::<false, true, true, false, false>,
+                    (false, true, false, true, true) => block_data_transfer::<false, true, false, true, true>,
+                    (false, true, false, true, false) => block_data_transfer::<false, true, false, true, false>,
+                    (false, true, false, false, true) => block_data_transfer::<false, true, false, false, true>,
+                    (false, true, false, false, false) => block_data_transfer::<false, true, false, false, false>,
+                    (false, false, true, true, true) => block_data_transfer::<false, false, true, true, true>,
+                    (false, false, true, true, false) => block_data_transfer::<false, false, true, true, false>,
+                    (false, false, true, false, true) => block_data_transfer::<false, false, true, false, true>,
+                    (false, false, true, false, false) => block_data_transfer::<false, false, true, false, false>,
+                    (false, false, false, true, true) => block_data_transfer::<false, false, false, true, true>,
+                    (false, false, false, true, false) => block_data_transfer::<false, false, false, true, false>,
+                    (false, false, false, false, true) => block_data_transfer::<false, false, false, false, true>,
+                    (false, false, false, false, false) => block_data_transfer::<false, false, false, false, false>,
+                }
+            } 
+            else {
                 undefined_arm
             }
         }

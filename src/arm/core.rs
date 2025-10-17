@@ -102,7 +102,7 @@ impl Arm7tdmi {
     }
 
     /// Retrieve register in arm mode
-    pub fn get_register_arm(&self, register_id: u32) -> u32 {
+    pub fn get_banked_register_arm(&self, register_id: u32) -> u32 {
         match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0,
             (1, _) => self.registers.r1,
@@ -151,7 +151,7 @@ impl Arm7tdmi {
         }
     }
 
-    pub fn set_register_arm(&mut self, register_id: u32, value: u32) {
+    pub fn set_banked_register_arm(&mut self, register_id: u32, value: u32) {
         match (register_id, &self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0 = value,
             (1, _) => self.registers.r1 = value,
@@ -679,5 +679,11 @@ mod arm7tdmi_tests {
     #[test]
     fn test_arm_ldrh_strh() {
         load_test("ARM7TDMI/v1/arm_ldrh_strh.json", verify_state, 0);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_arm_ldm_stm() {
+        load_test("ARM7TDMI/v1/arm_ldm_stm.json", verify_state, 0);
     }
 }
