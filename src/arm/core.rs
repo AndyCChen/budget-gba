@@ -255,6 +255,18 @@ impl Arm7tdmi {
         data.data.rotate_right((address & 3) * 8)
     }
 
+    pub fn read_word(&mut self, address: u32, access: u8) -> u32 {
+        let data = self.transactions[self.transaction_index - 1].clone();
+        self.transaction_next();
+
+        assert_eq!(data.addr, address, "mismatched address!");
+        assert_eq!(data.access, access, "mismatch access code!");
+        assert_eq!(data.size, 4, "mismatch size!");
+        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
+
+        data.data
+    }
+
     fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u16 {
         let address = address & !1;
         let data = self.transactions[self.transaction_index - 1].clone();
@@ -682,7 +694,6 @@ mod arm7tdmi_tests {
     }
 
     #[test]
-    #[ignore]
     fn test_arm_ldm_stm() {
         load_test("ARM7TDMI/v1/arm_ldm_stm.json", verify_state, 0);
     }

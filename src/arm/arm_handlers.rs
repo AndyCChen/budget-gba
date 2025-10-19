@@ -860,71 +860,135 @@ pub fn halfword_and_signed_data_transfer<
     }
 }
 
+#[derive(PartialEq)]
+enum BlockTransferState {
+    ForceUserMode,
+    LoadPsr,
+    None,
+}
+
 pub fn block_data_transfer<
     const PRE_INDEX: bool,
     const INC: bool,
-    const S: bool,
+    const S: bool, // load psr or force user mode
     const WRITE_BACK: bool,
     const LOAD: bool,
 >(
     cpu: &mut Arm7tdmi,
-    opcode: u32,
+    mut opcode: u32,
 ) {
     let rn = (opcode >> 16) & 0xF; // base
-    assert_eq!(rn, 15, "r15 as base address?");
+    let active_registers = (opcode as u16).count_ones();
 
+    // handle empty register list edge case
+    if active_registers == 0 {
+        opcode |= 0x8000;
+    }
+
+    let mut offset: u32 = 0;
     let base = cpu.get_banked_register_arm(rn);
-    let direction: u32 = if INC { 1 } else { to_negative(1) };
-    let mut offset = 0;
+
+    let (base_address, write_back_value) = match (active_registers == 0, INC) {
+        (true, true) => (base.wrapping_add(0x40), base.wrapping_add(0x40)),
+        (true, false) => (base.wrapping_sub(0x40), base.wrapping_sub(0x40)),
+        (false, true) => (base, base.wrapping_add(active_registers * 4)),
+        (false, false) => (
+            base.wrapping_sub(active_registers * 4),
+            base.wrapping_sub(active_registers * 4),
+        ),
+    };
+
+    let saved_mode = cpu.status.cpsr.mode_bits();
+    let r15_in_transfer_list = opcode & (1 << 15) != 0;
+    let block_transfer_state = match (S, LOAD, r15_in_transfer_list) {
+        (false, _, _) => BlockTransferState::None, // s bit not set
+        (true, true, true) => BlockTransferState::LoadPsr, // s bit set, LDM with r15 in transfer list
+        (true, _, true | false) => {
+            // s bit set, LDM or STM, without r15 in transfer list
+            // s bit set, STM, with r15 in transfer list
+            cpu.status.cpsr.set_mode_bits(Mode::User);
+            BlockTransferState::ForceUserMode
+        }
+    };
 
     cpu.registers.r15 += 4;
 
+    // set up register list with corresponding address
     let register_list = {
-        let mut temp: [(u32, Option<u32>); 16] = [(0, None); 16];
+        let mut temp: [(u32, Option<u32>, u8); 16] =
+            core::array::from_fn(|n| (n as u32, None, access_code::SEQUENTIAL));
 
-        let mut generate_address =
-            |idx: u32, register_id: &mut u32, address: &mut Option<u32>| {
-                *register_id = idx;
-                if opcode & (1 << idx) == 0 {
-                    return;
-                }
-
-                if PRE_INDEX {
-                    offset += direction;
-                    *address = Some(base.wrapping_add(offset));
-                } else {
-                    *address = Some(base.wrapping_add(offset));
-                    offset += direction;
-                }
-            };
-
-        if INC {
-            for (idx, (register_id, address)) in temp.iter_mut().enumerate() {
-                generate_address(idx as u32, register_id, address);
+        let mut generate_address = |address: &mut Option<u32>| {
+            if (INC && PRE_INDEX) || (!INC && !PRE_INDEX) {
+                offset = offset.wrapping_add(4);
+                *address = Some(base_address.wrapping_add(offset));
+            } else {
+                *address = Some(base_address.wrapping_add(offset));
+                offset = offset.wrapping_add(4);
             }
-        } else {
-            for (idx, (register_id, address)) in temp.iter_mut().enumerate().rev() {
-                generate_address(idx as u32, register_id, address);
-            }
+        };
+
+        let mut temp_iter = temp
+            .iter_mut()
+            .enumerate()
+            .filter(|(idx, _)| opcode & (1 << idx) != 0);
+
+        if let Some((_, (_, address, access))) = temp_iter.next() {
+            *access = access_code::NONSEQUENTIAL;
+            generate_address(address);
+        }
+
+        for (_, (_, address, _)) in temp_iter {
+            generate_address(address);
         }
 
         temp
     };
 
-    register_list
+    let mut register_list_iter = register_list
         .iter()
-        .filter_map(|(register_id, addr)| addr.as_ref().map(|val| (register_id, val)))
-        .for_each(|(register_id, address)| {
-            if LOAD {
-                let load_value = cpu.read_rotate_word(*address, access_code::NONSEQUENTIAL);
-                cpu.set_banked_register_arm(*register_id, load_value);
-            } else {
-                let store_value = cpu.get_banked_register_arm(*register_id);
-                cpu.write_word(*address, store_value, access_code::NONSEQUENTIAL);
-            }
+        .filter_map(|(register_id, addr, access)| {
+            addr.as_ref().map(|val| (register_id, val, access))
         });
 
-    todo!("block transfer");
+    if let Some((register_id, address, access)) = register_list_iter.next() {
+        if LOAD {
+            let load_value = cpu.read_word(*address, *access);
+
+            if WRITE_BACK {
+                cpu.set_banked_register_arm(rn, write_back_value);
+            }
+
+            cpu.set_banked_register_arm(*register_id, load_value);
+        } else {
+            let store_value = cpu.get_banked_register_arm(*register_id);
+            cpu.write_word(*address, store_value, *access);
+
+            if WRITE_BACK {
+                cpu.set_banked_register_arm(rn, write_back_value);
+            }
+        }
+    }
+
+    register_list_iter.for_each(|(register_id, address, access)| {
+        if LOAD {
+            let load_value = cpu.read_word(*address, *access);
+            cpu.set_banked_register_arm(*register_id, load_value);
+        } else {
+            let store_value = cpu.get_banked_register_arm(*register_id);
+            cpu.write_word(*address, store_value, *access);
+        }
+    });
+
+    match block_transfer_state {
+        BlockTransferState::ForceUserMode => cpu.status.cpsr.set_mode_bits(saved_mode),
+        BlockTransferState::LoadPsr => cpu.status.cpsr = StatusRegister::from_bits(cpu.get_spsr()),
+        BlockTransferState::None => (),
+    };
+
+    if (LOAD && r15_in_transfer_list) || ((WRITE_BACK) && rn == 15) {
+        cpu.pipeline_refill_arm();
+    }
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
