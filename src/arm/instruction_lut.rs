@@ -29,7 +29,15 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
         0b00 => {
             if instruction == 0b0001_0010_0001 {
                 branch_and_exchange
-            } else if (instruction & 0b1110_0000_1001) == 0b0000_0000_1001 && (instruction & 0b0110) != 0 {
+            }
+            else if (instruction & 0b1111_1011_1111) == 0b0001_0000_1001 {
+                let byte_quantity = (instruction >> 6) & 1 == 1;
+                match byte_quantity {
+                    true => data_swap::<true>,
+                    false => data_swap::<false>,
+                }
+            }  
+            else if (instruction & 0b1110_0000_1001) == 0b0000_0000_1001 && (instruction & 0b0110) != 0 {
                 let is_immediate = (instruction >> 6) & 1 == 1;
 
                 match is_immediate {
@@ -78,8 +86,8 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                 }
             }
             else if (instruction & 0b1111_1100_1001) == 0b0000_0000_1001 {
-                let accumulate = (instruction >> 5) & 1 != 0;
-                let set_condition = (instruction >> 4) & 1 != 0;
+                let accumulate = (instruction >> 5) & 1 == 1;
+                let set_condition = (instruction >> 4) & 1 == 1;
 
                 match (accumulate, set_condition) {
                     (true, true) => multiply::<true, true>,
@@ -88,9 +96,9 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                     (false, false) => multiply::<false, false>,
                 }
             } else if (instruction & 0b1111_1000_1001) == 0b0000_1000_1001 {
-                let signed = (instruction >> 6) & 1 != 0;
-                let accumulate = (instruction >> 5) & 1 != 0;
-                let set_condition = (instruction >> 4) & 1 != 0;
+                let signed = (instruction >> 6) & 1 == 1;
+                let accumulate = (instruction >> 5) & 1 == 1;
+                let set_condition = (instruction >> 4) & 1 == 1;
 
                 match (signed, accumulate, set_condition) {
                     (true, true, true) => multiply_long::<true, true, true>,
@@ -102,7 +110,7 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                     (false, false, true) => multiply_long::<false, false, true>,
                     (false, false, false) => multiply_long::<false, false, false>,
                 }
-            } 
+            }
             else {
                 undefined_arm
             }

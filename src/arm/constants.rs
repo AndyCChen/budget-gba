@@ -36,7 +36,7 @@ pub mod access_code {
     pub const SEQUENTIAL: u8 = 1;
     pub const CODE: u8 = 2;
     // pub const DMA: u8 = 4;
-    // pub const LOCK: u8 = 8;
+    pub const LOCK: u8 = 8;
 }
 
 pub mod kind_code {

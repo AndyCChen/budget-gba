@@ -697,4 +697,9 @@ mod arm7tdmi_tests {
     fn test_arm_ldm_stm() {
         load_test("ARM7TDMI/v1/arm_ldm_stm.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_arm_swp() {
+        load_test("ARM7TDMI/v1/arm_swp.json", verify_state, 0);
+    }
 }
