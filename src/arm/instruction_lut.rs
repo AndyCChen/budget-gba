@@ -250,7 +250,13 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
                 undefined_arm
             }
         }
-        0b11 => undefined_arm,
+        0b11 => {
+            if (instruction & 0b1111_0000_0000) == 0b1111_0000_0000 {
+                software_interrupt
+            } else {
+                undefined_arm
+            }
+        },
         _ => panic!("invalid opcode"),
     }
 }

@@ -702,4 +702,9 @@ mod arm7tdmi_tests {
     fn test_arm_swp() {
         load_test("ARM7TDMI/v1/arm_swp.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_arm_swi(){
+        load_test("ARM7TDMI/v1/arm_swi.json", verify_state, 0);
+    }
 }

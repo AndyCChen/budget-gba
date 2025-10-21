@@ -1,5 +1,7 @@
 use std::num::Wrapping;
 
+use num_traits::WrappingSub;
+
 use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
 
@@ -995,18 +997,17 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let rm = opcode & 0xF; // source register
     let rd = (opcode >> 12) & 0xF; // destination register
     let rn = (opcode >> 16) & 0xF; // base register
-    
+
     cpu.registers.r15 += 4;
-    
+
     // read from swap address
     let swap_address = cpu.get_banked_register_arm(rn);
     let memory_value: u32 = if SWAP_BYTE {
         cpu.read_byte(swap_address, access_code::NONSEQUENTIAL)
-        .into()
+            .into()
     } else {
         cpu.read_rotate_word(swap_address, access_code::NONSEQUENTIAL)
     };
-
 
     // write rm register value into swap address
     let register_value = cpu.get_banked_register_arm(rm);
@@ -1021,6 +1022,18 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     if rd == 15 {
         cpu.pipeline_refill_arm();
     }
+}
+
+pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u32) {
+    cpu.registers.r14_svc = (cpu.registers.r15 - Wrapping(4)).0;
+
+    cpu.registers.r15 = Wrapping(8);
+    cpu.status.spsr_svc = cpu.status.cpsr;
+
+    cpu.status.cpsr.set_i(true);
+    cpu.status.cpsr.set_mode_bits(Mode::Supervisor);
+
+    cpu.pipeline_refill_arm();
 }
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
