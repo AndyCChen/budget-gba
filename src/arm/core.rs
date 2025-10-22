@@ -1,23 +1,23 @@
 use std::num::Wrapping;
 
-use crate::arm::constants::{access_code, kind_code};
+use crate::arm::constants::access_code;
 use crate::arm::instruction_lut::ARM_TABLE;
 use crate::arm::json_test_states::*;
+use crate::bus::core::Bus;
+
 use bitfield_struct::bitfield;
 
 pub struct Arm7tdmi {
-    transaction_index: usize,
-    pub registers: GeneralRegisters,
-    pub status: StatusRegisters,
-    pub pipeline: [Option<u32>; 3], // [execute, decode, fetch]
-    pub pipeline_state: u8,
-    pub transactions: Vec<Transactions>,
+    pub(crate) registers: GeneralRegisters,
+    pub(crate) status: StatusRegisters,
+    pub(crate) pipeline: [Option<u32>; 3], // [execute, decode, fetch]
+    pub(crate) pipeline_state: u8,
+    pub(crate) bus: Box<dyn Bus>,
 }
 
 impl Arm7tdmi {
-    pub fn new(input_state: &InputStates) -> Self {
+    pub fn new(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
         Self {
-            transaction_index: 1,
             registers: GeneralRegisters {
                 r0: input_state.initial.R[0],
                 r1: input_state.initial.R[1],
@@ -73,7 +73,7 @@ impl Arm7tdmi {
                 None,
             ],
             pipeline_state: input_state.initial.access,
-            transactions: input_state.transactions.clone(),
+            bus,
         }
     }
 
@@ -102,7 +102,7 @@ impl Arm7tdmi {
     }
 
     /// Retrieve register in arm mode
-    pub fn get_banked_register_arm(&self, register_id: u32) -> u32 {
+    pub(crate) fn get_banked_register_arm(&self, register_id: u32) -> u32 {
         match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0,
             (1, _) => self.registers.r1,
@@ -151,7 +151,7 @@ impl Arm7tdmi {
         }
     }
 
-    pub fn set_banked_register_arm(&mut self, register_id: u32, value: u32) {
+    pub(crate) fn set_banked_register_arm(&mut self, register_id: u32, value: u32) {
         match (register_id, &self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0 = value,
             (1, _) => self.registers.r1 = value,
@@ -202,7 +202,7 @@ impl Arm7tdmi {
 
     // retrieve banked spsr from current corresponding mode.
     // if mode is user/system, returns the cpsr
-    pub fn get_spsr(&self) -> u32 {
+    pub(crate) fn get_spsr(&self) -> u32 {
         match self.status.cpsr.mode_bits() {
             Mode::User | Mode::System => self.status.cpsr.into_bits(),
             Mode::Fiq => self.status.spsr_fiq.into_bits(),
@@ -215,7 +215,7 @@ impl Arm7tdmi {
 
     // set banked spsr of the current corresponding mode.
     // if mode is user/system, sets the cpsr
-    pub fn set_spsr(&mut self, value: u32) {
+    pub(crate) fn set_spsr(&mut self, value: u32) {
         match self.status.cpsr.mode_bits() {
             Mode::User | Mode::System => (),
             Mode::Fiq => self.status.spsr_fiq = StatusRegister::from_bits(value),
@@ -226,127 +226,8 @@ impl Arm7tdmi {
         };
     }
 
-    fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
-        let address = address & !3; // align 4 byte boundary
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 4, "mismatch size!");
-        assert_eq!(
-            data.kind,
-            kind_code::INSTRUCTION_READ,
-            "mismatch kind code!"
-        );
-
-        data.data
-    }
-
-    pub fn read_rotate_word(&mut self, address: u32, access: u8) -> u32 {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 4, "mismatch size!");
-        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
-
-        data.data.rotate_right((address & 3) * 8)
-    }
-
-    pub fn read_word(&mut self, address: u32, access: u8) -> u32 {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 4, "mismatch size!");
-        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
-
-        data.data
-    }
-
-    fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u16 {
-        let address = address & !1;
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.size, 2, "mismatch size!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(
-            data.kind,
-            kind_code::INSTRUCTION_READ,
-            "mismatch kind code!"
-        );
-
-        data.data as u16
-    }
-
-    pub fn read_halfword(&mut self, address: u32, access: u8) -> u16 {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 2, "mismatch size!");
-        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
-
-        data.data as u16
-    }
-
-    pub fn write_halfword(&mut self, address: u32, value: u16, access: u8) {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 2, "mismatch size!");
-        assert_eq!(data.kind, kind_code::WRITE, "mismatch kind code!");
-        assert_eq!(data.data, Into::<u32>::into(value), "mismatch write value!");
-    }
-
-    pub fn write_word(&mut self, address: u32, value: u32, access: u8) {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 4, "mismatch size!");
-        assert_eq!(data.kind, kind_code::WRITE, "mismatch kind code!");
-        assert_eq!(data.data, value, "mismatch write value!");
-    }
-
-    pub fn read_byte(&mut self, address: u32, access: u8) -> u8 {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 1, "mismatch size!");
-        assert_eq!(data.kind, kind_code::GENERAL_READ, "mismatch kind code!");
-
-        data.data as u8
-    }
-
-    pub fn write_byte(&mut self, address: u32, value: u8, access: u8) {
-        let data = self.transactions[self.transaction_index - 1].clone();
-        self.transaction_next();
-
-        assert_eq!(data.addr, address, "mismatched address!");
-        assert_eq!(data.access, access, "mismatch access code!");
-        assert_eq!(data.size, 1, "mismatch size!");
-        assert_eq!(data.kind, kind_code::WRITE, "mismatch kind code!");
-        assert_eq!(data.data, Into::<u32>::into(value), "mismatch write value!");
-    }
-
-    fn transaction_next(&mut self) {
-        self.transaction_index += 1;
-    }
-
     /// Flush and refills the pipeline for arm mode
-    pub fn pipeline_refill_arm(&mut self) {
+    pub(crate) fn pipeline_refill_arm(&mut self) {
         self.pipeline[0] = Some(self.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
@@ -359,7 +240,7 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for thumb mode
-    pub fn pipeline_refill_thumb(&mut self) {
+    pub(crate) fn pipeline_refill_thumb(&mut self) {
         self.pipeline[0] = Some(
             self.pipeline_read_halfword(
                 self.registers.r15.0,
@@ -420,61 +301,61 @@ impl Arm7tdmi {
     }
 }
 
-pub struct StatusRegisters {
-    pub cpsr: StatusRegister,
-    pub spsr_fiq: StatusRegister,
-    pub spsr_svc: StatusRegister,
-    pub spsr_abt: StatusRegister,
-    pub spsr_irq: StatusRegister,
-    pub spsr_und: StatusRegister,
+pub(crate) struct StatusRegisters {
+    pub(crate) cpsr: StatusRegister,
+    pub(crate) spsr_fiq: StatusRegister,
+    pub(crate) spsr_svc: StatusRegister,
+    pub(crate) spsr_abt: StatusRegister,
+    pub(crate) spsr_irq: StatusRegister,
+    pub(crate) spsr_und: StatusRegister,
 }
 
 #[derive(Default, Debug)]
-pub struct GeneralRegisters {
-    pub r0: u32,
-    pub r1: u32,
-    pub r2: u32,
-    pub r3: u32,
-    pub r4: u32,
-    pub r5: u32,
-    pub r6: u32,
-    pub r7: u32,
+pub(crate) struct GeneralRegisters {
+    pub(crate) r0: u32,
+    pub(crate) r1: u32,
+    pub(crate) r2: u32,
+    pub(crate) r3: u32,
+    pub(crate) r4: u32,
+    pub(crate) r5: u32,
+    pub(crate) r6: u32,
+    pub(crate) r7: u32,
 
-    pub r8: u32,
-    pub r8_fiq: u32,
+    pub(crate) r8: u32,
+    pub(crate) r8_fiq: u32,
 
-    pub r9: u32,
-    pub r9_fiq: u32,
+    pub(crate) r9: u32,
+    pub(crate) r9_fiq: u32,
 
-    pub r10: u32,
-    pub r10_fiq: u32,
+    pub(crate) r10: u32,
+    pub(crate) r10_fiq: u32,
 
-    pub r11: u32,
-    pub r11_fiq: u32,
+    pub(crate) r11: u32,
+    pub(crate) r11_fiq: u32,
 
-    pub r12: u32,
-    pub r12_fiq: u32,
+    pub(crate) r12: u32,
+    pub(crate) r12_fiq: u32,
 
-    pub r13: u32, // stack pointer (sp)
-    pub r13_fiq: u32,
-    pub r13_svc: u32,
-    pub r13_abt: u32,
-    pub r13_irq: u32,
-    pub r13_und: u32,
+    pub(crate) r13: u32, // stack pointer (sp)
+    pub(crate) r13_fiq: u32,
+    pub(crate) r13_svc: u32,
+    pub(crate) r13_abt: u32,
+    pub(crate) r13_irq: u32,
+    pub(crate) r13_und: u32,
 
-    pub r14: u32, // link registers (lr)
-    pub r14_fiq: u32,
-    pub r14_svc: u32,
-    pub r14_abt: u32,
-    pub r14_irq: u32,
-    pub r14_und: u32,
+    pub(crate) r14: u32, // link registers (lr)
+    pub(crate) r14_fiq: u32,
+    pub(crate) r14_svc: u32,
+    pub(crate) r14_abt: u32,
+    pub(crate) r14_irq: u32,
+    pub(crate) r14_und: u32,
 
-    pub r15: Wrapping<u32>, // program counter (pc)
+    pub(crate) r15: Wrapping<u32>, // program counter (pc)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum Mode {
+pub(crate) enum Mode {
     User = 0b10000,
     Fiq = 0b10001,
     Irq = 0b10010,
@@ -504,39 +385,41 @@ impl Mode {
 }
 
 #[bitfield(u32)]
-pub struct StatusRegister {
+pub(crate) struct StatusRegister {
     #[bits(5, default = Mode::User, from = Mode::from_bits)]
-    pub mode_bits: Mode,
+    pub(crate) mode_bits: Mode,
 
     // 0: arm mode, 1: thumb mode,
-    pub t: bool,
+    pub(crate) t: bool,
 
     // 0: enable fiq, 1: disable fiq
-    pub f: bool,
+    pub(crate) f: bool,
 
     // 0: enable irq, 1: disable irq
-    pub i: bool,
+    pub(crate) i: bool,
 
     #[bits(20)]
     // reserved
     __: u32,
 
     // overflow
-    pub v: bool,
+    pub(crate) v: bool,
 
     // carry flag
-    pub c: bool,
+    pub(crate) c: bool,
 
     // zero flag
-    pub z: bool,
+    pub(crate) z: bool,
 
     // negative flag
-    pub n: bool,
+    pub(crate) n: bool,
 }
 
 #[cfg(test)]
 #[rustfmt::skip]
 mod arm7tdmi_tests {
+    use crate::bus::test_bus::TestBus;
+
     use super::*;
     use std::fs;
     use std::path::Path;
@@ -554,7 +437,7 @@ mod arm7tdmi_tests {
         let it = items.into_iter().enumerate().skip(skip);
 
         for (count, item) in it {
-            let mut cpu = Arm7tdmi::new(&item);
+            let mut cpu = Arm7tdmi::new(&item, Box::new(TestBus::new(&item.transactions)));
             cpu.run();
             check_state(&cpu, &item, count);
         }

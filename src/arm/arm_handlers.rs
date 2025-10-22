@@ -1,7 +1,5 @@
 use std::num::Wrapping;
 
-use num_traits::WrappingSub;
-
 use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
 
@@ -882,22 +880,23 @@ pub fn block_data_transfer<
     let rn = (opcode >> 16) & 0xF; // base
     let active_registers = (opcode as u16).count_ones();
 
-    // handle empty register list edge case
-    if active_registers == 0 {
-        opcode |= 0x8000;
-    }
-
     let mut offset: u32 = 0;
     let base = cpu.get_banked_register_arm(rn);
 
     let (base_address, write_back_value) = match (active_registers == 0, INC) {
-        (true, true) => (base.wrapping_add(0x40), base.wrapping_add(0x40)),
-        (true, false) => (base.wrapping_sub(0x40), base.wrapping_sub(0x40)),
         (false, true) => (base, base.wrapping_add(active_registers * 4)),
         (false, false) => (
             base.wrapping_sub(active_registers * 4),
             base.wrapping_sub(active_registers * 4),
         ),
+        (true, true) => {
+            opcode |= 0x8000;
+            (base.wrapping_add(0x40), base.wrapping_add(0x40))
+        }
+        (true, false) => {
+            opcode |= 0x8000;
+            (base.wrapping_sub(0x40), base.wrapping_sub(0x40))
+        }
     };
 
     let saved_mode = cpu.status.cpsr.mode_bits();
