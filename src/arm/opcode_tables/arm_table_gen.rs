@@ -1,19 +1,16 @@
 use crate::arm::core::Arm7tdmi;
 
-type ArmHandler = fn(&mut Arm7tdmi, u32);
+pub(crate) type ArmHandler = fn(&mut Arm7tdmi, u32);
+pub(crate) const ARM_TABLE_SIZE: usize = 0x1000;
 
-const ARM_TABLE_LENGTH: usize = 0x1000;
+pub(crate) const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_SIZE] {
+    use crate::arm::opcode_tables::arm_handlers::*;
 
-pub static ARM_TABLE: [ArmHandler; ARM_TABLE_LENGTH] = generate_arm_table();
-
-const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_LENGTH] {
-    use crate::arm::arm_handlers::*;
-
-    let mut arm_table: [ArmHandler; ARM_TABLE_LENGTH] = [undefined_arm; ARM_TABLE_LENGTH];
+    let mut arm_table: [ArmHandler; ARM_TABLE_SIZE] = [undefined_arm; ARM_TABLE_SIZE];
 
     let mut i = 0;
 
-    while i < ARM_TABLE_LENGTH {
+    while i < ARM_TABLE_SIZE {
         arm_table[i] = generate_arm_instruction(i);
         i += 1;
     }
@@ -22,7 +19,7 @@ const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_LENGTH] {
 }
 
 const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
-    use crate::arm::arm_handlers::*;
+    use crate::arm::opcode_tables::arm_handlers::*;
     use crate::{_data_processing_inner, data_processing};
 
     match instruction >> 10 {
@@ -262,7 +259,7 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
 }
 
 const fn generate_arm_halfword_transfer<const IS_IMMEDIATE: bool>(instruction: usize) -> ArmHandler {
-    use crate::arm::arm_handlers::halfword_and_signed_data_transfer;
+    use crate::arm::opcode_tables::arm_handlers::halfword_and_signed_data_transfer;
 
     let pre_indexing = (instruction >> 8) & 1 == 1;
     let increment = (instruction >> 7) & 1 == 1;

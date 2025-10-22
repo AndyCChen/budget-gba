@@ -1,8 +1,8 @@
 use std::num::Wrapping;
 
 use crate::arm::constants::access_code;
-use crate::arm::instruction_lut::ARM_TABLE;
 use crate::arm::json_test_states::*;
+use crate::arm::opcode_tables::instruction_lut::{ARM_TABLE, THUMB_TABLE};
 use crate::bus::core::Bus;
 
 use bitfield_struct::bitfield;
