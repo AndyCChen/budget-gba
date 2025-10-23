@@ -34,11 +34,22 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
                 }
             } else if (instruction & 0b11_1000_0000) == 0b00_0000_0000 {
                 let shift_op = (instruction >> 5) & 0x3;
+
                 match shift_op {
                     0 => move_shifted::<0>,
                     1 => move_shifted::<1>,
                     2 => move_shifted::<2>,
                     _ => panic!("Invalid shift op!"),
+                }
+            } else if (instruction & 0b11_1000_0000) == 0b00_1000_0000 {
+                let op = (instruction >> 5) & 0x3;
+
+                match op {
+                    0 => mov_cmp_add_sub_immediate::<0>,
+                    1 => mov_cmp_add_sub_immediate::<1>,
+                    2 => mov_cmp_add_sub_immediate::<2>,
+                    3 => mov_cmp_add_sub_immediate::<3>,
+                    _ => panic!("Invalid op!"),
                 }
             } else {
                 undefined_thumb

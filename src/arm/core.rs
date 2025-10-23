@@ -680,4 +680,9 @@ mod arm7tdmi_thumb_tests {
     fn test_thumb_add_sub() {
         load_test("ARM7TDMI/v1/thumb_add_sub.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_mov_cmp_add_sub() {
+        load_test("ARM7TDMI/v1/thumb_mov_cmp_add_sub.json", verify_state, 10);
+    }
 }

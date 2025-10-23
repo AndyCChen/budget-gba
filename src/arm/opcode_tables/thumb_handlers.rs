@@ -6,6 +6,10 @@ use crate::arm::core::Arm7tdmi;
 // const PC: u32 = 10; // program counter register number
 
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    const LSL: u8 = 0;
+    const LSR: u8 = 1;
+    const ASR: u8 = 2;
+
     cpu.registers.r15 += 2;
 
     let rd = opcode & 0x7;
@@ -16,9 +20,9 @@ pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
         let value = cpu.get_banked_register_thumb(rs);
 
         match SHIFT_OP {
-            0 => arithmetic::lsl(cpu, value, shift_amount.into()),
-            1 => arithmetic::lsr(cpu, true, value, shift_amount.into()),
-            2 => arithmetic::asr(cpu, true, value, shift_amount.into()),
+            LSL => arithmetic::lsl(cpu, value, shift_amount.into()),
+            LSR => arithmetic::lsr(cpu, true, value, shift_amount.into()),
+            ASR => arithmetic::asr(cpu, true, value, shift_amount.into()),
             _ => panic!("Invalid shift op!"),
         }
     };
@@ -48,6 +52,39 @@ pub fn add_subtract<const IMM: bool, const IS_SUBTRACT: bool>(cpu: &mut Arm7tdmi
     };
 
     cpu.set_banked_register_thumb(rd, result);
+}
+
+pub fn mov_cmp_add_sub_immediate<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    const MOV: u8 = 0;
+    const CMP: u8 = 1;
+    const ADD: u8 = 2;
+    const SUB: u8 = 3;
+
+    cpu.registers.r15 += 2;
+
+    let rd = (opcode >> 8) & 0x7;
+    let immediate_value: u32 = (opcode & 0xFF).into();
+
+    let op1 = cpu.get_banked_register_thumb(rd);
+
+    let result = match OP {
+        MOV => Some(arithmetic::mov::<true>(
+            cpu,
+            immediate_value,
+            cpu.status.cpsr.c(),
+        )),
+        CMP => {
+            arithmetic::sub::<true>(cpu, op1, immediate_value);
+            None
+        }
+        ADD => Some(arithmetic::add::<true>(cpu, op1, immediate_value)),
+        SUB => Some(arithmetic::sub::<true>(cpu, op1, immediate_value)),
+        _ => panic!("Invalid OP! {OP}"),
+    };
+
+    if let Some(value) = result {
+        cpu.set_banked_register_thumb(rd, value);
+    }
 }
 
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {
