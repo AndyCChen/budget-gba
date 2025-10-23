@@ -179,7 +179,11 @@ pub fn data_processing<
         }
 
         if result.is_some() {
-            cpu.pipeline_refill_arm(); // pc updated, so refill pipeline
+            if cpu.status.cpsr.t() {
+                cpu.pipeline_refill_thumb();
+            } else {
+                cpu.pipeline_refill_arm();
+            }
         }
     }
 }
@@ -722,7 +726,11 @@ pub fn block_data_transfer<
     };
 
     if (LOAD && r15_in_transfer_list) || ((WRITE_BACK) && rn == 15) {
-        cpu.pipeline_refill_arm();
+        if cpu.status.cpsr.t() {
+            cpu.pipeline_refill_thumb();
+        } else {
+            cpu.pipeline_refill_arm();
+        }
     }
 }
 

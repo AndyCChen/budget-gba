@@ -8,11 +8,11 @@ use crate::bus::core::Bus;
 use bitfield_struct::bitfield;
 
 pub struct Arm7tdmi {
-    pub(crate) registers: GeneralRegisters,
-    pub(crate) status: StatusRegisters,
-    pub(crate) pipeline: [Option<u32>; 3], // [execute, decode, fetch]
-    pub(crate) pipeline_state: u8,
-    pub(crate) bus: Box<dyn Bus>,
+    pub registers: GeneralRegisters,
+    pub status: StatusRegisters,
+    pub pipeline: [Option<u32>; 3], // [execute, decode, fetch]
+    pub pipeline_state: u8,
+    pub bus: Box<dyn Bus>,
 }
 
 impl Arm7tdmi {
@@ -100,7 +100,7 @@ impl Arm7tdmi {
     }
 
     /// Retrieve register in arm mode
-    pub(crate) fn get_banked_register_arm(&self, register_id: u32) -> u32 {
+    pub fn get_banked_register_arm(&self, register_id: u32) -> u32 {
         match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0,
             (1, _) => self.registers.r1,
@@ -149,7 +149,7 @@ impl Arm7tdmi {
         }
     }
 
-    pub(crate) fn set_banked_register_arm(&mut self, register_id: u32, value: u32) {
+    pub fn set_banked_register_arm(&mut self, register_id: u32, value: u32) {
         match (register_id, &self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0 = value,
             (1, _) => self.registers.r1 = value,
@@ -198,7 +198,7 @@ impl Arm7tdmi {
         }
     }
 
-    pub(crate) fn get_banked_register_thumb(&self, register_id: u16) -> u32 {
+    pub fn get_banked_register_thumb(&self, register_id: u16) -> u32 {
         match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0,
             (1, _) => self.registers.r1,
@@ -232,7 +232,7 @@ impl Arm7tdmi {
         }
     }
 
-    pub(crate) fn set_banked_register_thumb(&mut self, register_id: u16, value: u32) {
+    pub fn set_banked_register_thumb(&mut self, register_id: u16, value: u32) {
         match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0 = value,
             (1, _) => self.registers.r1 = value,
@@ -268,7 +268,7 @@ impl Arm7tdmi {
 
     // retrieve banked spsr from current corresponding mode.
     // if mode is user/system, returns the cpsr
-    pub(crate) fn get_spsr(&self) -> u32 {
+    pub fn get_spsr(&self) -> u32 {
         match self.status.cpsr.mode_bits() {
             Mode::User | Mode::System => self.status.cpsr.into_bits(),
             Mode::Fiq => self.status.spsr_fiq.into_bits(),
@@ -281,7 +281,7 @@ impl Arm7tdmi {
 
     // set banked spsr of the current corresponding mode.
     // if mode is user/system, sets the cpsr
-    pub(crate) fn set_spsr(&mut self, value: u32) {
+    pub fn set_spsr(&mut self, value: u32) {
         match self.status.cpsr.mode_bits() {
             Mode::User | Mode::System => (),
             Mode::Fiq => self.status.spsr_fiq = StatusRegister::from_bits(value),
@@ -293,7 +293,7 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for arm mode
-    pub(crate) fn pipeline_refill_arm(&mut self) {
+    pub fn pipeline_refill_arm(&mut self) {
         self.pipeline[0] = Some(self.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
@@ -306,7 +306,7 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for thumb mode
-    pub(crate) fn pipeline_refill_thumb(&mut self) {
+    pub fn pipeline_refill_thumb(&mut self) {
         self.pipeline[0] = Some(
             self.pipeline_read_halfword(
                 self.registers.r15.0,
@@ -370,61 +370,61 @@ impl Arm7tdmi {
     }
 }
 
-pub(crate) struct StatusRegisters {
-    pub(crate) cpsr: StatusRegister,
-    pub(crate) spsr_fiq: StatusRegister,
-    pub(crate) spsr_svc: StatusRegister,
-    pub(crate) spsr_abt: StatusRegister,
-    pub(crate) spsr_irq: StatusRegister,
-    pub(crate) spsr_und: StatusRegister,
+pub struct StatusRegisters {
+    pub cpsr: StatusRegister,
+    pub spsr_fiq: StatusRegister,
+    pub spsr_svc: StatusRegister,
+    pub spsr_abt: StatusRegister,
+    pub spsr_irq: StatusRegister,
+    pub spsr_und: StatusRegister,
 }
 
 #[derive(Default, Debug)]
-pub(crate) struct GeneralRegisters {
-    pub(crate) r0: u32,
-    pub(crate) r1: u32,
-    pub(crate) r2: u32,
-    pub(crate) r3: u32,
-    pub(crate) r4: u32,
-    pub(crate) r5: u32,
-    pub(crate) r6: u32,
-    pub(crate) r7: u32,
+pub struct GeneralRegisters {
+    pub r0: u32,
+    pub r1: u32,
+    pub r2: u32,
+    pub r3: u32,
+    pub r4: u32,
+    pub r5: u32,
+    pub r6: u32,
+    pub r7: u32,
 
-    pub(crate) r8: u32,
-    pub(crate) r8_fiq: u32,
+    pub r8: u32,
+    pub r8_fiq: u32,
 
-    pub(crate) r9: u32,
-    pub(crate) r9_fiq: u32,
+    pub r9: u32,
+    pub r9_fiq: u32,
 
-    pub(crate) r10: u32,
-    pub(crate) r10_fiq: u32,
+    pub r10: u32,
+    pub r10_fiq: u32,
 
-    pub(crate) r11: u32,
-    pub(crate) r11_fiq: u32,
+    pub r11: u32,
+    pub r11_fiq: u32,
 
-    pub(crate) r12: u32,
-    pub(crate) r12_fiq: u32,
+    pub r12: u32,
+    pub r12_fiq: u32,
 
-    pub(crate) r13: u32, // stack pointer (sp)
-    pub(crate) r13_fiq: u32,
-    pub(crate) r13_svc: u32,
-    pub(crate) r13_abt: u32,
-    pub(crate) r13_irq: u32,
-    pub(crate) r13_und: u32,
+    pub r13: u32, // stack pointer (sp)
+    pub r13_fiq: u32,
+    pub r13_svc: u32,
+    pub r13_abt: u32,
+    pub r13_irq: u32,
+    pub r13_und: u32,
 
-    pub(crate) r14: u32, // link registers (lr)
-    pub(crate) r14_fiq: u32,
-    pub(crate) r14_svc: u32,
-    pub(crate) r14_abt: u32,
-    pub(crate) r14_irq: u32,
-    pub(crate) r14_und: u32,
+    pub r14: u32, // link registers (lr)
+    pub r14_fiq: u32,
+    pub r14_svc: u32,
+    pub r14_abt: u32,
+    pub r14_irq: u32,
+    pub r14_und: u32,
 
-    pub(crate) r15: Wrapping<u32>, // program counter (pc)
+    pub r15: Wrapping<u32>, // program counter (pc)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum Mode {
+pub enum Mode {
     User = 0b10000,
     Fiq = 0b10001,
     Irq = 0b10010,
@@ -454,34 +454,34 @@ impl Mode {
 }
 
 #[bitfield(u32)]
-pub(crate) struct StatusRegister {
+pub struct StatusRegister {
     #[bits(5, default = Mode::User, from = Mode::from_bits)]
-    pub(crate) mode_bits: Mode,
+    pub mode_bits: Mode,
 
     // 0: arm mode, 1: thumb mode,
-    pub(crate) t: bool,
+    pub t: bool,
 
     // 0: enable fiq, 1: disable fiq
-    pub(crate) f: bool,
+    pub f: bool,
 
     // 0: enable irq, 1: disable irq
-    pub(crate) i: bool,
+    pub i: bool,
 
     #[bits(20)]
     // reserved
     __: u32,
 
     // overflow
-    pub(crate) v: bool,
+    pub v: bool,
 
     // carry flag
-    pub(crate) c: bool,
+    pub c: bool,
 
     // zero flag
-    pub(crate) z: bool,
+    pub z: bool,
 
     // negative flag
-    pub(crate) n: bool,
+    pub n: bool,
 }
 
 #[rustfmt::skip]

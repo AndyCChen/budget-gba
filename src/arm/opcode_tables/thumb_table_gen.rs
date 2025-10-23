@@ -1,10 +1,10 @@
 use crate::arm::core::Arm7tdmi;
 use crate::arm::opcode_tables::thumb_handlers::*;
 
-pub(crate) type ThumbHandler = fn(&mut Arm7tdmi, u16);
-pub(crate) const THUMB_TABLE_SIZE: usize = 0x400;
+pub type ThumbHandler = fn(&mut Arm7tdmi, u16);
+pub const THUMB_TABLE_SIZE: usize = 0x400;
 
-pub(crate) const fn generate_thumb_table() -> [ThumbHandler; THUMB_TABLE_SIZE] {
+pub const fn generate_thumb_table() -> [ThumbHandler; THUMB_TABLE_SIZE] {
     use crate::arm::opcode_tables::thumb_handlers::*;
 
     let mut thumb_table: [ThumbHandler; THUMB_TABLE_SIZE] = [undefined_thumb; THUMB_TABLE_SIZE];
