@@ -81,8 +81,9 @@ impl Arm7tdmi {
         if let Some(opcode) = self.pipeline[0] {
             // execute in thumb mode
             if self.status.cpsr.t() {
-                panic!("Thumb mode not implemented!");
-                //self.pipeline_prefetch(true);
+                self.pipeline_prefetch(true);
+                let thumb_table_hash = (opcode >> 6) & 0x3FF;
+                THUMB_TABLE[thumb_table_hash as usize](self, opcode as u16);
             }
             // execute in arm mode
             else {
@@ -92,11 +93,8 @@ impl Arm7tdmi {
                     return;
                 }
 
-                let arm_table_hash: usize = (((opcode & 0x0FF00000) >> 16)
-                    | ((opcode & 0xF0) >> 4))
-                    .try_into()
-                    .unwrap();
-                ARM_TABLE[arm_table_hash](self, opcode);
+                let arm_table_hash = ((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4);
+                ARM_TABLE[arm_table_hash as usize](self, opcode);
             }
         }
     }
@@ -145,7 +143,7 @@ impl Arm7tdmi {
             (15, _) => self.registers.r15.0,
 
             _ => panic!(
-                "Register id must be in range 1-15! {register_id} {:?}",
+                "Register id must be in range 0-15! {register_id} {:?}",
                 self.status.cpsr.mode_bits()
             ),
         }
@@ -194,7 +192,75 @@ impl Arm7tdmi {
             (15, _) => self.registers.r15 = Wrapping(value),
 
             _ => panic!(
-                "Register id must be in range 1-15! {register_id} {:?}",
+                "Register id must be in range 0-15! {register_id} {:?}",
+                self.status.cpsr.mode_bits()
+            ),
+        }
+    }
+
+    pub(crate) fn get_banked_register_thumb(&self, register_id: u16) -> u32 {
+        match (register_id, self.status.cpsr.mode_bits()) {
+            (0, _) => self.registers.r0,
+            (1, _) => self.registers.r1,
+            (2, _) => self.registers.r2,
+            (3, _) => self.registers.r3,
+            (4, _) => self.registers.r4,
+            (5, _) => self.registers.r5,
+            (6, _) => self.registers.r6,
+            (7, _) => self.registers.r7,
+
+            (8, Mode::User | Mode::System) => self.registers.r13,
+            (8, Mode::Fiq) => self.registers.r13_fiq,
+            (8, Mode::Supervisor) => self.registers.r13_svc,
+            (8, Mode::Abort) => self.registers.r13_abt,
+            (8, Mode::Irq) => self.registers.r13_irq,
+            (8, Mode::Undefined) => self.registers.r13_und,
+
+            (9, Mode::User | Mode::System) => self.registers.r14,
+            (9, Mode::Fiq) => self.registers.r14_fiq,
+            (9, Mode::Supervisor) => self.registers.r14_svc,
+            (9, Mode::Abort) => self.registers.r14_abt,
+            (9, Mode::Irq) => self.registers.r14_irq,
+            (9, Mode::Undefined) => self.registers.r14_und,
+
+            (10, _) => self.registers.r15.0,
+
+            _ => panic!(
+                "Register id must be in range 0-10! {register_id} {:?}",
+                self.status.cpsr.mode_bits()
+            ),
+        }
+    }
+
+    pub(crate) fn set_banked_register_thumb(&mut self, register_id: u16, value: u32) {
+        match (register_id, self.status.cpsr.mode_bits()) {
+            (0, _) => self.registers.r0 = value,
+            (1, _) => self.registers.r1 = value,
+            (2, _) => self.registers.r2 = value,
+            (3, _) => self.registers.r3 = value,
+            (4, _) => self.registers.r4 = value,
+            (5, _) => self.registers.r5 = value,
+            (6, _) => self.registers.r6 = value,
+            (7, _) => self.registers.r7 = value,
+
+            (8, Mode::User | Mode::System) => self.registers.r13 = value,
+            (8, Mode::Fiq) => self.registers.r13_fiq = value,
+            (8, Mode::Supervisor) => self.registers.r13_svc = value,
+            (8, Mode::Abort) => self.registers.r13_abt = value,
+            (8, Mode::Irq) => self.registers.r13_irq = value,
+            (8, Mode::Undefined) => self.registers.r13_und = value,
+
+            (9, Mode::User | Mode::System) => self.registers.r14 = value,
+            (9, Mode::Fiq) => self.registers.r14_fiq = value,
+            (9, Mode::Supervisor) => self.registers.r14_svc = value,
+            (9, Mode::Abort) => self.registers.r14_abt = value,
+            (9, Mode::Irq) => self.registers.r14_irq = value,
+            (9, Mode::Undefined) => self.registers.r14_und = value,
+
+            (10, _) => self.registers.r15.0 = value,
+
+            _ => panic!(
+                "Register id must be in range 0-10! {register_id} {:?}",
                 self.status.cpsr.mode_bits()
             ),
         }
@@ -262,7 +328,10 @@ impl Arm7tdmi {
     fn pipeline_prefetch(&mut self, is_thumb: bool) {
         if is_thumb {
             self.registers.r15 &= !0x1;
-            panic!("no thumb for pipeline prefetch yet!");
+            self.pipeline[2] = Some(
+                self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state)
+                    .into(),
+            );
         } else {
             self.registers.r15 &= !0x3;
             self.pipeline[2] =
@@ -415,16 +484,16 @@ pub(crate) struct StatusRegister {
     pub(crate) n: bool,
 }
 
-#[cfg(test)]
 #[rustfmt::skip]
-mod arm7tdmi_tests {
+#[allow(dead_code)]
+mod test_utils {
     use crate::bus::test_bus::TestBus;
 
     use super::*;
     use std::fs;
     use std::path::Path;
 
-    fn load_test<P: AsRef<Path>>(
+    pub fn load_test<P: AsRef<Path>>(
         path: P,
         check_state: fn(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize),
         skip: usize,
@@ -444,19 +513,19 @@ mod arm7tdmi_tests {
     }
 
     // ignore checking carry flag, useful for checking muliply instruction as the carry flag result is not emulated
-    fn verify_state_no_carry(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    pub fn verify_state_no_carry(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
         let mask = 0xDFFF_FFFF;
         assert_eq!(cpu.status.cpsr.into_bits() & mask, input_state.r#final.CPSR & mask, "{input_state:#?} cspr, test: {test_num}");
         verify_state_core(cpu, input_state, test_num);
     }
 
-    fn verify_state_no_carry_overflow(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    pub fn verify_state_no_carry_overflow(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
         let mask = 0xCFFF_FFFF;
         assert_eq!(cpu.status.cpsr.into_bits() & mask, input_state.r#final.CPSR & mask, "{input_state:#?} cspr, test: {test_num}");
         verify_state_core(cpu, input_state, test_num);
     }
 
-    fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    pub fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
         assert_eq!(cpu.status.cpsr.into_bits(), input_state.r#final.CPSR, "{input_state:#?} cspr, test: {test_num}");
         verify_state_core(cpu, input_state, test_num);
     }
@@ -510,6 +579,12 @@ mod arm7tdmi_tests {
         assert_eq!(cpu.pipeline[0], Some(final_state.pipeline[0]), "{input_state:#?} pipeline_0, test: {test_num}");
         assert_eq!(cpu.pipeline[1], Some(final_state.pipeline[1]), "{input_state:#?} pipeline_1, test: {test_num}");
     }
+}
+
+#[cfg(test)]
+#[rustfmt::skip]
+mod arm7tdmi_arm_tests {
+    use super::test_utils::*;
 
     #[test]
     fn test_arm_branch_and_exchange() {
@@ -587,7 +662,22 @@ mod arm7tdmi_tests {
     }
 
     #[test]
-    fn test_arm_swi(){
+    fn test_arm_swi() {
         load_test("ARM7TDMI/v1/arm_swi.json", verify_state, 0);
+    }
+}
+
+#[cfg(test)]
+mod arm7tdmi_thumb_tests {
+    use crate::arm::core::test_utils::{load_test, verify_state};
+
+    #[test]
+    fn test_thumb_lsl_lsr_asr() {
+        load_test("ARM7TDMI/v1/thumb_lsl_lsr_asr.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_add_sub() {
+        load_test("ARM7TDMI/v1/thumb_add_sub.json", verify_state, 0);
     }
 }

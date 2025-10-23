@@ -4,6 +4,7 @@ pub mod arm {
     pub mod json_test_states;
     pub mod memory;
     pub mod opcode_tables {
+        pub mod common;
         pub mod arm_handlers;
         pub mod arm_table_gen;
         pub mod instruction_lut;
