@@ -1,5 +1,5 @@
 use super::common::arithmetic::*;
-use crate::arm::core::Arm7tdmi;
+use crate::arm::{constants::access_code, core::Arm7tdmi};
 
 // const SP: u32 = 8; // stack pointer register number
 // const LR: u32 = 9; // link register register number
@@ -134,6 +134,7 @@ pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
 
     if matches!(OP, alu_op::LSL | alu_op::LSR | alu_op::ASR | alu_op::ROR) {
         // handle extra i cycle from register specified shift
+        cpu.bus.i_cycle();
     }
 
     let result = match OP {
@@ -238,6 +239,20 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
 
         _ => panic!("Invalid OP! {OP}"),
     };
+}
+
+pub fn pc_relative_load(cpu: &mut Arm7tdmi, opcode: u16) {
+    let rd: u32 = ((opcode >> 8) & 0x7).into();
+    let offset: u32 = ((opcode & 0xFF) * 4).into();
+
+    let address = (cpu.registers.r15.0 & !2).wrapping_add(offset);
+    let value = cpu.read_word(address, access_code::NONSEQUENTIAL);
+    cpu.set_banked_register(rd, value);
+
+    // todo handle i cycle
+    cpu.bus.i_cycle();
+
+    cpu.registers.r15 += 2;
 }
 
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {

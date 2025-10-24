@@ -9,4 +9,6 @@ pub trait Bus {
     fn write_word(&mut self, address: u32, value: u32, access: u8);
     fn write_halfword(&mut self, address: u32, value: u16, access: u8);
     fn write_byte(&mut self, address: u32, value: u8, access: u8);
+
+    fn i_cycle(&mut self) {}
 }

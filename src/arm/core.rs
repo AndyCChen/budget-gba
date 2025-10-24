@@ -656,4 +656,9 @@ mod thumb_16_tests {
     fn test_thumb_add_cmp_mov_hi() {
         load_test("ARM7TDMI/v1/thumb_add_cmp_mov_hi.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_ldr_pc_rel() {
+        load_test("ARM7TDMI/v1/thumb_ldr_pc_rel.json", verify_state, 0);
+    }
 }
