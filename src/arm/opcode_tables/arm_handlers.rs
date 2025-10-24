@@ -3,7 +3,7 @@ use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
 use std::num::Wrapping;
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
-    let branch_address = cpu.get_banked_register_arm(opcode & 0xF);
+    let branch_address = cpu.get_banked_register(opcode & 0xF);
     let is_thumb_mode = (branch_address & 0x1) == 1;
     cpu.status.cpsr.set_t(is_thumb_mode);
 
@@ -22,7 +22,7 @@ pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
 
     // branch with link, save r15 (pc) to r14 (link register)
     if LINK {
-        cpu.set_banked_register_arm(14, (cpu.registers.r15 - Wrapping(4)).0);
+        cpu.set_banked_register(14, (cpu.registers.r15 - Wrapping(4)).0);
     }
 
     // positive
@@ -100,7 +100,7 @@ pub fn data_processing<
         }
         // shift via bottom byte in register Rs
         else {
-            let rs_value = cpu.get_banked_register_arm(shift_field >> 4) & 0xFF;
+            let rs_value = cpu.get_banked_register(shift_field >> 4) & 0xFF;
 
             // pc is ahead by 12 when a register specified shift is used
             if register_specified_shift {
@@ -112,7 +112,7 @@ pub fn data_processing<
             rs_value
         };
 
-        let rm_value = cpu.get_banked_register_arm(rm);
+        let rm_value = cpu.get_banked_register(rm);
         let shift_type = const { (SHIFT >> 1) & 0x3 };
         match shift_type {
             LSL => lsl(cpu, rm_value, shift_amount),
@@ -122,7 +122,7 @@ pub fn data_processing<
             _ => panic!("Invalid shift type!"),
         }
     };
-    let op1 = cpu.get_banked_register_arm(rn);
+    let op1 = cpu.get_banked_register(rn);
 
     if !register_specified_shift {
         cpu.registers.r15 += 4;
@@ -161,7 +161,7 @@ pub fn data_processing<
     };
 
     if let Some(value) = result {
-        cpu.set_banked_register_arm(rd, value);
+        cpu.set_banked_register(rd, value);
     }
 
     if rd == 15 {
@@ -236,9 +236,9 @@ pub fn read_status_mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let rd = (opcode >> 12) & 0xF; // destination register
 
     if SPSR_DEST {
-        cpu.set_banked_register_arm(rd, cpu.get_spsr());
+        cpu.set_banked_register(rd, cpu.get_spsr());
     } else {
-        cpu.set_banked_register_arm(rd, cpu.status.cpsr.into_bits());
+        cpu.set_banked_register(rd, cpu.status.cpsr.into_bits());
     }
 
     cpu.registers.r15 += 4;
@@ -274,7 +274,7 @@ pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7td
         immediate_value.rotate_right(rotate_by)
     } else {
         let rm = opcode & 0xF; // source register
-        cpu.get_banked_register_arm(rm)
+        cpu.get_banked_register(rm)
     };
 
     let mut psr_value = if SPSR_DEST {
@@ -314,8 +314,8 @@ pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi
 
     // multiply: rd = rm * rs;
 
-    let op1 = cpu.get_banked_register_arm(rm);
-    let op2 = cpu.get_banked_register_arm(rs);
+    let op1 = cpu.get_banked_register(rm);
+    let op2 = cpu.get_banked_register(rs);
 
     // todo handle extra i cycles
     let _i_cycles = 'block: {
@@ -342,7 +342,7 @@ pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi
     let mut result = op1.wrapping_mul(op2);
 
     if ACCUMULATE {
-        let op3 = cpu.get_banked_register_arm(rn);
+        let op3 = cpu.get_banked_register(rn);
         result = result.wrapping_add(op3);
     }
 
@@ -351,7 +351,7 @@ pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi
         cpu.status.cpsr.set_z(result == 0);
     }
 
-    cpu.set_banked_register_arm(rd, result);
+    cpu.set_banked_register(rd, result);
 
     if rd == 15 {
         cpu.pipeline_refill_arm();
@@ -369,8 +369,8 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
     let rd_lo = (opcode >> 12) & 0xF;
     let rd_hi = (opcode >> 16) & 0xF;
 
-    let op1: u32 = cpu.get_banked_register_arm(rm);
-    let op2: u32 = cpu.get_banked_register_arm(rs);
+    let op1: u32 = cpu.get_banked_register(rm);
+    let op2: u32 = cpu.get_banked_register(rs);
 
     let _i_cycles = 'block: {
         let add_cycle = if ACCUMULATE { 1 } else { 0 };
@@ -404,8 +404,8 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
 
     if ACCUMULATE {
         let op3: u64 = {
-            let lo: u64 = cpu.get_banked_register_arm(rd_lo).into();
-            let hi: u64 = cpu.get_banked_register_arm(rd_hi).into();
+            let lo: u64 = cpu.get_banked_register(rd_lo).into();
+            let hi: u64 = cpu.get_banked_register(rd_hi).into();
             (hi << 32) | lo
         };
 
@@ -417,8 +417,8 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
         cpu.status.cpsr.set_z(result == 0);
     }
 
-    cpu.set_banked_register_arm(rd_lo, result as u32);
-    cpu.set_banked_register_arm(rd_hi, (result >> 32) as u32);
+    cpu.set_banked_register(rd_lo, result as u32);
+    cpu.set_banked_register(rd_hi, (result >> 32) as u32);
 
     if rd_lo == 15 || rd_hi == 15 {
         cpu.pipeline_refill_arm();
@@ -446,7 +446,7 @@ pub fn single_data_transfer<
     } else {
         let shift_amount = (opcode >> 7) & 0x1F;
         let shift_type = (opcode >> 5) & 0x3;
-        let value_to_shift = cpu.get_banked_register_arm(opcode & 0xF);
+        let value_to_shift = cpu.get_banked_register(opcode & 0xF);
         let is_immediate = true;
 
         match shift_type {
@@ -464,9 +464,9 @@ pub fn single_data_transfer<
     }
 
     let address = if PRE_INDEX {
-        cpu.get_banked_register_arm(rn).wrapping_add(offset)
+        cpu.get_banked_register(rn).wrapping_add(offset)
     } else {
-        cpu.get_banked_register_arm(rn)
+        cpu.get_banked_register(rn)
     };
 
     cpu.registers.r15 += 4;
@@ -480,14 +480,14 @@ pub fn single_data_transfer<
 
         // post index transfer will always do a writeback
         if WRITE_BACK || !PRE_INDEX {
-            cpu.set_banked_register_arm(rn, cpu.get_banked_register_arm(rn).wrapping_add(offset));
+            cpu.set_banked_register(rn, cpu.get_banked_register(rn).wrapping_add(offset));
         }
 
         // handle extra i cycle from load
 
-        cpu.set_banked_register_arm(rd, load_value);
+        cpu.set_banked_register(rd, load_value);
     } else {
-        let store_value = cpu.get_banked_register_arm(rd);
+        let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
             cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
@@ -497,7 +497,7 @@ pub fn single_data_transfer<
 
         // post index transfer will always do a writeback
         if WRITE_BACK || !PRE_INDEX {
-            cpu.set_banked_register_arm(rn, cpu.get_banked_register_arm(rn).wrapping_add(offset));
+            cpu.set_banked_register(rn, cpu.get_banked_register(rn).wrapping_add(offset));
         }
     }
 
@@ -526,7 +526,7 @@ pub fn halfword_and_signed_data_transfer<
         let mut temp = if IMM {
             ((opcode >> 4) & 0xF0) | (opcode & 0xF)
         } else {
-            cpu.get_banked_register_arm(rm)
+            cpu.get_banked_register(rm)
         };
 
         if !INC {
@@ -537,9 +537,9 @@ pub fn halfword_and_signed_data_transfer<
     };
 
     let address = if PRE_INDEX {
-        cpu.get_banked_register_arm(rn).wrapping_add(offset)
+        cpu.get_banked_register(rn).wrapping_add(offset)
     } else {
-        cpu.get_banked_register_arm(rn)
+        cpu.get_banked_register(rn)
     };
 
     cpu.registers.r15 += 4;
@@ -562,14 +562,14 @@ pub fn halfword_and_signed_data_transfer<
         };
 
         if WRITE_BACK || !PRE_INDEX {
-            cpu.set_banked_register_arm(rn, cpu.get_banked_register_arm(rn).wrapping_add(offset));
+            cpu.set_banked_register(rn, cpu.get_banked_register(rn).wrapping_add(offset));
         }
 
         // handle extra i cycle from load op
 
-        cpu.set_banked_register_arm(rd, load_value);
+        cpu.set_banked_register(rd, load_value);
     } else {
-        let store_value = cpu.get_banked_register_arm(rd);
+        let store_value = cpu.get_banked_register(rd);
 
         match (S, H) {
             (true, true) => panic!("Sign bit should not be set for store operation?"),
@@ -581,7 +581,7 @@ pub fn halfword_and_signed_data_transfer<
         };
 
         if WRITE_BACK || !PRE_INDEX {
-            cpu.set_banked_register_arm(rn, cpu.get_banked_register_arm(rn).wrapping_add(offset));
+            cpu.set_banked_register(rn, cpu.get_banked_register(rn).wrapping_add(offset));
         }
     }
 
@@ -611,7 +611,7 @@ pub fn block_data_transfer<
     let active_registers = (opcode as u16).count_ones();
 
     let mut offset: u32 = 0;
-    let base = cpu.get_banked_register_arm(rn);
+    let base = cpu.get_banked_register(rn);
 
     let (base_address, write_back_value) = match (active_registers == 0, INC) {
         (false, true) => (base, base.wrapping_add(active_registers * 4)),
@@ -687,16 +687,16 @@ pub fn block_data_transfer<
             let load_value = cpu.read_word(*address, *access);
 
             if WRITE_BACK {
-                cpu.set_banked_register_arm(rn, write_back_value);
+                cpu.set_banked_register(rn, write_back_value);
             }
 
-            cpu.set_banked_register_arm(*register_id, load_value);
+            cpu.set_banked_register(*register_id, load_value);
         } else {
-            let store_value = cpu.get_banked_register_arm(*register_id);
+            let store_value = cpu.get_banked_register(*register_id);
             cpu.write_word(*address, store_value, *access);
 
             if WRITE_BACK {
-                cpu.set_banked_register_arm(rn, write_back_value);
+                cpu.set_banked_register(rn, write_back_value);
             }
         }
     }
@@ -704,9 +704,9 @@ pub fn block_data_transfer<
     register_list_iter.for_each(|(register_id, address, access)| {
         if LOAD {
             let load_value = cpu.read_word(*address, *access);
-            cpu.set_banked_register_arm(*register_id, load_value);
+            cpu.set_banked_register(*register_id, load_value);
         } else {
-            let store_value = cpu.get_banked_register_arm(*register_id);
+            let store_value = cpu.get_banked_register(*register_id);
             cpu.write_word(*address, store_value, *access);
         }
     });
@@ -734,7 +734,7 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.registers.r15 += 4;
 
     // read from swap address
-    let swap_address = cpu.get_banked_register_arm(rn);
+    let swap_address = cpu.get_banked_register(rn);
     let memory_value: u32 = if SWAP_BYTE {
         cpu.read_byte(swap_address, access_code::NONSEQUENTIAL)
             .into()
@@ -743,14 +743,14 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     };
 
     // write rm register value into swap address
-    let register_value = cpu.get_banked_register_arm(rm);
+    let register_value = cpu.get_banked_register(rm);
     if SWAP_BYTE {
         cpu.write_byte(swap_address, register_value as u8, access_code::LOCK);
     } else {
         cpu.write_word(swap_address, register_value, access_code::LOCK);
     }
 
-    cpu.set_banked_register_arm(rd, memory_value);
+    cpu.set_banked_register(rd, memory_value);
 
     if rd == 15 {
         cpu.pipeline_refill_arm();

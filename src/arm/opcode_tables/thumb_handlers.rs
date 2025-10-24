@@ -8,12 +8,12 @@ use crate::arm::core::Arm7tdmi;
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
 
-    let rd = opcode & 0x7;
-    let rs = (opcode >> 3) & 0x7;
+    let rd: u32 = (opcode & 0x7).into();
+    let rs: u32 = ((opcode >> 3) & 0x7).into();
     let shift_amount = (opcode >> 6) & 0x1F;
 
     let (result, carry_from_shift) = {
-        let value = cpu.get_banked_register_thumb(rs);
+        let value = cpu.get_banked_register(rs);
 
         match SHIFT_OP {
             LSL => lsl(cpu, value, shift_amount.into()),
@@ -24,22 +24,18 @@ pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     };
 
     let result = mov::<true>(cpu, result, carry_from_shift);
-    cpu.set_banked_register_thumb(rd, result);
+    cpu.set_banked_register(rd, result);
 }
 
 pub fn add_subtract<const IMM: bool, const IS_SUBTRACT: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
 
-    let rd = opcode & 0x7; // destination register
-    let rs = (opcode >> 3) & 0x7; // source register
-    let rn = (opcode >> 6) & 0x7; // 3 bit immediate value or register id
+    let rd: u32 = (opcode & 0x7).into(); // destination register
+    let rs: u32 = ((opcode >> 3) & 0x7).into(); // source register
+    let rn: u32 = ((opcode >> 6) & 0x7).into(); // 3 bit immediate value or register id
 
-    let op1 = cpu.get_banked_register_thumb(rs);
-    let op2: u32 = if IMM {
-        rn.into()
-    } else {
-        cpu.get_banked_register_thumb(rn)
-    };
+    let op1 = cpu.get_banked_register(rs);
+    let op2: u32 = if IMM { rn } else { cpu.get_banked_register(rn) };
 
     let result = if IS_SUBTRACT {
         sub::<true>(cpu, op1, op2)
@@ -47,7 +43,7 @@ pub fn add_subtract<const IMM: bool, const IS_SUBTRACT: bool>(cpu: &mut Arm7tdmi
         add::<true>(cpu, op1, op2)
     };
 
-    cpu.set_banked_register_thumb(rd, result);
+    cpu.set_banked_register(rd, result);
 }
 
 pub fn mov_cmp_add_sub_immediate<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
@@ -58,10 +54,10 @@ pub fn mov_cmp_add_sub_immediate<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) 
 
     cpu.registers.r15 += 2;
 
-    let rd = (opcode >> 8) & 0x7;
+    let rd: u32 = ((opcode >> 8) & 0x7).into();
     let immediate_value: u32 = (opcode & 0xFF).into();
 
-    let op1 = cpu.get_banked_register_thumb(rd);
+    let op1 = cpu.get_banked_register(rd);
 
     let result = match OP {
         MOV => Some(mov::<true>(cpu, immediate_value, cpu.status.cpsr.c())),
@@ -75,7 +71,7 @@ pub fn mov_cmp_add_sub_immediate<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) 
     };
 
     if let Some(value) = result {
-        cpu.set_banked_register_thumb(rd, value);
+        cpu.set_banked_register(rd, value);
     }
 }
 
@@ -130,11 +126,11 @@ fn mul(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
 pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
 
-    let rd = opcode & 0x7;
-    let rs = (opcode >> 3) & 0x7;
+    let rd = (opcode & 0x7).into();
+    let rs = ((opcode >> 3) & 0x7).into();
 
-    let op1 = cpu.get_banked_register_thumb(rd);
-    let op2 = cpu.get_banked_register_thumb(rs);
+    let op1 = cpu.get_banked_register(rd);
+    let op2 = cpu.get_banked_register(rs);
 
     if matches!(OP, alu_op::LSL | alu_op::LSR | alu_op::ASR | alu_op::ROR) {
         // handle extra i cycle from register specified shift
@@ -182,8 +178,66 @@ pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     };
 
     if let Some(value) = result {
-        cpu.set_banked_register_thumb(rd, value);
+        cpu.set_banked_register(rd, value);
     }
+}
+
+pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
+    cpu: &mut Arm7tdmi,
+    opcode: u16,
+) {
+    const ADD: u8 = 0;
+    const CMP: u8 = 1;
+    const MOV: u8 = 2;
+    const BX: u8 = 3;
+
+    let rd: u32 = (u32::from(H1) << 3) | Into::<u32>::into(opcode & 0x7);
+    let rs: u32 = (u32::from(H2) << 3) | Into::<u32>::into((opcode >> 3) & 0x7);
+
+    let op1 = cpu.get_banked_register(rd);
+    let op2 = if rs == 15 {
+        cpu.get_banked_register(rs) & !1
+    } else {
+        cpu.get_banked_register(rs)
+    };
+
+    cpu.registers.r15 += 2;
+
+    match OP {
+        ADD | MOV => {
+            let result = match OP {
+                ADD => add::<false>(cpu, op1, op2),
+                MOV => mov::<false>(cpu, op2, cpu.status.cpsr.c()),
+                _ => panic!(),
+            };
+
+            cpu.set_banked_register(rd, result);
+
+            if rd == 15 {
+                cpu.registers.r15.0 &= !1;
+                cpu.pipeline_refill_thumb();
+            }
+        }
+        CMP => {
+            sub::<true>(cpu, op1, op2);
+        }
+        BX => {
+            // thumb mode
+            if op2 & 1 == 1 {
+                cpu.status.cpsr.set_t(true);
+                cpu.registers.r15.0 = op2 & !1;
+                cpu.pipeline_refill_thumb();
+            }
+            // arm mode
+            else {
+                cpu.status.cpsr.set_t(false);
+                cpu.registers.r15.0 = op2;
+                cpu.pipeline_refill_arm();
+            }
+        }
+
+        _ => panic!("Invalid OP! {OP}"),
+    };
 }
 
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {

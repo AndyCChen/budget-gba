@@ -100,7 +100,7 @@ impl Arm7tdmi {
     }
 
     /// Retrieve register in arm mode
-    pub fn get_banked_register_arm(&self, register_id: u32) -> u32 {
+    pub fn get_banked_register(&self, register_id: u32) -> u32 {
         match (register_id, self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0,
             (1, _) => self.registers.r1,
@@ -149,7 +149,7 @@ impl Arm7tdmi {
         }
     }
 
-    pub fn set_banked_register_arm(&mut self, register_id: u32, value: u32) {
+    pub fn set_banked_register(&mut self, register_id: u32, value: u32) {
         match (register_id, &self.status.cpsr.mode_bits()) {
             (0, _) => self.registers.r0 = value,
             (1, _) => self.registers.r1 = value,
@@ -193,74 +193,6 @@ impl Arm7tdmi {
 
             _ => panic!(
                 "Register id must be in range 0-15! {register_id} {:?}",
-                self.status.cpsr.mode_bits()
-            ),
-        }
-    }
-
-    pub fn get_banked_register_thumb(&self, register_id: u16) -> u32 {
-        match (register_id, self.status.cpsr.mode_bits()) {
-            (0, _) => self.registers.r0,
-            (1, _) => self.registers.r1,
-            (2, _) => self.registers.r2,
-            (3, _) => self.registers.r3,
-            (4, _) => self.registers.r4,
-            (5, _) => self.registers.r5,
-            (6, _) => self.registers.r6,
-            (7, _) => self.registers.r7,
-
-            (8, Mode::User | Mode::System) => self.registers.r13,
-            (8, Mode::Fiq) => self.registers.r13_fiq,
-            (8, Mode::Supervisor) => self.registers.r13_svc,
-            (8, Mode::Abort) => self.registers.r13_abt,
-            (8, Mode::Irq) => self.registers.r13_irq,
-            (8, Mode::Undefined) => self.registers.r13_und,
-
-            (9, Mode::User | Mode::System) => self.registers.r14,
-            (9, Mode::Fiq) => self.registers.r14_fiq,
-            (9, Mode::Supervisor) => self.registers.r14_svc,
-            (9, Mode::Abort) => self.registers.r14_abt,
-            (9, Mode::Irq) => self.registers.r14_irq,
-            (9, Mode::Undefined) => self.registers.r14_und,
-
-            (10, _) => self.registers.r15.0,
-
-            _ => panic!(
-                "Register id must be in range 0-10! {register_id} {:?}",
-                self.status.cpsr.mode_bits()
-            ),
-        }
-    }
-
-    pub fn set_banked_register_thumb(&mut self, register_id: u16, value: u32) {
-        match (register_id, self.status.cpsr.mode_bits()) {
-            (0, _) => self.registers.r0 = value,
-            (1, _) => self.registers.r1 = value,
-            (2, _) => self.registers.r2 = value,
-            (3, _) => self.registers.r3 = value,
-            (4, _) => self.registers.r4 = value,
-            (5, _) => self.registers.r5 = value,
-            (6, _) => self.registers.r6 = value,
-            (7, _) => self.registers.r7 = value,
-
-            (8, Mode::User | Mode::System) => self.registers.r13 = value,
-            (8, Mode::Fiq) => self.registers.r13_fiq = value,
-            (8, Mode::Supervisor) => self.registers.r13_svc = value,
-            (8, Mode::Abort) => self.registers.r13_abt = value,
-            (8, Mode::Irq) => self.registers.r13_irq = value,
-            (8, Mode::Undefined) => self.registers.r13_und = value,
-
-            (9, Mode::User | Mode::System) => self.registers.r14 = value,
-            (9, Mode::Fiq) => self.registers.r14_fiq = value,
-            (9, Mode::Supervisor) => self.registers.r14_svc = value,
-            (9, Mode::Abort) => self.registers.r14_abt = value,
-            (9, Mode::Irq) => self.registers.r14_irq = value,
-            (9, Mode::Undefined) => self.registers.r14_und = value,
-
-            (10, _) => self.registers.r15.0 = value,
-
-            _ => panic!(
-                "Register id must be in range 0-10! {register_id} {:?}",
                 self.status.cpsr.mode_bits()
             ),
         }
@@ -718,5 +650,10 @@ mod thumb_16_tests {
                 cpu.run();
                 verify_state_no_carry(&cpu, item, count);
             });
+    }
+
+    #[test]
+    fn test_thumb_add_cmp_mov_hi() {
+        load_test("ARM7TDMI/v1/thumb_add_cmp_mov_hi.json", verify_state, 0);
     }
 }

@@ -78,6 +78,38 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
                     15 => alu_operations::<15>,
                     _ => panic!("Invalid op!"),
                 }
+            } else if (instruction & 0b11_1111_0000) == 0b01_0001_0000 {
+                let h1 = (instruction >> 1) & 1 == 1;
+                let h2 = instruction & 1 == 1;
+                let op_type = match (instruction >> 2) & 0x3 {
+                    0 => AddCmpMovBxOp::Add,
+                    1 => AddCmpMovBxOp::Cmp,
+                    2 => AddCmpMovBxOp::Mov,
+                    3 => AddCmpMovBxOp::Bx,
+                    _ => panic!("Invalid op!"),
+                };
+
+                match (op_type, h1, h2) {
+                    (AddCmpMovBxOp::Add, true, true) => add_cmp_mov_hi::<0, true, true>,
+                    (AddCmpMovBxOp::Add, true, false) => add_cmp_mov_hi::<0, true, false>,
+                    (AddCmpMovBxOp::Add, false, true) => add_cmp_mov_hi::<0, false, true>,
+                    (AddCmpMovBxOp::Add, false, false) => add_cmp_mov_hi::<0, false, false>,
+
+                    (AddCmpMovBxOp::Cmp, true, true) => add_cmp_mov_hi::<1, true, true>,
+                    (AddCmpMovBxOp::Cmp, true, false) => add_cmp_mov_hi::<1, true, false>,
+                    (AddCmpMovBxOp::Cmp, false, true) => add_cmp_mov_hi::<1, false, true>,
+                    (AddCmpMovBxOp::Cmp, false, false) => add_cmp_mov_hi::<1, false, false>,
+
+                    (AddCmpMovBxOp::Mov, true, true) => add_cmp_mov_hi::<2, true, true>,
+                    (AddCmpMovBxOp::Mov, true, false) => add_cmp_mov_hi::<2, true, false>,
+                    (AddCmpMovBxOp::Mov, false, true) => add_cmp_mov_hi::<2, false, true>,
+                    (AddCmpMovBxOp::Mov, false, false) => add_cmp_mov_hi::<2, false, false>,
+
+                    (AddCmpMovBxOp::Bx, true, true) => add_cmp_mov_hi::<3, true, true>,
+                    (AddCmpMovBxOp::Bx, true, false) => add_cmp_mov_hi::<3, true, false>,
+                    (AddCmpMovBxOp::Bx, false, true) => add_cmp_mov_hi::<3, false, true>,
+                    (AddCmpMovBxOp::Bx, false, false) => add_cmp_mov_hi::<3, false, false>,
+                }
             } else {
                 undefined_thumb
             }
@@ -86,4 +118,11 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
         0b11 => undefined_thumb,
         _ => panic!("Invalid opcode!"),
     }
+}
+
+enum AddCmpMovBxOp {
+    Add = 0,
+    Cmp = 1,
+    Mov = 2,
+    Bx = 3,
 }
