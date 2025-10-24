@@ -1,6 +1,13 @@
 pub mod arithmetic {
     use crate::arm::core::Arm7tdmi;
 
+    // shift type constants for alu op
+
+    pub const LSL: u8 = 0;
+    pub const LSR: u8 = 1;
+    pub const ASR: u8 = 2;
+    pub const ROR: u8 = 3;
+
     fn update_flags_logical(cpu: &mut Arm7tdmi, result: u32, carry_from_shift: bool) {
         cpu.status.cpsr.set_c(carry_from_shift);
         cpu.status.cpsr.set_z(result == 0);
@@ -182,18 +189,6 @@ pub mod arithmetic {
         result
     }
 
-    pub fn sbc<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
-        let (op2, carry0) = (!op2).overflowing_add(u32::from(cpu.status.cpsr.c()));
-        let (result, carry1) = op1.overflowing_add(op2);
-        let overflow = ((result ^ op1) & (result ^ !op2) & 0x8000_0000) != 0;
-
-        if SET_COND {
-            update_flags_arithmetic(cpu, result, carry0 || carry1, overflow);
-        }
-
-        result
-    }
-
     pub fn orr<const SET_COND: bool>(
         cpu: &mut Arm7tdmi,
         op1: u32,
@@ -209,11 +204,15 @@ pub mod arithmetic {
         result
     }
 
-    pub fn mov<const SET_COND: bool>(cpu: &mut Arm7tdmi, op2: u32, carry_from_shift: bool) -> u32 {
+    pub fn mov<const SET_COND: bool>(
+        cpu: &mut Arm7tdmi,
+        value_to_move: u32,
+        carry_from_shift: bool,
+    ) -> u32 {
         if SET_COND {
-            update_flags_logical(cpu, op2, carry_from_shift);
+            update_flags_logical(cpu, value_to_move, carry_from_shift);
         }
 
-        op2
+        value_to_move
     }
 }

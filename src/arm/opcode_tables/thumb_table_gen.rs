@@ -55,7 +55,33 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
                 undefined_thumb
             }
         }
-        0b01 => undefined_thumb,
+        0b01 => {
+            if (instruction & 0b11_1111_0000) == 0b01_0000_0000 {
+                let op = instruction & 0xF;
+
+                match op {
+                    0 => alu_operations::<0>,
+                    1 => alu_operations::<1>,
+                    2 => alu_operations::<2>,
+                    3 => alu_operations::<3>,
+                    4 => alu_operations::<4>,
+                    5 => alu_operations::<5>,
+                    6 => alu_operations::<6>,
+                    7 => alu_operations::<7>,
+                    8 => alu_operations::<8>,
+                    9 => alu_operations::<9>,
+                    10 => alu_operations::<10>,
+                    11 => alu_operations::<11>,
+                    12 => alu_operations::<12>,
+                    13 => alu_operations::<13>,
+                    14 => alu_operations::<14>,
+                    15 => alu_operations::<15>,
+                    _ => panic!("Invalid op!"),
+                }
+            } else {
+                undefined_thumb
+            }
+        }
         0b10 => undefined_thumb,
         0b11 => undefined_thumb,
         _ => panic!("Invalid opcode!"),

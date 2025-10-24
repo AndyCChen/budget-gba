@@ -1,9 +1,9 @@
 use crate::arm::core::Arm7tdmi;
 
-pub(crate) type ArmHandler = fn(&mut Arm7tdmi, u32);
-pub(crate) const ARM_TABLE_SIZE: usize = 0x1000;
+pub type ArmHandler = fn(&mut Arm7tdmi, u32);
+pub const ARM_TABLE_SIZE: usize = 0x1000;
 
-pub(crate) const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_SIZE] {
+pub const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_SIZE] {
     use crate::arm::opcode_tables::arm_handlers::*;
 
     let mut arm_table: [ArmHandler; ARM_TABLE_SIZE] = [undefined_arm; ARM_TABLE_SIZE];

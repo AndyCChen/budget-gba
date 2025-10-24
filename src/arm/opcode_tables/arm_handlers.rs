@@ -1,7 +1,6 @@
-use std::num::Wrapping;
-
 use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
+use std::num::Wrapping;
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     let branch_address = cpu.get_banked_register_arm(opcode & 0xF);
@@ -59,13 +58,6 @@ pub mod data_op {
     pub const MOV: u8 = 13;
     pub const BIC: u8 = 14;
     pub const MVN: u8 = 15;
-
-    // shift type constants
-
-    pub const LSL: u8 = 0;
-    pub const LSR: u8 = 1;
-    pub const ASR: u8 = 2;
-    pub const ROR: u8 = 3;
 }
 
 pub fn data_processing<

@@ -503,12 +503,12 @@ mod test_utils {
         };
 
         let items: Vec<InputStates> = serde_json::from_str(&data).unwrap();
-        let it = items.into_iter().enumerate().skip(skip);
+        let it = items.iter().enumerate().skip(skip);
 
         for (count, item) in it {
-            let mut cpu = Arm7tdmi::new(&item, Box::new(TestBus::new(&item.transactions)));
+            let mut cpu = Arm7tdmi::new(item, Box::new(TestBus::new(&item.transactions)));
             cpu.run();
-            check_state(&cpu, &item, count);
+            check_state(&cpu, item, count);
         }
     }
 
@@ -583,7 +583,7 @@ mod test_utils {
 
 #[cfg(test)]
 #[rustfmt::skip]
-mod arm7tdmi_arm_tests {
+mod arm_32_tests {
     use super::test_utils::*;
 
     #[test]
@@ -668,8 +668,8 @@ mod arm7tdmi_arm_tests {
 }
 
 #[cfg(test)]
-mod arm7tdmi_thumb_tests {
-    use crate::arm::core::test_utils::{load_test, verify_state};
+mod thumb_16_tests {
+    use crate::arm::core::test_utils::{load_test, verify_state, verify_state_no_carry};
 
     #[test]
     fn test_thumb_lsl_lsr_asr() {
@@ -683,6 +683,40 @@ mod arm7tdmi_thumb_tests {
 
     #[test]
     fn test_thumb_mov_cmp_add_sub() {
-        load_test("ARM7TDMI/v1/thumb_mov_cmp_add_sub.json", verify_state, 10);
+        load_test("ARM7TDMI/v1/thumb_mov_cmp_add_sub.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_data_proc() {
+        use super::*;
+        use crate::bus::test_bus::TestBus;
+        use std::fs;
+
+        let Ok(data) = fs::read_to_string("ARM7TDMI/v1/thumb_data_proc.json") else {
+            panic!("Failed to load test file!");
+        };
+
+        let items: Vec<InputStates> = serde_json::from_str(&data).unwrap();
+        let is_multiply = |opcode: u32| (opcode >> 6) & 0xF == 0b1101;
+
+        items
+            .iter()
+            .filter(|item| !is_multiply(item.opcode))
+            .enumerate()
+            .for_each(|(count, item)| {
+                let mut cpu = Arm7tdmi::new(item, Box::new(TestBus::new(&item.transactions)));
+                cpu.run();
+                verify_state(&cpu, item, count);
+            });
+
+        items
+            .iter()
+            .filter(|item| is_multiply(item.opcode))
+            .enumerate()
+            .for_each(|(count, item)| {
+                let mut cpu = Arm7tdmi::new(item, Box::new(TestBus::new(&item.transactions)));
+                cpu.run();
+                verify_state_no_carry(&cpu, item, count);
+            });
     }
 }
