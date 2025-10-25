@@ -105,6 +105,16 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
         }
     } else if (instruction & 0b11_1110_0000) == 0b01_0010_0000 {
         pc_relative_load
+    } else if (instruction & 0b11_1100_0000) == 0b01_0100_0000 {
+        let is_load = (instruction >> 5) & 1 == 1;
+        let is_byte_sized = (instruction >> 4) & 1 == 1;
+
+        match (is_load, is_byte_sized) {
+            (true, true) => load_store_register_offset::<true, true>,
+            (true, false) => load_store_register_offset::<true, false>,
+            (false, true) => load_store_register_offset::<false, true>,
+            (false, false) => load_store_register_offset::<false, false>,
+        }
     } else {
         undefined_thumb
     }

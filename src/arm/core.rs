@@ -661,4 +661,9 @@ mod thumb_16_tests {
     fn test_thumb_ldr_pc_rel() {
         load_test("ARM7TDMI/v1/thumb_ldr_pc_rel.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_ldr_str_reg_offset() {
+        load_test("ARM7TDMI/v1/thumb_ldr_str_reg_offset.json", verify_state, 0);
+    }
 }

@@ -255,6 +255,42 @@ pub fn pc_relative_load(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
 }
 
+pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
+    cpu: &mut Arm7tdmi,
+    opcode: u16,
+) {
+    cpu.registers.r15 += 2;
+
+    let rd: u32 = (opcode & 0x7).into(); // source/dest register
+    let rb: u32 = ((opcode >> 3) & 0x7).into(); // base register
+    let ro: u32 = ((opcode >> 6) & 0x7).into(); // offset register
+
+    let address = cpu
+        .get_banked_register(rb)
+        .wrapping_add(cpu.get_banked_register(ro));
+
+    if LOAD {
+        let load_value = if TRANSFER_BYTE {
+            cpu.read_byte(address, access_code::NONSEQUENTIAL).into()
+        } else {
+            cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
+        };
+
+        // todo handle i cycle for load op
+        cpu.bus.i_cycle();
+
+        cpu.set_banked_register(rd, load_value);
+    } else {
+        let store_value = cpu.get_banked_register(rd);
+
+        if TRANSFER_BYTE {
+            cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+        } else {
+            cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+        }
+    }
+}
+
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {
     todo!("handle undefined opcode: {opcode}");
 }
