@@ -473,7 +473,7 @@ pub fn single_data_transfer<
 
     if LOAD {
         let load_value: u32 = if TRANSFER_BYTE {
-            cpu.read_byte(address, access_code::NONSEQUENTIAL).into()
+            cpu.read_byte(address, access_code::NONSEQUENTIAL)
         } else {
             cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
         };
@@ -546,18 +546,9 @@ pub fn halfword_and_signed_data_transfer<
 
     if LOAD {
         let load_value = match (S, H) {
-            (true, true) => {
-                let value = cpu.read_halfword(address, access_code::NONSEQUENTIAL);
-                value as i16 as i32 as u32 // do sign extension 
-            }
-            (true, false) => {
-                let value = cpu.read_byte(address, access_code::NONSEQUENTIAL);
-                value as i8 as i32 as u32 // do sign extension
-            }
-            (false, true) => {
-                let value = cpu.read_halfword(address, access_code::NONSEQUENTIAL) as u32;
-                value.rotate_right((address & 1) * 8)
-            }
+            (true, true) => cpu.read_signed_halfword(address, access_code::NONSEQUENTIAL),
+            (true, false) => cpu.read_signed_byte(address, access_code::NONSEQUENTIAL),
+            (false, true) => cpu.read_rotate_halfword(address, access_code::NONSEQUENTIAL),
             (false, false) => panic!("Reserved for SWP instruction!"),
         };
 
@@ -737,7 +728,6 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let swap_address = cpu.get_banked_register(rn);
     let memory_value: u32 = if SWAP_BYTE {
         cpu.read_byte(swap_address, access_code::NONSEQUENTIAL)
-            .into()
     } else {
         cpu.read_rotate_word(swap_address, access_code::NONSEQUENTIAL)
     };

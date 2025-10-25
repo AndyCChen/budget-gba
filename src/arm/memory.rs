@@ -6,9 +6,9 @@ impl Arm7tdmi {
         self.bus.pipeline_read_word(address, access)
     }
 
-    pub fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u16 {
+    pub fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u32 {
         let address = address & !1;
-        self.bus.pipeline_read_halfword(address, access)
+        self.bus.pipeline_read_halfword(address, access).into()
     }
 
     pub fn read_rotate_word(&mut self, address: u32, access: u8) -> u32 {
@@ -20,12 +20,29 @@ impl Arm7tdmi {
         self.bus.read_word(address, access)
     }
 
-    pub fn read_halfword(&mut self, address: u32, access: u8) -> u16 {
-        self.bus.read_halfword(address, access)
+    pub fn read_halfword(&mut self, address: u32, access: u8) -> u32 {
+        self.bus.read_halfword(address, access).into()
     }
 
-    pub fn read_byte(&mut self, address: u32, access: u8) -> u8 {
-        self.bus.read_byte(address, access)
+    pub fn read_rotate_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let value: u32 = self.bus.read_halfword(address, access).into();
+        value.rotate_right((address & 1) * 8)
+    }
+
+    pub fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32 {
+        if address & 1 == 1 {
+            (self.bus.read_halfword(address, access) >> 8) as i8 as i32 as u32
+        } else {
+            self.bus.read_halfword(address, access) as i16 as i32 as u32
+        }
+    }
+
+    pub fn read_byte(&mut self, address: u32, access: u8) -> u32 {
+        self.bus.read_byte(address, access).into()
+    }
+
+    pub fn read_signed_byte(&mut self, address: u32, access: u8) -> u32 {
+        self.bus.read_byte(address, access) as i8 as i32 as u32
     }
 
     pub fn write_word(&mut self, address: u32, value: u32, access: u8) {

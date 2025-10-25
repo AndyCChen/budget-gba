@@ -271,7 +271,7 @@ pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
 
     if LOAD {
         let load_value = if TRANSFER_BYTE {
-            cpu.read_byte(address, access_code::NONSEQUENTIAL).into()
+            cpu.read_byte(address, access_code::NONSEQUENTIAL)
         } else {
             cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
         };
@@ -288,6 +288,42 @@ pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
         } else {
             cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
         }
+    }
+}
+
+pub fn load_store_sign_extended<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.registers.r15 += 2;
+
+    let rd = u32::from(opcode) & 0x7; // destination
+    let rb = (u32::from(opcode) >> 3) & 0x7; // base
+    let ro = (u32::from(opcode) >> 6) & 0x7; // offset
+
+    let address = cpu
+        .get_banked_register(rb)
+        .wrapping_add(cpu.get_banked_register(ro));
+
+    match OP {
+        // store halfword
+        0 => {
+            let store_value = cpu.get_banked_register(rd);
+            cpu.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+        }
+        // load sign extended byte
+        1 => {
+            let load_value = cpu.read_signed_byte(address, access_code::NONSEQUENTIAL);
+            cpu.set_banked_register(rd, load_value);
+        }
+        // load halfword
+        2 => {
+            let load_value = cpu.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
+            cpu.set_banked_register(rd, load_value);
+        }
+        // load sign extended halfword
+        3 => {
+            let load_value = cpu.read_signed_halfword(address, access_code::NONSEQUENTIAL);
+            cpu.set_banked_register(rd, load_value);
+        }
+        _ => panic!("Invalid OP! {OP}"),
     }
 }
 

@@ -239,20 +239,14 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for thumb mode
     pub fn pipeline_refill_thumb(&mut self) {
-        self.pipeline[0] = Some(
-            self.pipeline_read_halfword(
-                self.registers.r15.0,
-                access_code::CODE | access_code::NONSEQUENTIAL,
-            )
-            .into(),
-        );
-        self.pipeline[1] = Some(
-            self.pipeline_read_halfword(
-                self.registers.r15.0.wrapping_add(2),
-                access_code::CODE | access_code::SEQUENTIAL,
-            )
-            .into(),
-        );
+        self.pipeline[0] = Some(self.pipeline_read_halfword(
+            self.registers.r15.0,
+            access_code::CODE | access_code::NONSEQUENTIAL,
+        ));
+        self.pipeline[1] = Some(self.pipeline_read_halfword(
+            self.registers.r15.0.wrapping_add(2),
+            access_code::CODE | access_code::SEQUENTIAL,
+        ));
         self.registers.r15 += 4;
     }
 
@@ -260,10 +254,8 @@ impl Arm7tdmi {
     fn pipeline_prefetch(&mut self, is_thumb: bool) {
         if is_thumb {
             self.registers.r15 &= !0x1;
-            self.pipeline[2] = Some(
-                self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state)
-                    .into(),
-            );
+            self.pipeline[2] =
+                Some(self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state));
         } else {
             self.registers.r15 &= !0x3;
             self.pipeline[2] =
@@ -600,6 +592,7 @@ mod arm_32_tests {
 }
 
 #[cfg(test)]
+#[rustfmt::skip]
 mod thumb_16_tests {
     use crate::arm::core::test_utils::{load_test, verify_state, verify_state_no_carry};
 
@@ -665,5 +658,20 @@ mod thumb_16_tests {
     #[test]
     fn test_thumb_ldr_str_reg_offset() {
         load_test("ARM7TDMI/v1/thumb_ldr_str_reg_offset.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_ldrsb_strb_reg_offset() {
+       load_test("ARM7TDMI/v1/thumb_ldrsb_strb_reg_offset.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_ldrsh_ldrsb_reg_offset() {
+        load_test("ARM7TDMI/v1/thumb_ldrsh_ldrsb_reg_offset.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_ldrh_strh_reg_offset() {
+        load_test("ARM7TDMI/v1/thumb_ldrh_strh_reg_offset.json", verify_state, 0);
     }
 }
