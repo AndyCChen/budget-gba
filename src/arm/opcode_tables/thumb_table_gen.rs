@@ -125,6 +125,23 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             3 => load_store_sign_extended::<3>,
             _ => panic!("Invalid op!"),
         }
+    } else if (instruction & 0b11_1000_0000) == 0b01_1000_0000 {
+        let transfer_byte = (instruction >> 6) & 1 == 1;
+        let is_load = (instruction >> 5) & 1 == 1;
+
+        match (transfer_byte, is_load) {
+            (true, true) => load_store_immediate_offset::<true, true>,
+            (true, false) => load_store_immediate_offset::<true, false>,
+            (false, true) => load_store_immediate_offset::<false, true>,
+            (false, false) => load_store_immediate_offset::<false, false>,
+        }
+    } else if (instruction & 0b11_1100_0000) == 0b10_0000_0000 {
+        let is_load = (instruction >> 5) & 1 == 1;
+        
+        match is_load {
+            true => load_store_halfword_immediate_offset::<true>,
+            false => load_store_halfword_immediate_offset::<false>,
+        }
     } else {
         undefined_thumb
     }

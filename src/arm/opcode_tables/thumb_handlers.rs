@@ -327,6 +327,62 @@ pub fn load_store_sign_extended<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     }
 }
 
+pub fn load_store_immediate_offset<const TRANSFER_BYTE: bool, const LOAD: bool>(
+    cpu: &mut Arm7tdmi,
+    opcode: u16,
+) {
+    cpu.registers.r15 += 2;
+
+    let rd = Into::<u32>::into(opcode & 7); // src/dest register
+    let rb = Into::<u32>::into((opcode >> 3) & 7); // base address register
+    let offset = Into::<u32>::into((opcode >> 6) & 0x1F) << if TRANSFER_BYTE { 0 } else { 2 };
+
+    let address = cpu.get_banked_register(rb).wrapping_add(offset);
+
+    if LOAD {
+        let load_value = if TRANSFER_BYTE {
+            cpu.read_byte(address, access_code::NONSEQUENTIAL)
+        } else {
+            cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
+        };
+
+        // todo handle i cycle for load op
+        cpu.bus.i_cycle();
+
+        cpu.set_banked_register(rd, load_value);
+    } else {
+        let store_value = cpu.get_banked_register(rd);
+
+        if TRANSFER_BYTE {
+            cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+        } else {
+            cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+        }
+    }
+}
+
+pub fn load_store_halfword_immediate_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.registers.r15 += 2;
+
+    let rd = Into::<u32>::into(opcode & 7); // src/dest register
+    let rb = Into::<u32>::into((opcode >> 3) & 7); // base register
+    let offset = Into::<u32>::into((opcode >> 6) & 0x1F) << 1;
+
+    let address = cpu.get_banked_register(rb).wrapping_add(offset);
+
+    if LOAD {
+        let load_value = cpu.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
+
+        // todo handle i cycle from load op
+        cpu.bus.i_cycle();
+
+        cpu.set_banked_register(rd, load_value);
+    } else {
+        let store_value = cpu.get_banked_register(rd);
+        cpu.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+    }
+}
+
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {
     todo!("handle undefined opcode: {opcode}");
 }

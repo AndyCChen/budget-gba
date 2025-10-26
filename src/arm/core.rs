@@ -674,4 +674,19 @@ mod thumb_16_tests {
     fn test_thumb_ldrh_strh_reg_offset() {
         load_test("ARM7TDMI/v1/thumb_ldrh_strh_reg_offset.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_ldr_str_imm_offset() {
+        load_test("ARM7TDMI/v1/thumb_ldr_str_imm_offset.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_ldrb_strb_imm_offset() {
+        load_test("ARM7TDMI/v1/thumb_ldrb_strb_imm_offset.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_ldrh_strh_imm_offset() {
+        load_test("ARM7TDMI/v1/thumb_ldrh_strh_imm_offset.json", verify_state, 0);
+    }
 }
