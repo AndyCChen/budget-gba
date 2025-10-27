@@ -137,10 +137,17 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
         }
     } else if (instruction & 0b11_1100_0000) == 0b10_0000_0000 {
         let is_load = (instruction >> 5) & 1 == 1;
-        
+
         match is_load {
             true => load_store_halfword_immediate_offset::<true>,
             false => load_store_halfword_immediate_offset::<false>,
+        }
+    } else if (instruction & 0b11_1100_0000) == 0b10_0100_0000 {
+        let is_load = (instruction >> 5) & 1 == 1;
+
+        match is_load {
+            true => sp_load_store_relative_offset::<true>,
+            false => sp_load_store_relative_offset::<false>,
         }
     } else {
         undefined_thumb

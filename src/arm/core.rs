@@ -689,4 +689,9 @@ mod thumb_16_tests {
     fn test_thumb_ldrh_strh_imm_offset() {
         load_test("ARM7TDMI/v1/thumb_ldrh_strh_imm_offset.json", verify_state, 0);
     }
+    
+    #[test]
+    fn test_thumb_ldr_str_sp_rel() {
+        load_test("ARM7TDMI/v1/thumb_ldr_str_sp_rel.json", verify_state, 0);
+    }
 }
