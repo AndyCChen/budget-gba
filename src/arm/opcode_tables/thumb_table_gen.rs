@@ -149,6 +149,13 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             true => sp_load_store_relative_offset::<true>,
             false => sp_load_store_relative_offset::<false>,
         }
+    } else if (instruction & 0b11_1100_0000) == 0b10_1000_0000 {
+        let is_stack_pointer = (instruction >> 5) & 1 == 1;
+
+        match is_stack_pointer {
+            true => pc_sp_load_address::<true>,
+            false => pc_sp_load_address::<false>,
+        }
     } else {
         undefined_thumb
     }

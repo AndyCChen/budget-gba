@@ -18,11 +18,13 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
 }
 
 pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+    use crate::arm::constants::reg_constant::LINK_REGISTER;
+
     let mut offset = (opcode & 0xFFFFFF) << 2;
 
     // branch with link, save r15 (pc) to r14 (link register)
     if LINK {
-        cpu.set_banked_register(14, (cpu.registers.r15 - Wrapping(4)).0);
+        cpu.set_banked_register(LINK_REGISTER, (cpu.registers.r15 - Wrapping(4)).0);
     }
 
     // positive

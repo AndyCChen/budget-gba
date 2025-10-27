@@ -1,5 +1,8 @@
 use super::common::arithmetic::*;
-use crate::arm::{constants::access_code, core::Arm7tdmi};
+use crate::arm::{
+    constants::{access_code, reg_constant::*},
+    core::Arm7tdmi,
+};
 
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
@@ -379,15 +382,13 @@ pub fn load_store_halfword_immediate_offset<const LOAD: bool>(cpu: &mut Arm7tdmi
     }
 }
 
-const SP: u32 = 13; // stack pointer register number
-
 pub fn sp_load_store_relative_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
-    
+
     let rd: u32 = ((opcode >> 8) & 7).into();
     let offset: u32 = ((opcode & 0xFF) << 2).into();
 
-    let address = cpu.get_banked_register(SP).wrapping_add(offset);
+    let address = cpu.get_banked_register(STACK_POINTER).wrapping_add(offset);
 
     if LOAD {
         let load_value = cpu.read_rotate_word(address, access_code::NONSEQUENTIAL);
@@ -396,11 +397,26 @@ pub fn sp_load_store_relative_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcod
         cpu.bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
-    }
-    else {
+    } else {
         let store_value = cpu.get_banked_register(rd);
         cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
     }
+}
+
+pub fn pc_sp_load_address<const SP: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    let rd: u32 = ((opcode >> 8) & 7).into();
+    let offset: u32 = ((opcode & 0xFF) << 2).into();
+
+    let address = if SP {
+        cpu.get_banked_register(STACK_POINTER).wrapping_add(offset)
+    } else {
+        let pc_value = cpu.registers.r15.0 & !2;
+        pc_value.wrapping_add(offset)
+    };
+
+    cpu.set_banked_register(rd, address);
+
+    cpu.registers.r15 += 2;
 }
 
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {

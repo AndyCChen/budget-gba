@@ -694,4 +694,9 @@ mod thumb_16_tests {
     fn test_thumb_ldr_str_sp_rel() {
         load_test("ARM7TDMI/v1/thumb_ldr_str_sp_rel.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_add_sp_or_pc() {
+        load_test("ARM7TDMI/v1/thumb_add_sp_or_pc.json", verify_state, 0);
+    }
 }
