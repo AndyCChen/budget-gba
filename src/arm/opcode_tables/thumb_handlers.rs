@@ -1,8 +1,5 @@
 use super::common::arithmetic::*;
-use crate::arm::{
-    constants::{access_code, reg_constant::*},
-    core::Arm7tdmi,
-};
+use crate::arm::{constants::access_code, core::Arm7tdmi, opcode_tables::common::reg_constant::*};
 
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
@@ -404,8 +401,8 @@ pub fn sp_load_store_relative_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcod
 }
 
 pub fn pc_sp_load_address<const SP: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
-    let rd: u32 = ((opcode >> 8) & 7).into();
-    let offset: u32 = ((opcode & 0xFF) << 2).into();
+    let rd = u32::from((opcode >> 8) & 7);
+    let offset = u32::from((opcode & 0xFF) << 2);
 
     let address = if SP {
         cpu.get_banked_register(STACK_POINTER).wrapping_add(offset)
@@ -415,6 +412,20 @@ pub fn pc_sp_load_address<const SP: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
     };
 
     cpu.set_banked_register(rd, address);
+
+    cpu.registers.r15 += 2;
+}
+
+pub fn add_sub_sp<const NEGATIVE_OFFSET: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    let offset = u32::from((opcode & 0x7F) << 2);
+
+    let result = if NEGATIVE_OFFSET {
+        cpu.get_banked_register(STACK_POINTER).wrapping_sub(offset)
+    } else {
+        cpu.get_banked_register(STACK_POINTER).wrapping_add(offset)
+    };
+
+    cpu.set_banked_register(STACK_POINTER, result);
 
     cpu.registers.r15 += 2;
 }

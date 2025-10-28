@@ -646,6 +646,11 @@ mod thumb_16_tests {
     }
 
     #[test]
+    fn test_thumb_bx() {
+        load_test("ARM7TDMI/v1/thumb_bx.json", verify_state, 0);
+    }
+
+    #[test]
     fn test_thumb_add_cmp_mov_hi() {
         load_test("ARM7TDMI/v1/thumb_add_cmp_mov_hi.json", verify_state, 0);
     }
@@ -698,5 +703,10 @@ mod thumb_16_tests {
     #[test]
     fn test_thumb_add_sp_or_pc() {
         load_test("ARM7TDMI/v1/thumb_add_sp_or_pc.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_add_sub_sp() {
+         load_test("ARM7TDMI/v1/thumb_add_sub_sp.json", verify_state, 0);
     }
 }

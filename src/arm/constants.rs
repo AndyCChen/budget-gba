@@ -48,8 +48,3 @@ pub mod kind_code {
     pub const GENERAL_READ: u8 = 1 << 0;
     pub const WRITE: u8 = 1 << 1;
 }
-
-pub mod reg_constant {
-    pub const STACK_POINTER: u32 = 13;
-    pub const LINK_REGISTER: u32 = 14;
-}

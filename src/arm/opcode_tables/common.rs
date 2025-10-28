@@ -216,3 +216,8 @@ pub mod arithmetic {
         value_to_move
     }
 }
+
+pub mod reg_constant {
+    pub const STACK_POINTER: u32 = 13;
+    pub const LINK_REGISTER: u32 = 14;
+}

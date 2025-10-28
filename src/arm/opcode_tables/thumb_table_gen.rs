@@ -156,6 +156,13 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             true => pc_sp_load_address::<true>,
             false => pc_sp_load_address::<false>,
         }
+    } else if (instruction & 0b11_1111_1100) == 0b10_1100_0000 {
+        let is_negative = (instruction >> 1) & 1 == 1;
+
+        match is_negative {
+            true => add_sub_sp::<true>,
+            false => add_sub_sp::<false>,
+        }
     } else {
         undefined_thumb
     }

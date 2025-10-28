@@ -1,5 +1,6 @@
 use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
+use crate::arm::opcode_tables::common::reg_constant::*;
 use std::num::Wrapping;
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
@@ -18,8 +19,6 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
 }
 
 pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
-    use crate::arm::constants::reg_constant::LINK_REGISTER;
-
     let mut offset = (opcode & 0xFFFFFF) << 2;
 
     // branch with link, save r15 (pc) to r14 (link register)
