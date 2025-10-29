@@ -220,4 +220,5 @@ pub mod arithmetic {
 pub mod reg_constant {
     pub const STACK_POINTER: u32 = 13;
     pub const LINK_REGISTER: u32 = 14;
+    pub const PROGRAM_COUNTER: u32 = 15;
 }

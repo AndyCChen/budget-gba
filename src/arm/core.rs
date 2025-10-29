@@ -707,6 +707,11 @@ mod thumb_16_tests {
 
     #[test]
     fn test_thumb_add_sub_sp() {
-         load_test("ARM7TDMI/v1/thumb_add_sub_sp.json", verify_state, 0);
+        load_test("ARM7TDMI/v1/thumb_add_sub_sp.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_push_pop() {
+        load_test("ARM7TDMI/v1/thumb_push_pop.json", verify_state, 0);
     }
 }

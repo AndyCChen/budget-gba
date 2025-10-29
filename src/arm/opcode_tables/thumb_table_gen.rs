@@ -163,7 +163,19 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             true => add_sub_sp::<true>,
             false => add_sub_sp::<false>,
         }
-    } else {
+    } else if (instruction & 0b11_1101_1000) == 0b10_1101_0000 {
+        let is_load = (instruction >> 5) & 1 == 1;
+        let push_pop_lr_pc = (instruction >> 2) & 1 == 1;
+
+        match (is_load, push_pop_lr_pc) {
+            (true, true) => push_pop_register::<true, true>,
+            (true, false) => push_pop_register::<true, false>,
+            (false, true) => push_pop_register::<false, true>,
+            (false, false) => push_pop_register::<false, false>,
+        }
+
+    }
+    else {
         undefined_thumb
     }
 }
