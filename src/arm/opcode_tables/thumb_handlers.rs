@@ -1,3 +1,5 @@
+use std::num::Wrapping;
+
 use super::common::arithmetic::*;
 use crate::arm::{constants::access_code, core::Arm7tdmi, opcode_tables::common::reg_constant::*};
 
@@ -511,6 +513,72 @@ pub fn push_pop_register<
     if PC_LR_BIT && LOAD {
         cpu.registers.r15.0 &= !1;
         cpu.pipeline_refill_thumb();
+    }
+}
+
+pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.registers.r15 += 2;
+
+    let rlist = opcode & 0xFF;
+    let rb: u32 = ((opcode >> 8) & 0x7).into(); // base register
+
+    let base = cpu.get_banked_register(rb);
+
+    // handle empty rlist
+    if rlist == 0 {
+        let access = access_code::NONSEQUENTIAL;
+
+        if LOAD {
+            let load_value = cpu.read_word(base, access);
+            cpu.set_banked_register(PROGRAM_COUNTER, load_value);
+            cpu.pipeline_refill_thumb();
+        } else {
+            cpu.write_word(base, cpu.registers.r15.0, access);
+        }
+
+        cpu.set_banked_register(rb, base.wrapping_add(0x40));
+
+        return;
+    }
+
+    let mut address = Wrapping(base);
+    let mut rlist_it = (0..u8::BITS).filter(|i| rlist & (1 << i) != 0);
+
+    if let Some(i) = rlist_it.next() {
+        let access = access_code::NONSEQUENTIAL;
+        let transfer_byte_size = rlist.count_ones() * 4;
+        let write_back = base.wrapping_add(transfer_byte_size);
+
+        if LOAD {
+            let load_value = cpu.read_word(address.0, access);
+            cpu.set_banked_register(rb, write_back);
+            cpu.set_banked_register(i, load_value);
+        } else {
+            let store_value = cpu.get_banked_register(i);
+            cpu.write_word(address.0, store_value, access);
+            cpu.set_banked_register(rb, write_back);
+        }
+
+        address += 4;
+    }
+
+    for i in rlist_it {
+        let access = access_code::SEQUENTIAL;
+
+        if LOAD {
+            let load_value = cpu.read_word(address.0, access);
+            cpu.set_banked_register(i, load_value);
+        } else {
+            let store_value = cpu.get_banked_register(i);
+            cpu.write_word(address.0, store_value, access);
+        }
+
+        address += 4;
+    }
+
+    // todo handle i cycle from load op
+    if LOAD {
+        cpu.bus.i_cycle();
     }
 }
 

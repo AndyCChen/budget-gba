@@ -173,9 +173,14 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             (false, true) => push_pop_register::<false, true>,
             (false, false) => push_pop_register::<false, false>,
         }
+    } else if (instruction & 0b11_1100_0000) == 0b11_0000_0000 {
+        let is_load = (instruction >> 5) & 1 == 1;
 
-    }
-    else {
+        match is_load {
+            true => multiple_load_store::<true>,
+            false => multiple_load_store::<false>,
+        }
+    } else {
         undefined_thumb
     }
 }

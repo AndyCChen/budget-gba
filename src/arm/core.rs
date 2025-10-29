@@ -714,4 +714,9 @@ mod thumb_16_tests {
     fn test_thumb_push_pop() {
         load_test("ARM7TDMI/v1/thumb_push_pop.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_ldm_stm() {
+        load_test("ARM7TDMI/v1/thumb_ldm_stm.json", verify_state, 0);
+    }
 }
