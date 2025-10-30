@@ -1,7 +1,11 @@
 use std::num::Wrapping;
 
 use super::common::arithmetic::*;
-use crate::arm::{constants::access_code, core::{Arm7tdmi, Mode}, opcode_tables::common::reg_constant::*};
+use crate::arm::{
+    constants::access_code,
+    core::{Arm7tdmi, Mode},
+    opcode_tables::common::reg_constant::*,
+};
 
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
@@ -635,6 +639,55 @@ pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u16) {
     cpu.status.cpsr.set_t(false); // switch to arm mode
 
     cpu.pipeline_refill_arm();
+}
+
+pub fn unconditional_branch(cpu: &mut Arm7tdmi, opcode: u16) {
+    let mut branch_offset: u32 = ((opcode & 0x7FF) << 1).into();
+
+    // positive
+    if branch_offset & 0x800 == 0 {
+        cpu.registers.r15 += branch_offset;
+    } else {
+        branch_offset |= 0xFFFF_F800;
+        branch_offset = !branch_offset + 1;
+        cpu.registers.r15 -= branch_offset;
+    }
+
+    cpu.pipeline_refill_thumb();
+}
+
+pub fn long_branch_with_link<
+    const H_BIT: bool, // 0: offset high, 1: offset low
+>(
+    cpu: &mut Arm7tdmi,
+    opcode: u16,
+) {
+    if H_BIT {
+        let offset_lo: u32 = ((opcode & 0x7FF) << 1).into();
+
+        let branch_address = cpu
+            .get_banked_register(LINK_REGISTER)
+            .wrapping_add(offset_lo);
+
+        cpu.set_banked_register(LINK_REGISTER, cpu.registers.r15.0.wrapping_sub(2) | 1);
+
+        cpu.registers.r15.0 = branch_address & !1;
+        cpu.pipeline_refill_thumb();
+    } else {
+        let mut offset_hi = (u32::from(opcode) & 0x7FF) << 12;
+
+        // positive
+        let lr_hi = if offset_hi & (1 << 22) == 0 {
+            cpu.registers.r15.0.wrapping_add(offset_hi)
+        } else {
+            offset_hi |= 0xFFC0_0000;
+            offset_hi = !offset_hi + 1;
+            cpu.registers.r15.0.wrapping_sub(offset_hi)
+        };
+
+        cpu.set_banked_register(LINK_REGISTER, lr_hi);
+        cpu.registers.r15 += 2;
+    }
 }
 
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {

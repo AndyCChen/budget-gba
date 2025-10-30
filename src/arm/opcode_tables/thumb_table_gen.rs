@@ -202,6 +202,15 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             15 => software_interrupt,
             _ => panic!("Invalid OP"),
         }
+    } else if (instruction & 0b11_1110_0000) == 0b11_1000_0000 {
+        unconditional_branch
+    } else if (instruction & 0b11_1100_0000) == 0b11_1100_0000 {
+        let h_bit = (instruction >> 5) & 1 == 1;
+
+        match h_bit {
+            true => long_branch_with_link::<true>,
+            false => long_branch_with_link::<false>,
+        }
     } else {
         undefined_thumb
     }

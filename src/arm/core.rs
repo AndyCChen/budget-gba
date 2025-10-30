@@ -729,4 +729,19 @@ mod thumb_16_tests {
     fn test_thumb_swi() {
         load_test("ARM7TDMI/v1/thumb_swi.json", verify_state, 0);
     }
+
+    #[test]
+    fn test_thumb_b() {
+        load_test("ARM7TDMI/v1/thumb_b.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_bl_blx_prefix() {
+        load_test("ARM7TDMI/v1/thumb_bl_blx_prefix.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_thumb_bl_suffix() {
+        load_test("ARM7TDMI/v1/thumb_bl_suffix.json", verify_state, 0);
+    }
 }
