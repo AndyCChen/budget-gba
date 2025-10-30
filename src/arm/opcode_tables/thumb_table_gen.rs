@@ -180,6 +180,28 @@ const fn generate_thumb_instruction(instruction: usize) -> ThumbHandler {
             true => multiple_load_store::<true>,
             false => multiple_load_store::<false>,
         }
+    } else if (instruction & 0b11_1100_0000) == 0b11_0100_0000 {
+        let cond = (instruction >> 2) & 0xF;
+
+        match cond {
+            0 => conditional_branch::<0>,
+            1 => conditional_branch::<1>,
+            2 => conditional_branch::<2>,
+            3 => conditional_branch::<3>,
+            4 => conditional_branch::<4>,
+            5 => conditional_branch::<5>,
+            6 => conditional_branch::<6>,
+            7 => conditional_branch::<7>,
+            8 => conditional_branch::<8>,
+            9 => conditional_branch::<9>,
+            10 => conditional_branch::<10>,
+            11 => conditional_branch::<11>,
+            12 => conditional_branch::<12>,
+            13 => conditional_branch::<13>,
+            14 => conditional_branch::<14>,
+            15 => software_interrupt,
+            _ => panic!("Invalid OP"),
+        }
     } else {
         undefined_thumb
     }

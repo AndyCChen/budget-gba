@@ -1,7 +1,7 @@
 use std::num::Wrapping;
 
 use super::common::arithmetic::*;
-use crate::arm::{constants::access_code, core::Arm7tdmi, opcode_tables::common::reg_constant::*};
+use crate::arm::{constants::access_code, core::{Arm7tdmi, Mode}, opcode_tables::common::reg_constant::*};
 
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
@@ -580,6 +580,61 @@ pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
     if LOAD {
         cpu.bus.i_cycle();
     }
+}
+
+pub fn conditional_branch<const COND: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    use crate::arm::constants::arm_condition_code::*;
+
+    let do_branch = match COND {
+        EQ => cpu.status.cpsr.z(),
+        NE => !cpu.status.cpsr.z(),
+        CS => cpu.status.cpsr.c(),
+        CC => !cpu.status.cpsr.c(),
+        MI => cpu.status.cpsr.n(),
+        PL => !cpu.status.cpsr.n(),
+        VS => cpu.status.cpsr.v(),
+        VC => !cpu.status.cpsr.v(),
+        HI => cpu.status.cpsr.c() && !cpu.status.cpsr.z(),
+        LS => !cpu.status.cpsr.c() || cpu.status.cpsr.z(),
+        GE => cpu.status.cpsr.n() == cpu.status.cpsr.v(),
+        LT => cpu.status.cpsr.n() != cpu.status.cpsr.v(),
+        GT => !cpu.status.cpsr.z() && (cpu.status.cpsr.n() == cpu.status.cpsr.v()),
+        LE => cpu.status.cpsr.z() || (cpu.status.cpsr.n() != cpu.status.cpsr.v()),
+        14 => panic!("Undefined cond 13!"),
+        15 => panic!("Condition 15 defines SWI instruction"),
+        _ => panic!("Invalid cond: {COND}"),
+    };
+
+    if !do_branch {
+        cpu.registers.r15 += 2;
+        return;
+    }
+
+    let mut branch_offset: u32 = ((opcode & 0xFF) << 1).into();
+
+    // positive
+    if branch_offset & 0x100 == 0 {
+        cpu.registers.r15 += branch_offset;
+    } else {
+        branch_offset |= 0xFFFF_FF00;
+        branch_offset = !branch_offset + 1;
+        cpu.registers.r15 -= branch_offset;
+    };
+
+    cpu.pipeline_refill_thumb();
+}
+
+pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u16) {
+    cpu.registers.r14_svc = cpu.registers.r15.0.wrapping_sub(2);
+
+    cpu.registers.r15 = Wrapping(8);
+    cpu.status.spsr_svc = cpu.status.cpsr;
+
+    cpu.status.cpsr.set_i(true);
+    cpu.status.cpsr.set_mode_bits(Mode::Supervisor);
+    cpu.status.cpsr.set_t(false); // switch to arm mode
+
+    cpu.pipeline_refill_arm();
 }
 
 pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {
