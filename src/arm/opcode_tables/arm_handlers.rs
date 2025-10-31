@@ -584,9 +584,9 @@ pub fn halfword_and_signed_data_transfer<
 
 #[derive(PartialEq)]
 enum BlockTransferState {
+    None,
     ForceUserMode,
     LoadPsr,
-    None,
 }
 
 pub fn block_data_transfer<
@@ -597,116 +597,104 @@ pub fn block_data_transfer<
     const LOAD: bool,
 >(
     cpu: &mut Arm7tdmi,
-    mut opcode: u32,
+    opcode: u32,
 ) {
-    let rn = (opcode >> 16) & 0xF; // base
-    let active_registers = (opcode as u16).count_ones();
-
-    let mut offset: u32 = 0;
+    let rn = (opcode >> 16) & 0xF; // base address register
     let base = cpu.get_banked_register(rn);
+    let mut rlist = opcode & 0xFFFF; // 16 bit register list for the 16 general purpose register
 
-    let (base_address, write_back_value) = match (active_registers == 0, INC) {
-        (false, true) => (base, base.wrapping_add(active_registers * 4)),
-        (false, false) => (
-            base.wrapping_sub(active_registers * 4),
-            base.wrapping_sub(active_registers * 4),
-        ),
-        (true, true) => {
-            opcode |= 0x8000;
-            (base.wrapping_add(0x40), base.wrapping_add(0x40))
-        }
-        (true, false) => {
-            opcode |= 0x8000;
-            (base.wrapping_sub(0x40), base.wrapping_sub(0x40))
-        }
-    };
+    // transfer begins at the lowest address first
+    let base_address;
+    let writeback_value;
 
-    let saved_mode = cpu.status.cpsr.mode_bits();
-    let r15_in_transfer_list = opcode & (1 << 15) != 0;
-    let block_transfer_state = match (S, LOAD, r15_in_transfer_list) {
-        (false, _, _) => BlockTransferState::None, // s bit not set
-        (true, true, true) => BlockTransferState::LoadPsr, // s bit set, LDM with r15 in transfer list
-        (true, _, true | false) => {
-            // s bit set, LDM or STM, without r15 in transfer list
-            // s bit set, STM, with r15 in transfer list
+    // handle empty register list which causes r15 to be loaded/stored
+    if rlist == 0 {
+        rlist = 0x8000;
+
+        if INC {
+            base_address = base.wrapping_add(0x40);
+            writeback_value = base_address;
+        } else {
+            base_address = base.wrapping_sub(0x40);
+            writeback_value = base_address;
+        }
+    } else {
+        let transfer_byte_size = rlist.count_ones() * 4;
+
+        if INC {
+            base_address = base;
+            writeback_value = base.wrapping_add(transfer_byte_size);
+        } else {
+            base_address = base.wrapping_sub(transfer_byte_size);
+            writeback_value = base_address;
+        }
+    }
+
+    let mode_backup = cpu.status.cpsr.mode_bits();
+    let r15_in_transfer_list = rlist & (1 << 15) != 0;
+    let block_transfer_state = if S {
+        if LOAD && r15_in_transfer_list {
+            BlockTransferState::LoadPsr
+        } else {
             cpu.status.cpsr.set_mode_bits(Mode::User);
             BlockTransferState::ForceUserMode
         }
+    } else {
+        BlockTransferState::None
     };
 
     cpu.registers.r15 += 4;
 
-    // set up register list with corresponding address
-    let register_list = {
-        let mut temp: [(u32, Option<u32>, u8); 16] =
-            core::array::from_fn(|n| (n as u32, None, access_code::SEQUENTIAL));
-
-        let mut generate_address = |address: &mut Option<u32>| {
+    let mut rlist_iter = (0..16)
+        .filter(|i| rlist & (1 << i) != 0)
+        .scan(0, |offset, i| {
             if (INC && PRE_INDEX) || (!INC && !PRE_INDEX) {
-                offset = offset.wrapping_add(4);
-                *address = Some(base_address.wrapping_add(offset));
+                *offset += 4;
+                Some((base_address.wrapping_add(*offset), i))
             } else {
-                *address = Some(base_address.wrapping_add(offset));
-                offset = offset.wrapping_add(4);
+                let yield_value = Some((base_address.wrapping_add(*offset), i));
+                *offset += 4;
+                yield_value
             }
-        };
-
-        let mut temp_iter = temp
-            .iter_mut()
-            .enumerate()
-            .filter(|(idx, _)| opcode & (1 << idx) != 0);
-
-        if let Some((_, (_, address, access))) = temp_iter.next() {
-            *access = access_code::NONSEQUENTIAL;
-            generate_address(address);
-        }
-
-        for (_, (_, address, _)) in temp_iter {
-            generate_address(address);
-        }
-
-        temp
-    };
-
-    let mut register_list_iter = register_list
-        .iter()
-        .filter_map(|(register_id, addr, access)| {
-            addr.as_ref().map(|val| (register_id, val, access))
         });
 
-    if let Some((register_id, address, access)) = register_list_iter.next() {
+    if let Some((address, register_id)) = rlist_iter.next() {
+        let access = access_code::NONSEQUENTIAL;
+
         if LOAD {
-            let load_value = cpu.read_word(*address, *access);
+            let load_value = cpu.read_word(address, access);
 
             if WRITE_BACK {
-                cpu.set_banked_register(rn, write_back_value);
+                cpu.set_banked_register(rn, writeback_value);
             }
 
-            cpu.set_banked_register(*register_id, load_value);
+            cpu.set_banked_register(register_id, load_value);
         } else {
-            let store_value = cpu.get_banked_register(*register_id);
-            cpu.write_word(*address, store_value, *access);
+            let store_value = cpu.get_banked_register(register_id);
+            cpu.write_word(address, store_value, access);
 
             if WRITE_BACK {
-                cpu.set_banked_register(rn, write_back_value);
+                cpu.set_banked_register(rn, writeback_value);
             }
         }
     }
 
-    register_list_iter.for_each(|(register_id, address, access)| {
+    for (address, register_id) in rlist_iter {
+        let access = access_code::SEQUENTIAL;
+
         if LOAD {
-            let load_value = cpu.read_word(*address, *access);
-            cpu.set_banked_register(*register_id, load_value);
+            let load_value = cpu.read_word(address, access);
+            cpu.set_banked_register(register_id, load_value);
         } else {
-            let store_value = cpu.get_banked_register(*register_id);
-            cpu.write_word(*address, store_value, *access);
+            let store_value = cpu.get_banked_register(register_id);
+            cpu.write_word(address, store_value, access);
         }
-    });
+    }
 
     match block_transfer_state {
-        BlockTransferState::ForceUserMode => cpu.status.cpsr.set_mode_bits(saved_mode),
-        BlockTransferState::LoadPsr => cpu.status.cpsr = StatusRegister::from_bits(cpu.get_spsr()),
         BlockTransferState::None => (),
+        BlockTransferState::ForceUserMode => cpu.status.cpsr.set_mode_bits(mode_backup),
+        BlockTransferState::LoadPsr => cpu.status.cpsr = StatusRegister::from_bits(cpu.get_spsr()),
     };
 
     if (LOAD && r15_in_transfer_list) || ((WRITE_BACK) && rn == 15) {
