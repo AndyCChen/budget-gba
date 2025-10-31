@@ -445,65 +445,63 @@ pub fn push_pop_register<
 ) {
     cpu.registers.r15 += 2;
 
-    let is_rlist_empty = opcode & 0xFF == 0;
-
+    let rlist = opcode & 0xFF;
     let base = cpu.get_banked_register(STACK_POINTER);
-    let mut address;
+    let base_address;
 
-    if !PC_LR_BIT && is_rlist_empty {
+    if !PC_LR_BIT && rlist == 0 {
+        let access = access_code::NONSEQUENTIAL;
+
         if LOAD {
-            let value = cpu.read_word(base, access_code::NONSEQUENTIAL);
-            cpu.set_banked_register(PROGRAM_COUNTER, value);
+            let pc_load_value = cpu.read_word(base, access);
+            cpu.set_banked_register(PROGRAM_COUNTER, pc_load_value);
             cpu.set_banked_register(STACK_POINTER, base.wrapping_add(0x40));
 
             cpu.pipeline_refill_thumb();
         } else {
-            address = base.wrapping_sub(0x40);
-            cpu.set_banked_register(STACK_POINTER, address);
-            cpu.write_word(address, cpu.registers.r15.0, access_code::NONSEQUENTIAL);
+            base_address = base.wrapping_sub(0x40);
+            cpu.set_banked_register(STACK_POINTER, base_address);
+            cpu.write_word(base_address, cpu.registers.r15.0, access);
         }
 
         return;
     }
 
-    let register_list = [
-        (0, opcode & 1 == 1),
-        (1, (opcode >> 1) & 1 == 1),
-        (2, (opcode >> 2) & 1 == 1),
-        (3, (opcode >> 3) & 1 == 1),
-        (4, (opcode >> 4) & 1 == 1),
-        (5, (opcode >> 5) & 1 == 1),
-        (6, (opcode >> 6) & 1 == 1),
-        (7, (opcode >> 7) & 1 == 1),
-        (
-            if LOAD { PROGRAM_COUNTER } else { LINK_REGISTER },
-            PC_LR_BIT,
-        ),
-    ];
-
-    let transfer_byte_size =
-        ((opcode & 0xFF).count_ones() + u32::from(register_list.last().unwrap().1)) * 4;
+    let transfer_byte_size = ((opcode & 0xFF).count_ones() + u32::from(PC_LR_BIT)) * 4;
 
     // update stack pointer
     if LOAD {
-        address = base;
+        base_address = base;
         cpu.set_banked_register(STACK_POINTER, base.wrapping_add(transfer_byte_size));
     } else {
-        address = base.wrapping_sub(transfer_byte_size);
-        cpu.set_banked_register(STACK_POINTER, address);
+        base_address = base.wrapping_sub(transfer_byte_size);
+        cpu.set_banked_register(STACK_POINTER, base_address);
     }
 
-    let mut access = access_code::NONSEQUENTIAL;
+    let rlist_iter = (0..8)
+        .filter(|i| rlist & (1 << i) != 0)
+        .chain(
+            if LOAD {
+                PROGRAM_COUNTER..=PROGRAM_COUNTER
+            } else {
+                LINK_REGISTER..=LINK_REGISTER
+            }
+            .filter(|_| PC_LR_BIT),
+        )
+        .scan(0, |offset, i| {
+            let yield_value = Some((base_address.wrapping_add(*offset), i));
+            *offset += 4;
+            yield_value
+        });
 
-    for (register_id, _) in register_list.iter().filter(|(_, is_active)| *is_active) {
+    let mut access = access_code::NONSEQUENTIAL;
+    for (address, register_id) in rlist_iter {
         if LOAD {
             let pop_value = cpu.read_word(address, access);
-            address = address.wrapping_add(4);
-            cpu.set_banked_register(*register_id, pop_value);
+            cpu.set_banked_register(register_id, pop_value);
         } else {
-            let push_value = cpu.get_banked_register(*register_id);
+            let push_value = cpu.get_banked_register(register_id);
             cpu.write_word(address, push_value, access);
-            address = address.wrapping_add(4);
         }
 
         access = access_code::SEQUENTIAL;
