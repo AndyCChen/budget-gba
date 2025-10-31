@@ -543,39 +543,40 @@ pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
         return;
     }
 
-    let mut address = Wrapping(base);
-    let mut rlist_it = (0..u8::BITS).filter(|i| rlist & (1 << i) != 0);
+    let mut rlist_iter = (0..8)
+        .filter(|i| rlist & (1 << i) != 0)
+        .scan(0, |offset, i| {
+            let yield_value = Some((base.wrapping_add(*offset), i));
+            *offset += 4;
+            yield_value
+        });
 
-    if let Some(i) = rlist_it.next() {
+    if let Some((address, register_id)) = rlist_iter.next() {
         let access = access_code::NONSEQUENTIAL;
         let transfer_byte_size = rlist.count_ones() * 4;
         let write_back = base.wrapping_add(transfer_byte_size);
 
         if LOAD {
-            let load_value = cpu.read_word(address.0, access);
+            let load_value = cpu.read_word(address, access);
             cpu.set_banked_register(rb, write_back);
-            cpu.set_banked_register(i, load_value);
+            cpu.set_banked_register(register_id, load_value);
         } else {
-            let store_value = cpu.get_banked_register(i);
-            cpu.write_word(address.0, store_value, access);
+            let store_value = cpu.get_banked_register(register_id);
+            cpu.write_word(address, store_value, access);
             cpu.set_banked_register(rb, write_back);
         }
-
-        address += 4;
     }
 
-    for i in rlist_it {
+    for (address, register_id) in rlist_iter {
         let access = access_code::SEQUENTIAL;
 
         if LOAD {
-            let load_value = cpu.read_word(address.0, access);
-            cpu.set_banked_register(i, load_value);
+            let load_value = cpu.read_word(address, access);
+            cpu.set_banked_register(register_id, load_value);
         } else {
-            let store_value = cpu.get_banked_register(i);
-            cpu.write_word(address.0, store_value, access);
+            let store_value = cpu.get_banked_register(register_id);
+            cpu.write_word(address, store_value, access);
         }
-
-        address += 4;
     }
 
     // todo handle i cycle from load op
