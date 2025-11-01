@@ -1,9 +1,9 @@
 use std::num::Wrapping;
 
 use crate::arm::constants::access_code;
-use crate::arm::json_test_states::*;
-use crate::arm::opcode_tables::instruction_lut::{ARM_TABLE, THUMB_TABLE};
-use crate::bus::core::Bus;
+use crate::arm::arm_json_test_states::*;
+use crate::arm::opcode_tables::{ARM_TABLE, THUMB_TABLE};
+use crate::bus::Bus;
 
 use bitfield_struct::bitfield;
 
@@ -411,7 +411,7 @@ pub struct StatusRegister {
 #[rustfmt::skip]
 #[allow(dead_code)]
 mod test_utils {
-    use crate::bus::test_bus::TestBus;
+    use crate::bus::TestBus;
 
     use super::*;
     use std::fs;
@@ -614,7 +614,7 @@ mod thumb_16_tests {
     #[test]
     fn test_thumb_data_proc() {
         use super::*;
-        use crate::bus::test_bus::TestBus;
+        use crate::bus::TestBus;
         use std::fs;
 
         let Ok(data) = fs::read_to_string("ARM7TDMI/v1/thumb_data_proc.json") else {

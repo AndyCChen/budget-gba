@@ -20,7 +20,7 @@ impl Arm7tdmi {
         self.bus.read_word(address, access)
     }
 
-    pub fn read_halfword(&mut self, address: u32, access: u8) -> u32 {
+    pub fn _read_halfword(&mut self, address: u32, access: u8) -> u32 {
         self.bus.read_halfword(address, access).into()
     }
 

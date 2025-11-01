@@ -35,12 +35,8 @@ pub mod access_code {
     pub const NONSEQUENTIAL: u8 = 0;
     pub const SEQUENTIAL: u8 = 1 << 0;
     pub const CODE: u8 = 1 << 1;
-    pub const DMA: u8 = 1 << 2;
+    pub const _DMA: u8 = 1 << 2;
     pub const LOCK: u8 = 1 << 3;
-
-    // pub const INSTRUCTION_READ: u8 = 1 << 4;
-    // pub const GENERAL_READ: u8 = 1 << 5;
-    // pub const WRITE: u8 = 1 << 6;
 }
 
 pub mod kind_code {
