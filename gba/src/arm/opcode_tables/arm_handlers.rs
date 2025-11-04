@@ -106,7 +106,8 @@ pub fn data_processing<
             // pc is ahead by 12 when a register specified shift is used
             if register_specified_shift {
                 // todo handle extra I cycle
-
+                cpu.bus.i_cycle();
+                cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
                 cpu.registers.r15 += 4;
             }
 
@@ -126,6 +127,7 @@ pub fn data_processing<
     let op1 = cpu.get_banked_register(rn);
 
     if !register_specified_shift {
+        cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         cpu.registers.r15 += 4;
     }
 
@@ -242,6 +244,7 @@ pub fn read_status_mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
         cpu.set_banked_register(rd, cpu.status.cpsr.into_bits());
     }
 
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 }
 
@@ -302,10 +305,12 @@ pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7td
         cpu.status.cpsr = StatusRegister::from_bits(psr_value);
     }
 
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 }
 
 pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
     let rm = opcode & 0xF; // op1 reg value
@@ -363,6 +368,7 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
     cpu: &mut Arm7tdmi,
     opcode: u32,
 ) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
     let rm = opcode & 0xF;
@@ -470,6 +476,7 @@ pub fn single_data_transfer<
         cpu.get_banked_register(rn)
     };
 
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
     if LOAD {
@@ -543,6 +550,7 @@ pub fn halfword_and_signed_data_transfer<
         cpu.get_banked_register(rn)
     };
 
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
     if LOAD {
@@ -558,6 +566,7 @@ pub fn halfword_and_signed_data_transfer<
         }
 
         // handle extra i cycle from load op
+        cpu.bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
@@ -643,6 +652,7 @@ pub fn block_data_transfer<
         BlockTransferState::None
     };
 
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
     let mut rlist_iter = (0..16)
@@ -711,6 +721,7 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     let rd = (opcode >> 12) & 0xF; // destination register
     let rn = (opcode >> 16) & 0xF; // base register
 
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
     // read from swap address

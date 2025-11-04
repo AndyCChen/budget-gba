@@ -234,6 +234,8 @@ impl Arm7tdmi {
             self.registers.r15.0.wrapping_add(4),
             access_code::CODE | access_code::SEQUENTIAL,
         ));
+
+        self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 8;
     }
 
@@ -247,6 +249,8 @@ impl Arm7tdmi {
             self.registers.r15.0.wrapping_add(2),
             access_code::CODE | access_code::SEQUENTIAL,
         ));
+
+        self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 4;
     }
 

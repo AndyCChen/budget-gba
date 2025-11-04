@@ -8,6 +8,7 @@ use crate::arm::{
 };
 
 pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = (opcode & 0x7).into();
@@ -30,6 +31,7 @@ pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
 }
 
 pub fn add_subtract<const IMM: bool, const IS_SUBTRACT: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = (opcode & 0x7).into(); // destination register
@@ -54,6 +56,7 @@ pub fn mov_cmp_add_sub_immediate<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) 
     const ADD: u8 = 2;
     const SUB: u8 = 3;
 
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = ((opcode >> 8) & 0x7).into();
@@ -126,6 +129,7 @@ fn mul(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
 }
 
 pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd = (opcode & 0x7).into();
@@ -136,6 +140,7 @@ pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
 
     if matches!(OP, alu_op::LSL | alu_op::LSR | alu_op::ASR | alu_op::ROR) {
         // handle extra i cycle from register specified shift
+        cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
         cpu.bus.i_cycle();
     }
 
@@ -194,8 +199,8 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
     const MOV: u8 = 2;
     const BX: u8 = 3;
 
-    let rd: u32 = (u32::from(H1) << 3) | Into::<u32>::into(opcode & 0x7);
-    let rs: u32 = (u32::from(H2) << 3) | Into::<u32>::into((opcode >> 3) & 0x7);
+    let rd: u32 = (u32::from(H1) << 3) | u32::from(opcode & 0x7);
+    let rs: u32 = (u32::from(H2) << 3) | u32::from((opcode >> 3) & 0x7);
 
     let op1 = cpu.get_banked_register(rd);
     let op2 = if rs == 15 {
@@ -204,6 +209,7 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
         cpu.get_banked_register(rs)
     };
 
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     match OP {
@@ -254,6 +260,7 @@ pub fn pc_relative_load(cpu: &mut Arm7tdmi, opcode: u16) {
     // todo handle i cycle
     cpu.bus.i_cycle();
 
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 }
 
@@ -261,6 +268,7 @@ pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
     cpu: &mut Arm7tdmi,
     opcode: u16,
 ) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = (opcode & 0x7).into(); // source/dest register
@@ -294,6 +302,7 @@ pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
 }
 
 pub fn load_store_sign_extended<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd = u32::from(opcode) & 0x7; // destination
@@ -333,6 +342,7 @@ pub fn load_store_immediate_offset<const TRANSFER_BYTE: bool, const LOAD: bool>(
     cpu: &mut Arm7tdmi,
     opcode: u16,
 ) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd = Into::<u32>::into(opcode & 7); // src/dest register
@@ -364,6 +374,7 @@ pub fn load_store_immediate_offset<const TRANSFER_BYTE: bool, const LOAD: bool>(
 }
 
 pub fn load_store_halfword_immediate_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd = Into::<u32>::into(opcode & 7); // src/dest register
@@ -386,6 +397,7 @@ pub fn load_store_halfword_immediate_offset<const LOAD: bool>(cpu: &mut Arm7tdmi
 }
 
 pub fn sp_load_store_relative_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = ((opcode >> 8) & 7).into();
@@ -419,6 +431,7 @@ pub fn pc_sp_load_address<const SP: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
 
     cpu.set_banked_register(rd, address);
 
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 }
 
@@ -433,6 +446,7 @@ pub fn add_sub_sp<const NEGATIVE_OFFSET: bool>(cpu: &mut Arm7tdmi, opcode: u16) 
 
     cpu.set_banked_register(STACK_POINTER, result);
 
+    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 }
 
@@ -443,6 +457,7 @@ pub fn push_pop_register<
     cpu: &mut Arm7tdmi,
     opcode: u16,
 ) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rlist = opcode & 0xFF;
@@ -519,6 +534,7 @@ pub fn push_pop_register<
 }
 
 pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
     let rlist = opcode & 0xFF;
@@ -603,12 +619,13 @@ pub fn conditional_branch<const COND: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
         LT => cpu.status.cpsr.n() != cpu.status.cpsr.v(),
         GT => !cpu.status.cpsr.z() && (cpu.status.cpsr.n() == cpu.status.cpsr.v()),
         LE => cpu.status.cpsr.z() || (cpu.status.cpsr.n() != cpu.status.cpsr.v()),
-        14 => panic!("Undefined cond 13!"),
+        14 => panic!("Condition 14 is undefined!"),
         15 => panic!("Condition 15 defines SWI instruction"),
         _ => panic!("Invalid cond: {COND}"),
     };
 
     if !do_branch {
+        cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         cpu.registers.r15 += 2;
         return;
     }
@@ -685,6 +702,8 @@ pub fn long_branch_with_link<
         };
 
         cpu.set_banked_register(LINK_REGISTER, lr_hi);
+        
+        cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         cpu.registers.r15 += 2;
     }
 }
