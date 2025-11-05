@@ -1,7 +1,4 @@
-use crate::{
-    arm::*,
-    bus::core::Bus,
-};
+use crate::{arm::*, bus::core::Bus};
 
 use num_traits::{Bounded, FromPrimitive, ToPrimitive, Unsigned};
 
@@ -59,10 +56,12 @@ impl TestBus {
 
 impl Bus for TestBus {
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
+        let address = address & !3; // align 4 byte boundary
         self.read(address, access, kind_code::INSTRUCTION_READ)
     }
 
     fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u16 {
+        let address = address & !1;
         self.read(address, access, kind_code::INSTRUCTION_READ)
     }
 
@@ -81,11 +80,11 @@ impl Bus for TestBus {
     fn write_word(&mut self, address: u32, value: u32, access: u8) {
         self.write(address, value, access);
     }
-    
+
     fn write_halfword(&mut self, address: u32, value: u16, access: u8) {
         self.write(address, value, access)
     }
-    
+
     fn write_byte(&mut self, address: u32, value: u8, access: u8) {
         self.write(address, value, access)
     }

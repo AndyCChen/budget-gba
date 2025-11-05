@@ -2,12 +2,10 @@ use crate::arm::core::Arm7tdmi;
 
 impl Arm7tdmi {
     pub fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
-        let address = address & !3; // align 4 byte boundary
         self.bus.pipeline_read_word(address, access)
     }
 
     pub fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u32 {
-        let address = address & !1;
         self.bus.pipeline_read_halfword(address, access).into()
     }
 
@@ -31,7 +29,8 @@ impl Arm7tdmi {
 
     pub fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32 {
         if address & 1 == 1 {
-            (self.bus.read_halfword(address, access) >> 8) as i8 as i32 as u32
+            self.read_rotate_halfword(address, access)  as i8 as i32 as u32
+            //self.bus.read_byte(address, access) as i8 as i32 as u32
         } else {
             self.bus.read_halfword(address, access) as i16 as i32 as u32
         }
