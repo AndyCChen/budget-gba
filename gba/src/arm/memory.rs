@@ -29,7 +29,7 @@ impl Arm7tdmi {
 
     pub fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32 {
         if address & 1 == 1 {
-            self.read_rotate_halfword(address, access)  as i8 as i32 as u32
+            self.read_rotate_halfword(address, access) as i8 as i32 as u32
             //self.bus.read_byte(address, access) as i8 as i32 as u32
         } else {
             self.bus.read_halfword(address, access) as i16 as i32 as u32

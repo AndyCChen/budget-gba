@@ -1,5 +1,5 @@
 use crate::bus::Bus;
-use num_traits::{Bounded, FromPrimitive, ToPrimitive, Unsigned};
+use num_traits::{FromPrimitive, ToPrimitive, Unsigned};
 
 const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
@@ -22,6 +22,13 @@ impl GbaBus {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.bios_ram.fill(0);
+        self.wram_256.fill(0);
+        self.wram_32.fill(0);
+        self.gamepak_rom.fill(0);
+    }
+
     fn read<T: Unsigned + FromPrimitive>(&mut self, address: u32, _access: u8) -> T {
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
         let read_value: T;
@@ -29,6 +36,14 @@ impl GbaBus {
         // bios
         if address <= 0x01FF_FFFF {
             read_value = mem_read(align::<T>(address & 0x3FFF), &self.bios_ram);
+        }
+        // 256kb wram
+        else if address <= 0x02FF_FFFF {
+            read_value = mem_read(align::<T>(address & 0x3FFFF), &self.wram_256);
+        }
+        // 32kb wram
+        else if address <= 0x03FF_FFFF {
+            read_value = mem_read(align::<T>(address & 0x7FFF), &self.wram_32);
         } else {
             todo!()
         }
@@ -36,10 +51,26 @@ impl GbaBus {
         read_value
     }
 
-    fn write<T: Unsigned + FromPrimitive>(&mut self, address: u32, value: T, access: u8) {
+    fn write<T: Unsigned + FromPrimitive + ToPrimitive>(
+        &mut self,
+        address: u32,
+        value: T,
+        _access: u8,
+    ) {
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
-        
+        // bios
+        if address <= 0x01FF_FFFF {
+            // bios is read-only
+        }
+        // 256kb wram
+        else if address <= 0x02FF_FFFF {
+            mem_write(align::<T>(address & 0x3FFFF), &mut self.wram_256, value);
+        }
+        // 32kb wram
+        else if address <= 0x03FF_FFFF {
+            mem_write(align::<T>(address & 0x7FFF), &mut self.wram_32, value);
+        }
     }
 }
 
@@ -55,6 +86,21 @@ fn mem_read<T: Unsigned + FromPrimitive>(address: usize, data: &[u8]) -> T {
         _ => panic!(),
     }
     .unwrap()
+}
+
+fn mem_write<T: Unsigned + ToPrimitive>(address: usize, data: &mut [u8], value: T) {
+    match size_of::<T>() {
+        1 => data[address] = value.to_u8().unwrap(),
+        2 => {
+            let le_bytes = value.to_u16().unwrap().to_le_bytes();
+            data[address..address + 2].copy_from_slice(&le_bytes);
+        }
+        4 => {
+            let le_bytes = value.to_u32().unwrap().to_le_bytes();
+            data[address..address + 4].copy_from_slice(&le_bytes);
+        }
+        _ => panic!(),
+    }
 }
 
 fn align<T: Unsigned>(address: u32) -> usize {
@@ -92,6 +138,69 @@ impl Bus for GbaBus {
 
     fn write_byte(&mut self, address: u32, value: u8, access: u8) {
         self.write(address, value, access);
+    }
+}
+
+#[cfg(test)]
+mod gba_bus_test {
+    use crate::{
+        arm::access_code,
+        bus::{Bus, gba_bus::GbaBus},
+    };
+
+    #[test]
+    fn bus_read_test() {
+        let mut bus = GbaBus::new();
+        bus.wram_256[0x3FF00] = 0xAA;
+        bus.wram_256[0x3FF01] = 0xBB;
+        bus.wram_256[0x3FF02] = 0xCC;
+        bus.wram_256[0x3FF03] = 0xDD;
+
+        let wram_256_start = 0x0200_0000;
+
+        assert_eq!(
+            bus.read_word(wram_256_start + 0x3FF00, access_code::NONSEQUENTIAL),
+            0xDDCC_BBAA
+        );
+
+        assert_eq!(
+            bus.read_halfword(wram_256_start + 0x3FF00, access_code::NONSEQUENTIAL),
+            0xBBAA
+        );
+
+        // read at unaligned address
+
+        assert_eq!(
+            bus.read_word(wram_256_start + 2 + 0x3FF00, access_code::NONSEQUENTIAL),
+            0xDDCC_BBAA
+        );
+
+        assert_eq!(
+            bus.read_halfword(wram_256_start + 1 + 0x3FF00, access_code::NONSEQUENTIAL),
+            0xBBAA
+        );
+    }
+
+    #[test]
+    fn bus_write_test() {
+        let wram_256_start = 0x0200_0000;
+
+        let mut bus = GbaBus::new();
+
+        bus.write_word(wram_256_start, 0xAABB_CCDD, access_code::NONSEQUENTIAL);
+        assert_eq!(bus.wram_256[0..4], [0xDD, 0xCC, 0xBB, 0xAA]);
+
+        bus.reset();
+        bus.write_word(wram_256_start + 1, 0xAABB_CCDD, access_code::NONSEQUENTIAL);
+        assert_eq!(bus.wram_256[0..4], [0xDD, 0xCC, 0xBB, 0xAA]);
+
+        bus.reset();
+        bus.write_halfword(wram_256_start + 2, 0xAABB, access_code::NONSEQUENTIAL);
+        assert_eq!(bus.wram_256[2..4], [0xBB, 0xAA]);
+
+        bus.reset();
+        bus.write_halfword(wram_256_start + 3, 0xAABB, access_code::NONSEQUENTIAL);
+        assert_eq!(bus.wram_256[2..4], [0xBB, 0xAA]);
     }
 }
 
@@ -137,10 +246,5 @@ mod gba_bus_alignment_test {
         assert_eq!(align::<u8>(1), 1);
         assert_eq!(align::<u8>(3), 3);
         assert_eq!(align::<u8>(5), 5);
-    }
-
-    #[test]
-    fn test_boundary_alignment() {
-        // test that the alignment means that address never goes above u32::MAX
     }
 }
