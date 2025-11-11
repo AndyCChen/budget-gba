@@ -1,7 +1,7 @@
 use std::num::Wrapping;
 
-use crate::arm::constants::access_code;
 use crate::arm::arm_json_test_states::*;
+use crate::arm::constants::access_code;
 use crate::arm::opcode_tables::{ARM_TABLE, THUMB_TABLE};
 use crate::bus::Bus;
 
@@ -598,7 +598,7 @@ mod arm_32_tests {
 #[cfg(test)]
 #[rustfmt::skip]
 mod thumb_16_tests {
-    use crate::arm::core::test_utils::{load_test, verify_state, verify_state_no_carry};
+    use super::test_utils::{load_test, verify_state, verify_state_no_carry};
 
     #[test]
     fn test_thumb_lsl_lsr_asr() {

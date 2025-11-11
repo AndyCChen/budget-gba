@@ -37,7 +37,7 @@ impl TestBus {
         T::from_u32(data.data & mask).unwrap()
     }
 
-    fn write<T: Unsigned + Bounded + FromPrimitive + ToPrimitive>(
+    fn write<T: Unsigned + ToPrimitive>(
         &mut self,
         address: u32,
         value: T,
