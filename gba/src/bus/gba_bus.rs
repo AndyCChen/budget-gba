@@ -1,4 +1,5 @@
 use crate::bus::Bus;
+use crate::ppu::Ppu;
 use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
@@ -6,19 +7,21 @@ const WRAM_256: usize = 256 * 1024;
 const WRAM_32: usize = 32 * 1024;
 
 pub struct GbaBus {
-    bios_ram: [u8; BIOS_SIZE],
-    wram_256: [u8; WRAM_256],
-    wram_32: [u8; WRAM_32],
-    gamepak_rom: Vec<u8>,
+    bios_ram: Box<[u8]>,
+    wram_256: Box<[u8]>,
+    wram_32: Box<[u8]>,
+    gamepak_rom: Box<[u8]>,
+    ppu: Ppu,
 }
 
 impl GbaBus {
     pub fn new() -> Self {
         Self {
-            bios_ram: [0; BIOS_SIZE],
-            wram_256: [0; WRAM_256],
-            wram_32: [0; WRAM_32],
-            gamepak_rom: vec![0; 0],
+            bios_ram: vec![0; BIOS_SIZE].into_boxed_slice(),
+            wram_256: vec![0; WRAM_256].into_boxed_slice(),
+            wram_32: vec![0; WRAM_32].into_boxed_slice(),
+            gamepak_rom: vec![0; 0].into_boxed_slice(),
+            ppu: Ppu::new(),
         }
     }
 
@@ -29,20 +32,63 @@ impl GbaBus {
         self.gamepak_rom.fill(0);
     }
 
+    // tick the system for N cycles
+    fn tick(&mut self, _n: u8) {}
+
     fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, _access: u8) -> T {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
         match page {
             // bios
-            0 => T::mem_read(T::align(address & 0x3FFF), &self.bios_ram),
+            0 => {
+                self.tick(1);
+                T::mem_read(T::align(address & 0x3FFF), &self.bios_ram)
+            }
 
             // 256kb wram
-            2 => T::mem_read(T::align(address & 0x3FFFF), &self.wram_256),
+            2 => {
+                let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
+                self.tick(if is_u32 { 6 } else { 3 });
+                T::mem_read(T::align(address & 0x3FFFF), &self.wram_256)
+            }
 
             // 32kb wram
-            3 => T::mem_read(T::align(address & 0x7FFF), &self.wram_32),
-            _ => todo!(),
+            3 => {
+                self.tick(1);
+                T::mem_read(T::align(address & 0x7FFF), &self.wram_32)
+            }
+
+            // palette ram
+            5 => {
+                let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
+                self.tick(if is_u32 { 2 } else { 1 });
+                T::mem_read(T::align(address & 0x3FF), &self.ppu.palette_ram)
+            }
+
+            // vram
+            6 => {
+                let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
+                self.tick(if is_u32 { 2 } else { 1 });
+
+                // 96kb vram is mirrored in 128kb blocks
+                // 96kb vram can be pictured as 64kb + 32kb, with the 32kb block being mirrored
+                let address = address & 0x1_FFFF;
+                if address < 0x1_8000 {
+                    T::mem_read(T::align(address), &self.ppu.vram)
+                } else {
+                    let address = 0x1_0000 | (address & 0x7FFF);
+                    T::mem_read(T::align(address), &self.ppu.vram)
+                }
+            }
+
+            // oam ram
+            7 => {
+                self.tick(1);
+                T::mem_read(T::align(address & 0x3FF), &self.ppu.oam)
+            }
+
+            _ => todo!("open bus value"),
         }
     }
 
@@ -52,17 +98,91 @@ impl GbaBus {
 
         match page {
             // 256 kb wram
-            2 => value.mem_write(T::align(address & 0x3FFFF), &mut self.wram_256),
+            2 => {
+                let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
+                self.tick(if is_u32 { 6 } else { 3 });
+                value.mem_write(T::align(address & 0x3FFFF), &mut self.wram_256)
+            }
 
             // 32kb wram
-            3 => value.mem_write(T::align(address & 0x7FFF), &mut self.wram_32),
+            3 => {
+                self.tick(1);
+                value.mem_write(T::align(address & 0x7FFF), &mut self.wram_32)
+            }
 
-            _ => (),
+            // palette ram
+            5 => match T::int_type() {
+                GbaBusIntType::Word | GbaBusIntType::Halfword => {
+                    let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
+                    self.tick(if is_u32 { 2 } else { 1 });
+                    value.mem_write(T::align(address & 0x3FF), &mut self.ppu.palette_ram);
+                }
+                GbaBusIntType::Byte => {
+                    self.tick(1);
+                    let address = u16::align(address & 0x3FF);
+                    // byte sized writes will duplicate the byte in the upper and lower 16 bit halfword in memory
+                    value.mem_write(address, &mut self.ppu.palette_ram);
+                    value.mem_write(address + 1, &mut self.ppu.palette_ram);
+                }
+            },
+
+            // vram
+            6 => match T::int_type() {
+                GbaBusIntType::Word | GbaBusIntType::Halfword => {
+                    let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
+                    self.tick(if is_u32 { 2 } else { 1 });
+
+                    let address = address & 0x1_FFFF;
+                    if address < 0x1_8000 {
+                        value.mem_write(T::align(address), &mut self.ppu.vram);
+                    } else {
+                        let address = 0x1_0000 | (address & 0x7FFF);
+                        value.mem_write(T::align(address), &mut self.ppu.vram);
+                    }
+                }
+                GbaBusIntType::Byte => {
+                    self.tick(1);
+
+                    // 96kb vram is mirrored in 128kb blocks
+                    // 96kb vram can be pictured as 64kb + 32kb, with the 32kb block being mirrored
+                    let address = address & 0x1_FFFF;
+                    if address < 0x1_8000 {
+                        let address = u16::align(address);
+                        value.mem_write(address, &mut self.ppu.vram);
+                        value.mem_write(address + 1, &mut self.ppu.vram);
+                    } else {
+                        let address = T::align(0x1_0000 | (address & 0x7FFF));
+                        value.mem_write(address, &mut self.ppu.vram);
+                        value.mem_write(address + 1, &mut self.ppu.vram);
+                    }
+                }
+            },
+
+            // oam ram
+            7 => match T::int_type() {
+                GbaBusIntType::Word | GbaBusIntType::Halfword => {
+                    self.tick(1);
+                    value.mem_write(T::align(address & 0x3FF), &mut self.ppu.oam);
+                }
+                GbaBusIntType::Byte => {
+                    self.tick(1);
+                    let address = u16::align(address & 0x3FF);
+                    // byte sized writes will duplicate the byte in the upper and lower 16 bit halfword in memory
+                    value.mem_write(address, &mut self.ppu.oam);
+                    value.mem_write(address + 1, &mut self.ppu.oam);
+                }
+            },
+
+            _ => todo!("set open bus value"),
         }
     }
 }
 
 impl Bus for GbaBus {
+    fn i_cycle(&mut self) {
+        self.tick(1);
+    }
+
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
         self.read(address, access)
     }
@@ -96,10 +216,17 @@ impl Bus for GbaBus {
     }
 }
 
+enum GbaBusIntType {
+    Word,
+    Halfword,
+    Byte,
+}
+
 trait GbaBusInt {
     fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T;
     fn mem_write(&self, address: usize, data: &mut [u8]);
     fn align(address: u32) -> usize;
+    fn int_type() -> GbaBusIntType;
 }
 
 impl GbaBusInt for u8 {
@@ -113,6 +240,10 @@ impl GbaBusInt for u8 {
 
     fn align(address: u32) -> usize {
         address as usize
+    }
+
+    fn int_type() -> GbaBusIntType {
+        GbaBusIntType::Byte
     }
 }
 
@@ -131,6 +262,10 @@ impl GbaBusInt for u16 {
     fn align(address: u32) -> usize {
         (address & !1) as usize
     }
+
+    fn int_type() -> GbaBusIntType {
+        GbaBusIntType::Halfword
+    }
 }
 
 impl GbaBusInt for u32 {
@@ -147,6 +282,10 @@ impl GbaBusInt for u32 {
 
     fn align(address: u32) -> usize {
         (address & !3) as usize
+    }
+
+    fn int_type() -> GbaBusIntType {
+        GbaBusIntType::Word
     }
 }
 
@@ -224,6 +363,5 @@ mod gba_bus_test {
         bus.reset();
         bus.write_halfword(wram_256_start + 3, 0xAABB, access_code::NONSEQUENTIAL);
         assert_eq!(bus.wram_256[2..4], [0xBB, 0xAA]);
-
     }
 }
