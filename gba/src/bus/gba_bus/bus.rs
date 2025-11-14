@@ -1,18 +1,11 @@
+use super::GbaBus;
 use crate::bus::Bus;
 use crate::ppu::Ppu;
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, ToPrimitive};
 
 const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
 const WRAM_32: usize = 32 * 1024;
-
-pub struct GbaBus {
-    bios_ram: Box<[u8]>,
-    wram_256: Box<[u8]>,
-    wram_32: Box<[u8]>,
-    gamepak_rom: Box<[u8]>,
-    ppu: Ppu,
-}
 
 impl GbaBus {
     pub fn new() -> Self {
@@ -57,6 +50,12 @@ impl GbaBus {
             3 => {
                 self.tick(1);
                 T::mem_read(T::align(address & 0x7FFF), &self.wram_32)
+            }
+
+            // I/O registers
+            4 => {
+                self.tick(1);
+                T::io_read(self, T::align(address))
             }
 
             // palette ram
@@ -225,6 +224,8 @@ enum GbaBusIntType {
 trait GbaBusInt {
     fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T;
     fn mem_write(&self, address: usize, data: &mut [u8]);
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T;
+    fn io_write<T: GbaBusInt + ToPrimitive>(&self, bus: &mut GbaBus, address: usize) {}
     fn align(address: u32) -> usize;
     fn int_type() -> GbaBusIntType;
 }
@@ -236,6 +237,10 @@ impl GbaBusInt for u8 {
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
         data[address] = *self;
+    }
+
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
+        T::from_u8(bus.read_io_byte(address)).unwrap()
     }
 
     fn align(address: u32) -> usize {
@@ -259,6 +264,10 @@ impl GbaBusInt for u16 {
         data[address..address + 2].copy_from_slice(&self.to_le_bytes());
     }
 
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
+        T::from_u16(bus.read_io_halfword(address)).unwrap()
+    }
+
     fn align(address: u32) -> usize {
         (address & !1) as usize
     }
@@ -280,6 +289,10 @@ impl GbaBusInt for u32 {
         data[address..address + 4].copy_from_slice(&self.to_le_bytes());
     }
 
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
+        T::from_u32(bus.read_io_word(address)).unwrap()
+    }
+
     fn align(address: u32) -> usize {
         (address & !3) as usize
     }
@@ -293,7 +306,7 @@ impl GbaBusInt for u32 {
 mod gba_bus_test {
     use crate::{
         arm::access_code,
-        bus::{Bus, gba_bus::GbaBus},
+        bus::{Bus, GbaBus},
     };
 
     #[test]

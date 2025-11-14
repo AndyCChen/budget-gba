@@ -1,4 +1,4 @@
-use crate::{arm::*, bus::core::Bus};
+use crate::{arm::*, bus::Bus};
 
 use num_traits::{Bounded, FromPrimitive, ToPrimitive, Unsigned};
 
@@ -37,12 +37,7 @@ impl TestBus {
         T::from_u32(data.data & mask).unwrap()
     }
 
-    fn write<T: Unsigned + ToPrimitive>(
-        &mut self,
-        address: u32,
-        value: T,
-        access: u8,
-    ) {
+    fn write<T: Unsigned + ToPrimitive>(&mut self, address: u32, value: T, access: u8) {
         let data = self.transactions[self.transaction_index].clone();
         self.next_transaction();
 
