@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["gba"]
+members = ["gba", "gba/utils"]
 
 [dependencies]
 gba = { path = "gba" }
-

@@ -1,7 +1,7 @@
 use super::GbaBus;
 use crate::bus::Bus;
 use crate::ppu::Ppu;
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
@@ -107,6 +107,12 @@ impl GbaBus {
             3 => {
                 self.tick(1);
                 value.mem_write(T::align(address & 0x7FFF), &mut self.wram_32)
+            }
+
+            // I/O registers
+            4 => {
+                self.tick(1);
+                value.io_write(self, T::align(address));
             }
 
             // palette ram
@@ -225,7 +231,7 @@ trait GbaBusInt {
     fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T;
     fn mem_write(&self, address: usize, data: &mut [u8]);
     fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T;
-    fn io_write<T: GbaBusInt + ToPrimitive>(&self, bus: &mut GbaBus, address: usize) {}
+    fn io_write(&self, bus: &mut GbaBus, address: usize);
     fn align(address: u32) -> usize;
     fn int_type() -> GbaBusIntType;
 }
@@ -241,6 +247,10 @@ impl GbaBusInt for u8 {
 
     fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
         T::from_u8(bus.read_io_byte(address)).unwrap()
+    }
+
+    fn io_write(&self, bus: &mut GbaBus, address: usize) {
+        bus.write_io_byte(*self, address);
     }
 
     fn align(address: u32) -> usize {
@@ -268,6 +278,10 @@ impl GbaBusInt for u16 {
         T::from_u16(bus.read_io_halfword(address)).unwrap()
     }
 
+    fn io_write(&self, bus: &mut GbaBus, address: usize) {
+        bus.write_io_halfword(*self, address);
+    }
+
     fn align(address: u32) -> usize {
         (address & !1) as usize
     }
@@ -291,6 +305,10 @@ impl GbaBusInt for u32 {
 
     fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
         T::from_u32(bus.read_io_word(address)).unwrap()
+    }
+
+    fn io_write(&self, bus: &mut GbaBus, address: usize) {
+        bus.write_io_word(*self, address);
     }
 
     fn align(address: u32) -> usize {

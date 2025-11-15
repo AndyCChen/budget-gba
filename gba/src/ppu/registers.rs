@@ -1,4 +1,5 @@
 use bitfield_struct::bitfield;
+use utils::{ReadIo16, WriteIo16};
 
 pub struct Registers {
     pub lcd_control: LcdControl,
@@ -57,7 +58,24 @@ impl BgMode {
     }
 }
 
+pub trait ReadIoHalfWord {
+    fn read(&self, byte_select: HalfwordIo) -> u8;
+}
+
+pub trait ReadIoWord {
+    fn read(&self, byte_select: WordIo) -> u8;
+}
+
+pub trait WriteIoHalfword {
+    fn write(&mut self, value: u8, byte_select: HalfwordIo);
+}
+
+pub trait WriteIoWord {
+    fn write(&mut self, value: u8, byte_select: HalfwordIo);
+}
+
 #[bitfield(u16)]
+#[derive(ReadIo16, WriteIo16)]
 pub struct LcdControl {
     #[bits(3, default = BgMode::Mode0, from = BgMode::from_bits)]
     pub bg_mode: BgMode,
@@ -76,16 +94,8 @@ pub struct LcdControl {
     pub obj_window_enable: bool,
 }
 
-impl LcdControl {
-    pub fn read(&self, byte_select: HalfwordIo) -> u8 {
-        match byte_select {
-            HalfwordIo::B1 => self.into_bits() as u8,
-            HalfwordIo::B2 => (self.into_bits() >> 8) as u8,
-        }
-    }
-}
-
 #[bitfield(u16)]
+#[derive(ReadIo16)]
 pub struct LcdStatus {
     pub vblank_flag: bool,
     pub hblank_flag: bool,
@@ -102,26 +112,20 @@ pub struct LcdStatus {
     pub vcount: u8,
 }
 
-impl LcdStatus {
-    pub fn read(&self, byte_select: HalfwordIo) -> u8 {
+impl WriteIoHalfword for LcdStatus {
+    fn write(&mut self, value: u8, byte_select: HalfwordIo) {
+        let value = u16::from(value);
+        let v = self.into_bits();
         match byte_select {
-            HalfwordIo::B1 => self.into_bits() as u8,
-            HalfwordIo::B2 => (self.into_bits() >> 8) as u8,
+            HalfwordIo::B1 => *self = Self::from_bits((v & 0xFF00) | (value & !7)), // bits 0..2 are read only
+            HalfwordIo::B2 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
         }
     }
 }
 
 #[bitfield(u16)]
+#[derive(ReadIo16)]
 pub struct VerticalCounter {
     scanline_count: u8,
     __: u8,
-}
-
-impl VerticalCounter {
-    pub fn read(&self, byte_select: HalfwordIo) -> u8 {
-        match byte_select {
-            HalfwordIo::B1 => self.into_bits() as u8,
-            HalfwordIo::B2 => (self.into_bits() >> 8) as u8,
-        }
-    }
 }

@@ -33,4 +33,37 @@ impl GbaBus {
         ];
         u32::from_le_bytes(word)
     }
+
+    pub fn write_io_byte(&mut self, value: u8, address: usize) {
+        match address {
+            // lcd I/O registers
+            DISPCNT => self.ppu.registers.lcd_control.write(value, HalfwordIo::B1),
+            v if v == DISPCNT + 1 => self.ppu.registers.lcd_control.write(value, HalfwordIo::B2),
+
+            DISPSTAT => self.ppu.registers.lcd_status.write(value, HalfwordIo::B1),
+            v if v == DISPSTAT + 1 => self.ppu.registers.lcd_status.write(value, HalfwordIo::B2),
+
+            _ => (),
+        }
+    }
+
+    pub fn write_io_halfword(&mut self, value: u16, address: usize) {
+        value
+            .to_le_bytes()
+            .iter()
+            .enumerate()
+            .for_each(|(offset, byte)| {
+                self.write_io_byte(*byte, address + offset);
+            });
+    }
+
+    pub fn write_io_word(&mut self, value: u32, address: usize) {
+        value
+            .to_le_bytes()
+            .iter()
+            .enumerate()
+            .for_each(|(offset, byte)| {
+                self.write_io_byte(*byte, address + offset);
+            });
+    }
 }

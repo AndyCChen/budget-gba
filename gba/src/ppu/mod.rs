@@ -1,6 +1,6 @@
 mod registers;
 
-pub use registers::{HalfwordIo, WordIo};
+pub use registers::{HalfwordIo, ReadIoHalfWord, WriteIoHalfword};
 
 use registers::Registers;
 
