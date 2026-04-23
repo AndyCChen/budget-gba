@@ -10,7 +10,7 @@ use bitfield_struct::bitfield;
 pub struct Arm7tdmi {
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
-    pub pipeline: [Option<u32>; 3], // [execute, decode, fetch]
+    pub pipeline: [u32; 2], // make sure pipeline is filled first before running!
     pub pipeline_state: u8,
     pub bus: Box<dyn Bus>,
 }
@@ -73,9 +73,8 @@ impl Arm7tdmi {
                 spsr_und: StatusRegister::from_bits(input_state.initial.SPSR[4]),
             },
             pipeline: [
-                Some(input_state.initial.pipeline[0]),
-                Some(input_state.initial.pipeline[1]),
-                None,
+                input_state.initial.pipeline[0],
+                input_state.initial.pipeline[1],
             ],
             pipeline_state: input_state.initial.access,
             bus,
@@ -83,21 +82,21 @@ impl Arm7tdmi {
     }
 
     pub fn run(&mut self) {
-        if let Some(opcode) = self.pipeline[0] {
-            if self.status.cpsr.t() {
-                self.pipeline_prefetch(PipelinePrefetchMode::Thumb);
-                let thumb_table_hash = (opcode >> 6) & 0x3FF;
-                THUMB_TABLE[thumb_table_hash as usize](self, opcode as u16);
-            } else {
-                self.pipeline_prefetch(PipelinePrefetchMode::Arm);
-                if !self.condition_check((opcode >> 28) as u8) {
-                    self.registers.r15 += 4;
-                    return;
-                }
+        let opcode = self.pipeline[0];
 
-                let arm_table_hash = ((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4);
-                ARM_TABLE[arm_table_hash as usize](self, opcode);
+        if self.status.cpsr.t() {
+            self.pipeline_prefetch(PipelinePrefetchMode::Thumb);
+            let thumb_table_hash = (opcode >> 6) & 0x3FF;
+            THUMB_TABLE[thumb_table_hash as usize](self, opcode as u16);
+        } else {
+            self.pipeline_prefetch(PipelinePrefetchMode::Arm);
+            if !self.condition_check((opcode >> 28) as u8) {
+                self.registers.r15 += 4;
+                return;
             }
+
+            let arm_table_hash = ((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4);
+            ARM_TABLE[arm_table_hash as usize](self, opcode);
         }
     }
 
@@ -228,14 +227,14 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for arm mode
     pub fn pipeline_refill_arm(&mut self) {
-        self.pipeline[0] = Some(self.pipeline_read_word(
+        self.pipeline[0] = self.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
-        ));
-        self.pipeline[1] = Some(self.pipeline_read_word(
+        );
+        self.pipeline[1] = self.pipeline_read_word(
             self.registers.r15.0.wrapping_add(4),
             access_code::CODE | access_code::SEQUENTIAL,
-        ));
+        );
 
         self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 8;
@@ -243,14 +242,14 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for thumb mode
     pub fn pipeline_refill_thumb(&mut self) {
-        self.pipeline[0] = Some(self.pipeline_read_halfword(
+        self.pipeline[0] = self.pipeline_read_halfword(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
-        ));
-        self.pipeline[1] = Some(self.pipeline_read_halfword(
+        );
+        self.pipeline[1] = self.pipeline_read_halfword(
             self.registers.r15.0.wrapping_add(2),
             access_code::CODE | access_code::SEQUENTIAL,
-        ));
+        );
 
         self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 4;
@@ -258,20 +257,19 @@ impl Arm7tdmi {
 
     /// fetch opcode and push into pipeline
     fn pipeline_prefetch(&mut self, mode: PipelinePrefetchMode) {
+        self.pipeline.copy_within(1.., 0);
         match mode {
             PipelinePrefetchMode::Arm => {
                 self.registers.r15 &= !0x3;
-                self.pipeline[2] =
-                    Some(self.pipeline_read_word(self.registers.r15.0, self.pipeline_state));
+                self.pipeline[1] =
+                    self.pipeline_read_word(self.registers.r15.0, self.pipeline_state);
             }
             PipelinePrefetchMode::Thumb => {
                 self.registers.r15 &= !0x1;
-                self.pipeline[2] =
-                    Some(self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state));
+                self.pipeline[1] =
+                    self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state);
             }
         }
-
-        self.pipeline.copy_within(1..3, 0);
     }
 
     /// Checks 4-bit condition code that determines if instruction should be executed or skipped.
@@ -510,8 +508,8 @@ mod test_utils {
         assert_eq!(cpu.registers.r13_und, final_state.R_und[0], "{input_state:#?} r13_und, test: {test_num}");
         assert_eq!(cpu.registers.r14_und, final_state.R_und[1], "{input_state:#?} r14_und, test: {test_num}");
 
-        assert_eq!(cpu.pipeline[0], Some(final_state.pipeline[0]), "{input_state:#?} pipeline_0, test: {test_num}");
-        assert_eq!(cpu.pipeline[1], Some(final_state.pipeline[1]), "{input_state:#?} pipeline_1, test: {test_num}");
+        assert_eq!(cpu.pipeline[0], final_state.pipeline[0], "{input_state:#?} pipeline_0, test: {test_num}");
+        assert_eq!(cpu.pipeline[1], final_state.pipeline[1], "{input_state:#?} pipeline_1, test: {test_num}");
     }
 }
 
