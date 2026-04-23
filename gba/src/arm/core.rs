@@ -15,6 +15,11 @@ pub struct Arm7tdmi {
     pub bus: Box<dyn Bus>,
 }
 
+enum PipelinePrefetchMode {
+    Arm,
+    Thumb,
+}
+
 impl Arm7tdmi {
     pub fn new(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
         Self {
@@ -79,15 +84,12 @@ impl Arm7tdmi {
 
     pub fn run(&mut self) {
         if let Some(opcode) = self.pipeline[0] {
-            // execute in thumb mode
             if self.status.cpsr.t() {
-                self.pipeline_prefetch(true);
+                self.pipeline_prefetch(PipelinePrefetchMode::Thumb);
                 let thumb_table_hash = (opcode >> 6) & 0x3FF;
                 THUMB_TABLE[thumb_table_hash as usize](self, opcode as u16);
-            }
-            // execute in arm mode
-            else {
-                self.pipeline_prefetch(false);
+            } else {
+                self.pipeline_prefetch(PipelinePrefetchMode::Arm);
                 if !self.condition_check((opcode >> 28) as u8) {
                     self.registers.r15 += 4;
                     return;
@@ -255,16 +257,20 @@ impl Arm7tdmi {
     }
 
     /// fetch opcode and push into pipeline
-    fn pipeline_prefetch(&mut self, is_thumb: bool) {
-        if is_thumb {
-            self.registers.r15 &= !0x1;
-            self.pipeline[2] =
-                Some(self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state));
-        } else {
-            self.registers.r15 &= !0x3;
-            self.pipeline[2] =
-                Some(self.pipeline_read_word(self.registers.r15.0, self.pipeline_state));
+    fn pipeline_prefetch(&mut self, mode: PipelinePrefetchMode) {
+        match mode {
+            PipelinePrefetchMode::Arm => {
+                self.registers.r15 &= !0x3;
+                self.pipeline[2] =
+                    Some(self.pipeline_read_word(self.registers.r15.0, self.pipeline_state));
+            }
+            PipelinePrefetchMode::Thumb => {
+                self.registers.r15 &= !0x1;
+                self.pipeline[2] =
+                    Some(self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state));
+            }
         }
+
         self.pipeline.copy_within(1..3, 0);
     }
 
