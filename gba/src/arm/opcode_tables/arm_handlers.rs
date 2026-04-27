@@ -763,35 +763,17 @@ pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
     todo!("handle undefined opcode: {opcode}");
 }
 
-trait Negative<T, N> {
-    fn negative(input: N) -> Self;
+trait Negative<T> {
+    fn negative(input: T) -> Self;
 }
 
-impl Negative<u8, u8> for u8 {
-    fn negative(input: u8) -> Self {
-        (!input).wrapping_add(1)
-    }
-}
-
-impl Negative<u16, u16> for u16 {
-    fn negative(input: u16) -> Self {
-        (!input).wrapping_add(1)
-    }
-}
-
-impl Negative<u32, u32> for u32 {
+impl Negative<u32> for u32 {
     fn negative(input: u32) -> Self {
         (!input).wrapping_add(1)
     }
 }
 
-impl Negative<u64, u64> for u64 {
-    fn negative(input: u64) -> Self {
-        (!input).wrapping_add(1)
-    }
-}
-
 /// Retrieve raw binary representation of a negative number as a unsigned integer
-fn to_negative<T: Negative<T, N>, N>(input: N) -> T {
-    Negative::<T, N>::negative(input)
+fn to_negative<T: Negative<T>>(input: T) -> T {
+    Negative::<T>::negative(input)
 }
