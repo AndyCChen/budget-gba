@@ -1,5 +1,5 @@
 use bitfield_struct::bitfield;
-use utils::{ReadIo16, WriteIo16};
+use register_macros::{ReadIo16, WriteIo16};
 
 pub struct Registers {
     pub lcd_control: LcdControl,

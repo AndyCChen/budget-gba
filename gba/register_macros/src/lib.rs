@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 
-// macros to generate default read/write io functions
+// macros to generate default read/write functions for 16/32 bit IO registers
 
 #[proc_macro_derive(ReadIo16)]
 pub fn read16_io_macro_derive(input: TokenStream) -> TokenStream {
