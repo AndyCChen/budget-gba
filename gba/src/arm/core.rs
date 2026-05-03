@@ -3,7 +3,7 @@ use std::num::Wrapping;
 use crate::arm::arm_json_test_states::*;
 use crate::arm::constants::access_code;
 use crate::arm::opcode_tables::{ARM_TABLE, THUMB_TABLE};
-use crate::bus::Bus;
+use crate::bus::{Bus, GbaBus};
 
 use bitfield_struct::bitfield;
 
@@ -21,7 +21,17 @@ enum PipelinePrefetchMode {
 }
 
 impl Arm7tdmi {
-    pub fn new(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
+    pub fn new() -> Self {
+        Self {
+            registers: GeneralRegisters::default(),
+            status: StatusRegisters::default(),
+            pipeline: [0, 0],
+            pipeline_state: access_code::NONSEQUENTIAL,
+            bus: Box::new(GbaBus::new()),
+        }
+    }
+
+    pub fn from_test_state(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
         Self {
             registers: GeneralRegisters {
                 r0: input_state.initial.R[0],
@@ -302,6 +312,7 @@ impl Arm7tdmi {
     }
 }
 
+#[derive(Default)]
 pub struct StatusRegisters {
     pub cpsr: StatusRegister,
     pub spsr_fiq: StatusRegister,
@@ -438,7 +449,7 @@ mod test_utils {
         let it = items.iter().enumerate().skip(skip);
 
         for (count, item) in it {
-            let mut cpu = Arm7tdmi::new(item, Box::new(TestBus::new(&item.transactions)));
+            let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
             cpu.run();
             check_state(&cpu, item, count);
         }
@@ -637,7 +648,7 @@ mod thumb_16_tests {
             .filter(|item| !is_multiply(item.opcode))
             .enumerate()
             .for_each(|(count, item)| {
-                let mut cpu = Arm7tdmi::new(item, Box::new(TestBus::new(&item.transactions)));
+                let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
                 cpu.run();
                 verify_state(&cpu, item, count);
             });
@@ -647,7 +658,7 @@ mod thumb_16_tests {
             .filter(|item| is_multiply(item.opcode))
             .enumerate()
             .for_each(|(count, item)| {
-                let mut cpu = Arm7tdmi::new(item, Box::new(TestBus::new(&item.transactions)));
+                let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
                 cpu.run();
                 verify_state_no_carry(&cpu, item, count);
             });

@@ -5,6 +5,7 @@ pub struct Registers {
     pub lcd_control: LcdControl,
     pub lcd_status: LcdStatus,
     pub v_counter: VerticalCounter,
+    pub bg_control_0: BgControl0,
 }
 
 impl Registers {
@@ -13,6 +14,7 @@ impl Registers {
             lcd_control: LcdControl::new(),
             lcd_status: LcdStatus::new(),
             v_counter: VerticalCounter::new(),
+            bg_control_0: BgControl0::new(),
         }
     }
 }

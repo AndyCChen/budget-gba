@@ -30,71 +30,69 @@ macro_rules! io_register_u32 {
     };
 }
 
-
-
 // LCD I/O Registers
 io_register_u16!(0x400_0000, DISPCNT);
 // io_register_u16!(0x400_0002, GREENSWAP); Not sure what this register does yet
 io_register_u16!(0x400_0004, DISPSTAT);
 io_register_u16!(0x400_0006, VCOUNT);
-io_register_u16!(0x400_0008, BG0CNT); 
-io_register_u16!(0x400_000A, BG1CNT); 
-io_register_u16!(0x400_000C, BG2CNT); 
-io_register_u16!(0x400_000E, BG3CNT); 
-pub const BG0HOFS: usize = 0x400_0010;
-pub const BG0VOFS: usize = 0x400_0012;
-pub const BG1HOFS: usize = 0x400_0014;
-pub const BG1VOFS: usize = 0x400_0016;
-pub const BG2HOFS: usize = 0x400_0018;
-pub const BG2VOFS: usize = 0x400_001A;
-pub const BG3HOFS: usize = 0x400_001C;
-pub const BG3VOFS: usize = 0x400_001E;
-pub const BG2PA: usize = 0x400_0020;
-pub const BG2PB: usize = 0x400_0022;
-pub const BG2PC: usize = 0x400_0024;
-pub const BG2PD: usize = 0x400_0026;
+io_register_u16!(0x400_0008, BG0CNT);
+io_register_u16!(0x400_000A, BG1CNT);
+io_register_u16!(0x400_000C, BG2CNT);
+io_register_u16!(0x400_000E, BG3CNT);
+io_register_u16!(0x400_0010, BG0HOFS);
+io_register_u16!(0x400_0012, BG0VOFS);
+io_register_u16!(0x400_0014, BG1HOFS);
+io_register_u16!(0x400_0016, BG1VOFS);
+io_register_u16!(0x400_0018, BG2HOFS);
+io_register_u16!(0x400_001A, BG2VOFS);
+io_register_u16!(0x400_001C, BG3HOFS);
+io_register_u16!(0x400_001E, BG3VOFS);
+io_register_u16!(0x400_0020, BG2PA);
+io_register_u16!(0x400_0022, BG2PB);
+io_register_u16!(0x400_0024, BG2PC);
+io_register_u16!(0x400_0026, BG2PD);
 io_register_u32!(0x400_0028, BG2X);
 io_register_u32!(0x400_002C, BG2Y);
-pub const BG3PA: usize = 0x400_0030;
-pub const BG3PB: usize = 0x400_0032;
-pub const BG3PC: usize = 0x400_0034;
-pub const BG3PD: usize = 0x400_0036;
-pub const BG3X: usize = 0x400_0038;
-pub const BG3Y: usize = 0x400_003C;
-pub const WIN0H: usize = 0x400_0040;
-pub const WIN1H: usize = 0x400_0042;
-pub const WIN0V: usize = 0x400_0044;
-pub const WIN1V: usize = 0x400_0046;
-pub const WININ: usize = 0x400_0048;
-pub const WINOUT: usize = 0x400_004A;
-pub const MOSAIC: usize = 0x400_004C;
-pub const BLDCNT: usize = 0x400_0050;
-pub const BLDALPHA: usize = 0x400_0052;
-pub const BLDY: usize = 0x400_0054;
+io_register_u16!(0x400_0030, BG3PA);
+io_register_u16!(0x400_0032, BG3PB);
+io_register_u16!(0x400_0034, BG3PC);
+io_register_u16!(0x400_0036, BG3PD);
+io_register_u32!(0x400_0038, BG3X);
+io_register_u32!(0x400_003C, BG3Y);
+io_register_u16!(0x400_0040, WIN0H);
+io_register_u16!(0x400_0042, WIN1H);
+io_register_u16!(0x400_0044, WIN0V);
+io_register_u16!(0x400_0046, WIN1V);
+io_register_u16!(0x400_0048, WININ);
+io_register_u16!(0x400_004A, WINOUT);
+io_register_u16!(0x400_004C, MOSAIC);
+io_register_u16!(0x400_0050, BLDCNT);
+io_register_u16!(0x400_0052, BLDALPHA);
+io_register_u16!(0x400_0054, BLDY);
 
 // Sound Registers
 // DMA Transfer Channels
 
 // Timer Registers
-const TM0CNT_L: usize = 0x400_0100;
-const TM0CNT_H: usize = 0x400_0102;
-const TM1CNT_L: usize = 0x400_0104;
-const TM1CNT_H: usize = 0x400_0106;
-const TM2CNT_L: usize = 0x400_0108;
-const TM2CNT_H: usize = 0x400_010A;
-const TM3CNT_L: usize = 0x400_010C;
-const TM3CNT_H: usize = 0x400_010E;
+io_register_u16!(0x400_0100, TM0CNT_L);
+io_register_u16!(0x400_0102, TM0CNT_H);
+io_register_u16!(0x400_0104, TM1CNT_L);
+io_register_u16!(0x400_0106, TM1CNT_H);
+io_register_u16!(0x400_0108, TM2CNT_L);
+io_register_u16!(0x400_010A, TM2CNT_H);
+io_register_u16!(0x400_010C, TM3CNT_L);
+io_register_u16!(0x400_010E, TM3CNT_H);
 
 // Serial Communication (1)
 
 // Keypad Input
-const KEYINPUT: usize = 0x400_0130;
-const KEYCNT: usize = 0x400_0132;
+io_register_u16!(0x400_0130, KEYINPUT);
+io_register_u16!(0x400_0132, KEYCNT);
 
 // Serial Communication (2)
 
 // Watstate, and Power-Down Control
-const IE: usize = 0x400_0200;
-const IF: usize = 0x400_0202;
-const WAITCNT: usize = 0x400_0204;
-const IME: usize = 0x400_0208;
+io_register_u16!(0x400_0200, IE);
+io_register_u16!(0x400_0202, IF);
+io_register_u16!(0x400_0204, WAITCNT);
+io_register_u16!(0x400_0208, IME);
