@@ -15,8 +15,8 @@ fn impl_read16_io_macro(ast: &syn::DeriveInput) -> TokenStream {
         impl ReadIoHalfWord for #name {
             fn read(&self, byte_select: HalfwordIo) -> u8 {
                 match byte_select {
-                    HalfwordIo::B1 => self.into_bits() as u8,
-                    HalfwordIo::B2 => (self.into_bits() >> 8) as u8,
+                    HalfwordIo::B0 => self.into_bits() as u8,
+                    HalfwordIo::B1 => (self.into_bits() >> 8) as u8,
                 }
             }
         }
@@ -36,10 +36,10 @@ fn impl_read32_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
         impl ReadIoWord for #name {
             fn read(&self, byte_select: WordIo) -> u8 {
                 match byte_select {
-                    WordIo::B1 => self.into_bits() as u8,
-                    WordIo::B2 => (self.into_bits() >> 8) as u8,
-                    WordIo::B3 => (self.into_bits() >> 16) as u8,
-                    WordIo::B4 => (self.into_bits() >> 24) as u8,
+                    WordIo::B0 => self.into_bits() as u8,
+                    WordIo::B1 => (self.into_bits() >> 8) as u8,
+                    WordIo::B2 => (self.into_bits() >> 16) as u8,
+                    WordIo::B3 => (self.into_bits() >> 24) as u8,
                 }
             }
         }
@@ -61,8 +61,8 @@ fn impl_write16_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
                 let value = u16::from(value);
                 let v = self.into_bits();
                 match byte_select {
-                    HalfwordIo::B1 => *self = Self::from_bits((v & 0xFF00) | value),
-                    HalfwordIo::B2 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
+                    HalfwordIo::B0 => *self = Self::from_bits((v & 0xFF00) | value),
+                    HalfwordIo::B1 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
                 }
             }
         }
@@ -84,10 +84,10 @@ fn impl_write32_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
                 let value = u32::from(value);
                 let v = self.into_bits();
                 match byte_select {
-                    Word::B1 => *self = Self::from_bits((v & 0xFFFF_FF00) | value),
-                    Word::B2 => *self = Self::from_bits((v & 0xFFFF_00FF) | (value << 8)),
-                    Word::B3 => *self = Self::from_bits((v & 0xFF00_FFFF) | (value << 16)),
-                    Word::B4 => *self = Self::from_bits((v & 0x00FF_FFFF) | (value << 24)),
+                    Word::B0 => *self = Self::from_bits((v & 0xFFFF_FF00) | value),
+                    Word::B1 => *self = Self::from_bits((v & 0xFFFF_00FF) | (value << 8)),
+                    Word::B2 => *self = Self::from_bits((v & 0xFF00_FFFF) | (value << 16)),
+                    Word::B3 => *self = Self::from_bits((v & 0x00FF_FFFF) | (value << 24)),
                 }
             }
         }

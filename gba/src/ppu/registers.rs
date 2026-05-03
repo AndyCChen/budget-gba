@@ -18,15 +18,15 @@ impl Registers {
 }
 
 pub enum HalfwordIo {
-    B1, // 1st byte
-    B2, // 2nd byte
+    B0, // 1st byte
+    B1, // 2nd byte
 }
 
 pub enum WordIo {
-    B1, // 1st byte
-    B2, // etc...
+    B0, // 1st byte
+    B1, // etc...
+    B2,
     B3,
-    B4,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,8 +117,8 @@ impl WriteIoHalfword for LcdStatus {
         let value = u16::from(value);
         let v = self.into_bits();
         match byte_select {
-            HalfwordIo::B1 => *self = Self::from_bits((v & 0xFF00) | (value & !7)), // bits 0..2 are read only
-            HalfwordIo::B2 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
+            HalfwordIo::B0 => *self = Self::from_bits((v & 0xFF00) | (value & !7)), // bits 0..2 are read only
+            HalfwordIo::B1 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
         }
     }
 }
