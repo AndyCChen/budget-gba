@@ -17,6 +17,22 @@ impl Registers {
     }
 }
 
+pub trait ReadIoHalfWord {
+    fn read(&self, byte_select: HalfwordIo) -> u8;
+}
+
+pub trait ReadIoWord {
+    fn read(&self, byte_select: WordIo) -> u8;
+}
+
+pub trait WriteIoHalfword {
+    fn write(&mut self, value: u8, byte_select: HalfwordIo);
+}
+
+pub trait WriteIoWord {
+    fn write(&mut self, value: u8, byte_select: HalfwordIo);
+}
+
 pub enum HalfwordIo {
     B0, // 1st byte
     B1, // 2nd byte
@@ -56,22 +72,6 @@ impl BgMode {
             _ => panic!("Invalid BgMode!"),
         }
     }
-}
-
-pub trait ReadIoHalfWord {
-    fn read(&self, byte_select: HalfwordIo) -> u8;
-}
-
-pub trait ReadIoWord {
-    fn read(&self, byte_select: WordIo) -> u8;
-}
-
-pub trait WriteIoHalfword {
-    fn write(&mut self, value: u8, byte_select: HalfwordIo);
-}
-
-pub trait WriteIoWord {
-    fn write(&mut self, value: u8, byte_select: HalfwordIo);
 }
 
 #[bitfield(u16)]
@@ -126,6 +126,30 @@ impl WriteIoHalfword for LcdStatus {
 #[bitfield(u16)]
 #[derive(ReadIo16)]
 pub struct VerticalCounter {
-    scanline_count: u8,
+    pub scanline_count: u8,
     __: u8,
+}
+
+#[bitfield(u16)]
+#[derive(WriteIo16, ReadIo16)]
+pub struct BgControl0 {
+    #[bits(2)]
+    pub bg_priority: u8,
+
+    #[bits(2)]
+    pub char_base_block: u8,
+
+    #[bits(2)]
+    __: u8,
+
+    pub mosaic: bool,
+    pub palettes: bool,
+
+    #[bits(5)]
+    pub screen_base_block: u8,
+
+    __: bool,
+
+    #[bits(2)]
+    pub screen_size: u8,
 }

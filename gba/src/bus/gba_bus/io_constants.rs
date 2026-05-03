@@ -37,10 +37,10 @@ io_register_u16!(0x400_0000, DISPCNT);
 // io_register_u16!(0x400_0002, GREENSWAP); Not sure what this register does yet
 io_register_u16!(0x400_0004, DISPSTAT);
 io_register_u16!(0x400_0006, VCOUNT);
-pub const BG0CNT: usize = 0x400_0008;
-pub const BG1CNT: usize = 0x400_000A;
-pub const BG2CNT: usize = 0x400_000C;
-pub const BG3CNT: usize = 0x400_000E;
+io_register_u16!(0x400_0008, BG0CNT); 
+io_register_u16!(0x400_000A, BG1CNT); 
+io_register_u16!(0x400_000C, BG2CNT); 
+io_register_u16!(0x400_000E, BG3CNT); 
 pub const BG0HOFS: usize = 0x400_0010;
 pub const BG0VOFS: usize = 0x400_0012;
 pub const BG1HOFS: usize = 0x400_0014;
