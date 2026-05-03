@@ -6,14 +6,14 @@ impl GbaBus {
     pub fn read_io_byte(&self, address: usize) -> u8 {
         match address {
             // lcd I/O registers
-            DISPCNT => self.ppu.registers.lcd_control.read(HalfwordIo::B1),
-            v if v == DISPCNT + 1 => self.ppu.registers.lcd_control.read(HalfwordIo::B2),
+            DISPCNT_0 => self.ppu.registers.lcd_control.read(HalfwordIo::B1),
+            DISPCNT_1 => self.ppu.registers.lcd_control.read(HalfwordIo::B2),
 
-            DISPSTAT => self.ppu.registers.lcd_status.read(HalfwordIo::B1),
-            v if v == DISPSTAT + 1 => self.ppu.registers.lcd_status.read(HalfwordIo::B2),
+            DISPSTAT_0 => self.ppu.registers.lcd_status.read(HalfwordIo::B1),
+            DISPSTAT_1 => self.ppu.registers.lcd_status.read(HalfwordIo::B2),
 
-            VCOUNT => self.ppu.registers.v_counter.read(HalfwordIo::B1),
-            v if v == VCOUNT + 1 => self.ppu.registers.v_counter.read(HalfwordIo::B2),
+            VCOUNT_0 => self.ppu.registers.v_counter.read(HalfwordIo::B1),
+            VCOUNT_1 => self.ppu.registers.v_counter.read(HalfwordIo::B2),
 
             _ => 0,
         }
@@ -37,11 +37,11 @@ impl GbaBus {
     pub fn write_io_byte(&mut self, value: u8, address: usize) {
         match address {
             // lcd I/O registers
-            DISPCNT => self.ppu.registers.lcd_control.write(value, HalfwordIo::B1),
-            v if v == DISPCNT + 1 => self.ppu.registers.lcd_control.write(value, HalfwordIo::B2),
+            DISPCNT_0 => self.ppu.registers.lcd_control.write(value, HalfwordIo::B1),
+            DISPCNT_1 => self.ppu.registers.lcd_control.write(value, HalfwordIo::B2),
 
-            DISPSTAT => self.ppu.registers.lcd_status.write(value, HalfwordIo::B1),
-            v if v == DISPSTAT + 1 => self.ppu.registers.lcd_status.write(value, HalfwordIo::B2),
+            DISPSTAT_0 => self.ppu.registers.lcd_status.write(value, HalfwordIo::B1),
+            DISPSTAT_1 => self.ppu.registers.lcd_status.write(value, HalfwordIo::B2),
 
             _ => (),
         }

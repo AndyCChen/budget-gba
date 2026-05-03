@@ -1,7 +1,42 @@
+use paste::paste;
+
+// helper macro to generate halfword io register addresses with
+// suffixes _0 and _1 because I'm lazy
+macro_rules! io_register_u16 {
+    ($base_address:expr, $identifier:tt) => {
+        paste! {
+            pub const [<$identifier _0>]: usize = $base_address;
+        }
+        paste! {
+            pub const [<$identifier _1>]: usize = $base_address + 1;
+        }
+    };
+}
+
+macro_rules! io_register_u32 {
+    ($base_address:expr, $identifier:tt) => {
+        paste! {
+            pub const [<$identifier _0>]: usize = $base_address;
+        }
+        paste! {
+            pub const [<$identifier _1>]: usize = $base_address + 1;
+        }
+        paste! {
+            pub const [<$identifier _2>]: usize = $base_address + 2;
+        }
+        paste! {
+            pub const [<$identifier _3>]: usize = $base_address + 4;
+        }
+    };
+}
+
+
+
 // LCD I/O Registers
-pub const DISPCNT: usize = 0x400_0000;
-pub const DISPSTAT: usize = 0x400_0004;
-pub const VCOUNT: usize = 0x400_0006;
+io_register_u16!(0x400_0000, DISPCNT);
+// io_register_u16!(0x400_0002, GREENSWAP); Not sure what this register does yet
+io_register_u16!(0x400_0004, DISPSTAT);
+io_register_u16!(0x400_0006, VCOUNT);
 pub const BG0CNT: usize = 0x400_0008;
 pub const BG1CNT: usize = 0x400_000A;
 pub const BG2CNT: usize = 0x400_000C;
@@ -18,8 +53,8 @@ pub const BG2PA: usize = 0x400_0020;
 pub const BG2PB: usize = 0x400_0022;
 pub const BG2PC: usize = 0x400_0024;
 pub const BG2PD: usize = 0x400_0026;
-pub const BG2X: usize = 0x400_0028;
-pub const BG2Y: usize = 0x400_002C;
+io_register_u32!(0x400_0028, BG2X);
+io_register_u32!(0x400_002C, BG2Y);
 pub const BG3PA: usize = 0x400_0030;
 pub const BG3PB: usize = 0x400_0032;
 pub const BG3PC: usize = 0x400_0034;
