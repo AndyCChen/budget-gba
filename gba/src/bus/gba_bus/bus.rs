@@ -1,4 +1,5 @@
-use super::GbaBus;
+use std::fs;
+
 use crate::bus::Bus;
 use crate::ppu::Ppu;
 use num_traits::FromPrimitive;
@@ -7,10 +8,23 @@ const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
 const WRAM_32: usize = 32 * 1024;
 
+pub struct GbaBus {
+    bios_ram: Box<[u8]>,
+    wram_256: Box<[u8]>,
+    wram_32: Box<[u8]>,
+    gamepak_rom: Box<[u8]>,
+    pub ppu: Ppu,
+}
+
 impl GbaBus {
     pub fn new() -> Self {
+        let bios: Vec<u8> =
+            fs::read("resource/gba_bios.bin").expect("Failed to read gba_bios.bin!");
+
+        assert_eq!(bios.len(), BIOS_SIZE);
+
         Self {
-            bios_ram: vec![0; BIOS_SIZE].into_boxed_slice(),
+            bios_ram: bios.into_boxed_slice(),
             wram_256: vec![0; WRAM_256].into_boxed_slice(),
             wram_32: vec![0; WRAM_32].into_boxed_slice(),
             gamepak_rom: vec![0; 0].into_boxed_slice(),
@@ -23,6 +37,8 @@ impl GbaBus {
         self.wram_256.fill(0);
         self.wram_32.fill(0);
         self.gamepak_rom.fill(0);
+
+        self.ppu.reset();
     }
 
     // tick the system for N cycles
@@ -184,6 +200,10 @@ impl GbaBus {
 }
 
 impl Bus for GbaBus {
+    fn reset(&mut self) {
+        self.reset();
+    }
+
     fn i_cycle(&mut self) {
         self.tick(1);
     }

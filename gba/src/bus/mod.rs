@@ -2,6 +2,8 @@ mod gba_bus;
 mod test_bus;
 
 pub trait Bus {
+    fn reset(&mut self) {}
+
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32;
     fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u16;
 

@@ -36,4 +36,9 @@ impl BudgetGba {
         // run the emulation for 1 frame here
         godot_print!("{delta}");
     }
+
+    #[func]
+    fn reset(&mut self) {
+        self.cpu.reset();
+    }
 }

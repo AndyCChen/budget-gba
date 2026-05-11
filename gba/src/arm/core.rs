@@ -91,6 +91,15 @@ impl Arm7tdmi {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.registers = GeneralRegisters::default();
+        self.status = StatusRegisters::default();
+        self.pipeline.fill(0);
+        self.pipeline_state = access_code::NONSEQUENTIAL;
+        
+        self.bus.reset();
+    }
+
     pub fn run(&mut self) {
         let opcode = self.pipeline[0];
 

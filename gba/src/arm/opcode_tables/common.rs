@@ -217,6 +217,26 @@ pub mod arithmetic {
     }
 }
 
+// data op constants for arm 32 data processing instructions
+pub mod data_op {
+    pub const AND: u8 = 0;
+    pub const EOR: u8 = 1;
+    pub const SUB: u8 = 2;
+    pub const RSB: u8 = 3;
+    pub const ADD: u8 = 4;
+    pub const ADC: u8 = 5;
+    pub const SBC: u8 = 6;
+    pub const RSC: u8 = 7;
+    pub const TST: u8 = 8;
+    pub const TEQ: u8 = 9;
+    pub const CMP: u8 = 10;
+    pub const CMN: u8 = 11;
+    pub const ORR: u8 = 12;
+    pub const MOV: u8 = 13;
+    pub const BIC: u8 = 14;
+    pub const MVN: u8 = 15;
+}
+
 pub mod reg_constant {
     pub const STACK_POINTER: u32 = 13;
     pub const LINK_REGISTER: u32 = 14;

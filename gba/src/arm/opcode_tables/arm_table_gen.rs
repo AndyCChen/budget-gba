@@ -1,3 +1,4 @@
+use super::common::data_op;
 use crate::arm::core::Arm7tdmi;
 
 pub type ArmHandler = fn(&mut Arm7tdmi, u32);
@@ -18,9 +19,58 @@ pub const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_SIZE] {
     arm_table
 }
 
+// poor man's macro to help generate data processing instructions for the arm lookup table at compile time
+macro_rules! data_processing {
+    ($imm:expr, $data_opcode:expr, $set_cond:expr, $shift:expr) => {
+        match $data_opcode {
+            data_op::AND => _data_processing_inner!($imm, { data_op::AND }, $set_cond, $shift),
+            data_op::EOR => _data_processing_inner!($imm, { data_op::EOR }, $set_cond, $shift),
+            data_op::SUB => _data_processing_inner!($imm, { data_op::SUB }, $set_cond, $shift),
+            data_op::RSB => _data_processing_inner!($imm, { data_op::RSB }, $set_cond, $shift),
+            data_op::ADD => _data_processing_inner!($imm, { data_op::ADD }, $set_cond, $shift),
+            data_op::ADC => _data_processing_inner!($imm, { data_op::ADC }, $set_cond, $shift),
+            data_op::SBC => _data_processing_inner!($imm, { data_op::SBC }, $set_cond, $shift),
+            data_op::RSC => _data_processing_inner!($imm, { data_op::RSC }, $set_cond, $shift),
+            data_op::TST => _data_processing_inner!($imm, { data_op::TST }, $set_cond, $shift),
+            data_op::TEQ => _data_processing_inner!($imm, { data_op::TEQ }, $set_cond, $shift),
+            data_op::CMP => _data_processing_inner!($imm, { data_op::CMP }, $set_cond, $shift),
+            data_op::CMN => _data_processing_inner!($imm, { data_op::CMN }, $set_cond, $shift),
+            data_op::ORR => _data_processing_inner!($imm, { data_op::ORR }, $set_cond, $shift),
+            data_op::MOV => _data_processing_inner!($imm, { data_op::MOV }, $set_cond, $shift),
+            data_op::BIC => _data_processing_inner!($imm, { data_op::BIC }, $set_cond, $shift),
+            data_op::MVN => _data_processing_inner!($imm, { data_op::MVN }, $set_cond, $shift),
+            _ => panic!("Invalid data op!"),
+        }
+    };
+}
+
+macro_rules! _data_processing_inner {
+    ($imm:expr, $data_opcode:expr, $set_cond:expr, $shift:expr) => {
+        match $shift {
+            0 => data_processing::<$imm, $data_opcode, $set_cond, 0>,
+            1 => data_processing::<$imm, $data_opcode, $set_cond, 1>,
+            2 => data_processing::<$imm, $data_opcode, $set_cond, 2>,
+            3 => data_processing::<$imm, $data_opcode, $set_cond, 3>,
+            4 => data_processing::<$imm, $data_opcode, $set_cond, 4>,
+            5 => data_processing::<$imm, $data_opcode, $set_cond, 5>,
+            6 => data_processing::<$imm, $data_opcode, $set_cond, 6>,
+            7 => data_processing::<$imm, $data_opcode, $set_cond, 7>,
+            8 => data_processing::<$imm, $data_opcode, $set_cond, 8>,
+            9 => data_processing::<$imm, $data_opcode, $set_cond, 9>,
+            10 => data_processing::<$imm, $data_opcode, $set_cond, 10>,
+            11 => data_processing::<$imm, $data_opcode, $set_cond, 11>,
+            12 => data_processing::<$imm, $data_opcode, $set_cond, 12>,
+            13 => data_processing::<$imm, $data_opcode, $set_cond, 13>,
+            14 => data_processing::<$imm, $data_opcode, $set_cond, 14>,
+            15 => data_processing::<$imm, $data_opcode, $set_cond, 15>,
+            _ => panic!("shift field must be in range 0-15!"),
+        }
+    };
+}
+
+#[rustfmt::skip]
 const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
     use crate::arm::opcode_tables::arm_handlers::*;
-    use crate::{_data_processing_inner, data_processing};
 
     match instruction >> 10 {
         0b00 => {
@@ -258,6 +308,7 @@ const fn generate_arm_instruction(instruction: usize) -> ArmHandler {
     }
 }
 
+#[rustfmt::skip]
 const fn generate_arm_halfword_transfer<const IS_IMMEDIATE: bool>(instruction: usize) -> ArmHandler {
     use crate::arm::opcode_tables::arm_handlers::halfword_and_signed_data_transfer;
 

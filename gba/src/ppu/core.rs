@@ -22,4 +22,10 @@ impl Ppu {
             registers: Registers::new(),
         }
     }
+
+    pub fn reset(&mut self) {
+        self.palette_ram.fill(0);
+        self.vram.fill(0);
+        self.oam.fill(0);
+    }
 }
