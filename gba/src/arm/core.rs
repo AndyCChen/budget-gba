@@ -100,13 +100,13 @@ impl Arm7tdmi {
             THUMB_TABLE[thumb_table_hash as usize](self, opcode as u16);
         } else {
             self.pipeline_prefetch(PipelinePrefetchMode::Arm);
-            if !self.condition_check((opcode >> 28) as u8) {
+            if self.condition_check((opcode >> 28) as u8) {
+                let arm_table_hash = ((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4);
+                ARM_TABLE[arm_table_hash as usize](self, opcode);
+            } else {
+                self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
                 self.registers.r15 += 4;
-                return;
             }
-
-            let arm_table_hash = ((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4);
-            ARM_TABLE[arm_table_hash as usize](self, opcode);
         }
     }
 

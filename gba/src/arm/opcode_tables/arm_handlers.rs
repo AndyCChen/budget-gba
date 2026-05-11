@@ -77,7 +77,7 @@ pub fn data_processing<
     let rd = (opcode >> 12) & 0xF; // destination register of result
 
     // shift amount for operand 2 is specified by a register
-    let register_specified_shift = const { !IMM && (SHIFT & 1) != 0 };
+    let register_specified_shift = !IMM && (SHIFT & 1) != 0;
 
     let (op2, carry_from_shift) = if IMM {
         let shift_amount = ((opcode >> 8) & 0xF) * 2;
@@ -104,12 +104,9 @@ pub fn data_processing<
             let rs_value = cpu.get_banked_register(shift_field >> 4) & 0xFF;
 
             // pc is ahead by 12 when a register specified shift is used
-            if register_specified_shift {
-                // todo handle extra I cycle
-                cpu.bus.i_cycle();
-                cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
-                cpu.registers.r15 += 4;
-            }
+            cpu.bus.i_cycle();
+            cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+            cpu.registers.r15 += 4;
 
             rs_value
         };
@@ -735,9 +732,17 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     // write rm register value into swap address
     let register_value = cpu.get_banked_register(rm);
     if SWAP_BYTE {
-        cpu.write_byte(swap_address, register_value as u8, access_code::LOCK);
+        cpu.write_byte(
+            swap_address,
+            register_value as u8,
+            access_code::NONSEQUENTIAL | access_code::LOCK,
+        );
     } else {
-        cpu.write_word(swap_address, register_value, access_code::LOCK);
+        cpu.write_word(
+            swap_address,
+            register_value,
+            access_code::NONSEQUENTIAL | access_code::LOCK,
+        );
     }
 
     cpu.set_banked_register(rd, memory_value);
