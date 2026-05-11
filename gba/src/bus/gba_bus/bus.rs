@@ -12,7 +12,7 @@ pub struct GbaBus {
     bios_ram: Box<[u8]>,
     wram_256: Box<[u8]>,
     wram_32: Box<[u8]>,
-    gamepak_rom: Box<[u8]>,
+    gamepak: Box<[u8]>,
     pub ppu: Ppu,
 }
 
@@ -27,7 +27,7 @@ impl GbaBus {
             bios_ram: bios.into_boxed_slice(),
             wram_256: vec![0; WRAM_256].into_boxed_slice(),
             wram_32: vec![0; WRAM_32].into_boxed_slice(),
-            gamepak_rom: vec![0; 0].into_boxed_slice(),
+            gamepak: vec![0; 0].into_boxed_slice(),
             ppu: Ppu::new(),
         }
     }
@@ -36,7 +36,7 @@ impl GbaBus {
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
-        self.gamepak_rom.fill(0);
+        self.gamepak.fill(0);
 
         self.ppu.reset();
     }
@@ -55,7 +55,7 @@ impl GbaBus {
                 T::mem_read(T::align(address & 0x3FFF), &self.bios_ram)
             }
 
-            // 256kb wram
+            // 256kb wram, always has 2 wait states
             2 => {
                 let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
                 self.tick(if is_u32 { 6 } else { 3 });
@@ -102,6 +102,13 @@ impl GbaBus {
                 self.tick(1);
                 T::mem_read(T::align(address & 0x3FF), &self.ppu.oam)
             }
+
+            // gamepak region 8/9
+            
+
+            // gamepak region 10/11
+            // gamepak region 12/13
+            
 
             _ => todo!("open bus value"),
         }
