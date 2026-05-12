@@ -26,7 +26,7 @@ macro_rules! io_register_u32 {
             pub const [<$identifier _2>]: usize = $base_address + 2;
         }
         paste! {
-            pub const [<$identifier _3>]: usize = $base_address + 4;
+            pub const [<$identifier _3>]: usize = $base_address + 3;
         }
     };
 }
@@ -96,5 +96,5 @@ io_register_u16!(BG0CNT, 0x400_0008);
 // Watstate, and Power-Down Control
 // io_register_u16!(IE, 0x400_0200);
 // io_register_u16!(IF, 0x400_0202);
-// io_register_u16!(WAITCNT, 0x400_0204);
+io_register_u32!(WAITCNT, 0x400_0204);
 // io_register_u16!(IME, 0x400_0208);

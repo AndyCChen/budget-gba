@@ -1,7 +1,8 @@
 mod arm;
 mod bus;
-mod ppu;
+mod gamepak;
 mod io;
+mod ppu;
 
 use godot::prelude::*;
 

@@ -96,7 +96,7 @@ impl Arm7tdmi {
         self.status = StatusRegisters::default();
         self.pipeline.fill(0);
         self.pipeline_state = access_code::NONSEQUENTIAL;
-        
+
         self.bus.reset();
     }
 
@@ -407,7 +407,9 @@ impl Mode {
 
 #[bitfield(u32)]
 pub struct StatusRegister {
-    #[bits(5, default = Mode::User, from = Mode::from_bits)]
+    // unsure if default mode starts in User or System mode.
+    // mgba seems to start in System mode and I think user and system mode are the same on the gba.
+    #[bits(5, default = Mode::System, from = Mode::from_bits)]
     pub mode_bits: Mode,
 
     // 0: arm mode, 1: thumb mode,

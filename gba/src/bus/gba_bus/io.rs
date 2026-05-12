@@ -6,6 +6,7 @@ impl GbaBus {
     pub fn read_io_byte(&self, address: usize) -> u8 {
         match address {
             // lcd I/O registers
+
             DISPCNT_0 => self.ppu.registers.lcd_control.read(HalfwordIo::B0),
             DISPCNT_1 => self.ppu.registers.lcd_control.read(HalfwordIo::B1),
 
@@ -17,6 +18,13 @@ impl GbaBus {
 
             BG0CNT_0 => self.ppu.registers.bg_control_0.read(HalfwordIo::B0),
             BG0CNT_1 => self.ppu.registers.bg_control_0.read(HalfwordIo::B1),
+
+            // Interrupt, Waitstate, and Power-Down Control
+
+            WAITCNT_0 => self.gamepak.registers.waitstate_control.read(WordIo::B0),
+            WAITCNT_1 => self.gamepak.registers.waitstate_control.read(WordIo::B1),
+            WAITCNT_2 => self.gamepak.registers.waitstate_control.read(WordIo::B2),
+            WAITCNT_3 => self.gamepak.registers.waitstate_control.read(WordIo::B3),
 
             _ => 0,
         }
@@ -33,6 +41,13 @@ impl GbaBus {
 
             BG0CNT_0 => self.ppu.registers.bg_control_0.write(value, HalfwordIo::B0),
             BG0CNT_1 => self.ppu.registers.bg_control_0.write(value, HalfwordIo::B1),
+
+            // Interrupt, Waitstate, and Power-Down Control
+
+            WAITCNT_0 => self.gamepak.registers.waitstate_control.write(value, WordIo::B0),
+            WAITCNT_1 => self.gamepak.registers.waitstate_control.write(value, WordIo::B1),
+            WAITCNT_2 => self.gamepak.registers.waitstate_control.write(value, WordIo::B2),
+            WAITCNT_3 => self.gamepak.registers.waitstate_control.write(value, WordIo::B3),
 
             _ => (),
         }

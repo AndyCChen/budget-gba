@@ -1,6 +1,7 @@
 use std::fs;
 
 use crate::bus::Bus;
+use crate::gamepak::{AccessType, GamePak, GamepakRegion};
 use crate::ppu::Ppu;
 use num_traits::FromPrimitive;
 
@@ -12,7 +13,7 @@ pub struct GbaBus {
     bios_ram: Box<[u8]>,
     wram_256: Box<[u8]>,
     wram_32: Box<[u8]>,
-    gamepak: Box<[u8]>,
+    pub gamepak: GamePak,
     pub ppu: Ppu,
 }
 
@@ -27,7 +28,7 @@ impl GbaBus {
             bios_ram: bios.into_boxed_slice(),
             wram_256: vec![0; WRAM_256].into_boxed_slice(),
             wram_32: vec![0; WRAM_32].into_boxed_slice(),
-            gamepak: vec![0; 0].into_boxed_slice(),
+            gamepak: GamePak::new(),
             ppu: Ppu::new(),
         }
     }
@@ -36,15 +37,15 @@ impl GbaBus {
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
-        self.gamepak.fill(0);
 
+        self.gamepak.reset();
         self.ppu.reset();
     }
 
     // tick the system for N cycles
     fn tick(&mut self, _n: u8) {}
 
-    fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, _access: u8) -> T {
+    fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: u8) -> T {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
@@ -104,11 +105,37 @@ impl GbaBus {
             }
 
             // gamepak region 8/9
-            
+            8 => {
+                let wait_states = self.gamepak.get_wait_states(
+                    AccessType::try_from(access).unwrap(),
+                    GamepakRegion::Region8_9,
+                );
+                self.tick(1 + wait_states); // timing is 1 plus number of waitstates
+                let rom_size = self.gamepak.rom.len() as u32;
+                T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
+            }
 
             // gamepak region 10/11
+            10 => {
+                let wait_states = self.gamepak.get_wait_states(
+                    AccessType::try_from(access).unwrap(),
+                    GamepakRegion::Region10_11,
+                );
+                self.tick(1 + wait_states); // timing is 1 plus number of waitstates
+                let rom_size = self.gamepak.rom.len() as u32;
+                T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
+            }
+
             // gamepak region 12/13
-            
+            12 => {
+                let wait_states = self.gamepak.get_wait_states(
+                    AccessType::try_from(access).unwrap(),
+                    GamepakRegion::Region12_13,
+                );
+                self.tick(1 + wait_states); // timing is 1 plus number of waitstates
+                let rom_size = self.gamepak.rom.len() as u32;
+                T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
+            }
 
             _ => todo!("open bus value"),
         }
