@@ -22,13 +22,15 @@ enum PipelinePrefetchMode {
 
 impl Arm7tdmi {
     pub fn new() -> Self {
-        Self {
+        let mut cpu = Arm7tdmi {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [0, 0],
             pipeline_state: access_code::NONSEQUENTIAL,
             bus: Box::new(GbaBus::new()),
-        }
+        };
+        cpu.pipeline_refill_arm();
+        cpu
     }
 
     pub fn from_test_state(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
@@ -100,7 +102,7 @@ impl Arm7tdmi {
         self.bus.reset();
     }
 
-    pub fn run(&mut self) {
+    pub fn step(&mut self) {
         let opcode = self.pipeline[0];
 
         if self.status.cpsr.t() {
@@ -461,7 +463,7 @@ mod test_utils {
 
         for (count, item) in it {
             let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
-            cpu.run();
+            cpu.step();
             check_state(&cpu, item, count);
         }
     }
@@ -660,7 +662,7 @@ mod thumb_16_tests {
             .enumerate()
             .for_each(|(count, item)| {
                 let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
-                cpu.run();
+                cpu.step();
                 verify_state(&cpu, item, count);
             });
 
@@ -670,7 +672,7 @@ mod thumb_16_tests {
             .enumerate()
             .for_each(|(count, item)| {
                 let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
-                cpu.run();
+                cpu.step();
                 verify_state_no_carry(&cpu, item, count);
             });
     }

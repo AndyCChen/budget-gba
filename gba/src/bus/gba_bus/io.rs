@@ -1,6 +1,6 @@
 use crate::bus::GbaBus;
 use crate::io::constants::*;
-use crate::io::registers::*;
+use crate::io::*;
 
 impl GbaBus {
     pub fn read_io_byte(&self, address: usize) -> u8 {

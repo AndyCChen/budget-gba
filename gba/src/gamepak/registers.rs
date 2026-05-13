@@ -1,4 +1,4 @@
-use crate::io::registers::*;
+use crate::io::*;
 use bitfield_struct::bitfield;
 use register_macros::ReadIo32;
 

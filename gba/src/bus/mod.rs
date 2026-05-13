@@ -16,6 +16,10 @@ pub trait Bus {
     fn write_byte(&mut self, address: u32, value: u8, access: u8);
 
     fn i_cycle(&mut self) {}
+    
+    fn cycles(&self) -> usize {
+        0
+    }
 }
 
 pub use gba_bus::GbaBus;

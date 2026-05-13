@@ -9,3 +9,4 @@ pub use arm_json_test_states::*;
 pub use constants::access_code;
 pub use constants::kind_code;
 pub use core::Arm7tdmi;
+pub use constants::ARM7TDMI_CLOCK_RATE;

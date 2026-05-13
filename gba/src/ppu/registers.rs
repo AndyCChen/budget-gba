@@ -1,6 +1,6 @@
 use bitfield_struct::bitfield;
 use register_macros::{ReadIo16, WriteIo16};
-use crate::io::registers::*;
+use crate::io::*;
 
 pub struct Registers {
     pub lcd_control: LcdControl,

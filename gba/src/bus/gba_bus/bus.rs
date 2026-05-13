@@ -1,5 +1,3 @@
-use std::fs;
-
 use crate::bus::Bus;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
 use crate::ppu::Ppu;
@@ -9,25 +7,24 @@ const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
 const WRAM_32: usize = 32 * 1024;
 
+const BIOS: &[u8; BIOS_SIZE] = include_bytes!("../../../resource/gba_bios.bin");
+
 pub struct GbaBus {
     bios_ram: Box<[u8]>,
     wram_256: Box<[u8]>,
     wram_32: Box<[u8]>,
+    cycles: usize,
     pub gamepak: GamePak,
     pub ppu: Ppu,
 }
 
 impl GbaBus {
     pub fn new() -> Self {
-        let bios: Vec<u8> =
-            fs::read("resource/gba_bios.bin").expect("Failed to read gba_bios.bin!");
-
-        assert_eq!(bios.len(), BIOS_SIZE);
-
         Self {
-            bios_ram: bios.into_boxed_slice(),
+            bios_ram: BIOS.to_vec().into_boxed_slice(),
             wram_256: vec![0; WRAM_256].into_boxed_slice(),
             wram_32: vec![0; WRAM_32].into_boxed_slice(),
+            cycles: 0,
             gamepak: GamePak::new(),
             ppu: Ppu::new(),
         }
@@ -37,13 +34,15 @@ impl GbaBus {
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
-
+        self.cycles = 0;
         self.gamepak.reset();
         self.ppu.reset();
     }
 
     // tick the system for N cycles
-    fn tick(&mut self, _n: u8) {}
+    fn tick(&mut self, n: u8) {
+        self.cycles += usize::from(n);
+    }
 
     fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: u8) -> T {
         let page = address >> 24;
@@ -240,6 +239,10 @@ impl Bus for GbaBus {
 
     fn i_cycle(&mut self) {
         self.tick(1);
+    }
+
+    fn cycles(&self) -> usize {
+        self.cycles
     }
 
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {

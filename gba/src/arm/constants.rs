@@ -1,5 +1,5 @@
 // 16.78 MHz clock rate
-const ARM7TDMI_CLOCK_RATE: usize = 16 * 1024 * 1024;
+pub const ARM7TDMI_CLOCK_RATE: usize = 16 * 1024 * 1024;
 
 pub mod arm_condition_code {
     /// Z set
