@@ -1,8 +1,15 @@
 mod arm_handlers;
 mod arm_table_gen;
 mod common;
-mod instruction_lut;
 mod thumb_handlers;
 mod thumb_table_gen;
 
-pub use instruction_lut::*;
+use arm_table_gen::*;
+use thumb_table_gen::*;
+
+pub use arm_table_gen::ARM_TABLE_SIZE;
+pub use common::arm_data_op;
+pub use thumb_table_gen::THUMB_TABLE_SIZE;
+
+pub static ARM_TABLE: [ArmHandler; ARM_TABLE_SIZE] = generate_arm_table();
+pub static THUMB_TABLE: [ThumbHandler; THUMB_TABLE_SIZE] = generate_thumb_table();

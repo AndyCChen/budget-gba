@@ -218,7 +218,7 @@ pub mod arithmetic {
 }
 
 // data op constants for arm 32 data processing instructions
-pub mod data_op {
+pub mod arm_data_op {
     pub const AND: u8 = 0;
     pub const EOR: u8 = 1;
     pub const SUB: u8 = 2;

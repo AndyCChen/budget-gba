@@ -26,17 +26,12 @@ pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
         cpu.set_banked_register(LINK_REGISTER, (cpu.registers.r15 - Wrapping(4)).0);
     }
 
-    // positive
-    if opcode & (1 << 23) == 0 {
-        cpu.registers.r15 += offset;
-    }
     // negative
-    else {
+    if opcode & (1 << 23) != 0 {
         offset |= 0xFC_000000;
-        offset = !offset + 1;
-        cpu.registers.r15 -= offset;
     }
-
+    
+    cpu.registers.r15 += offset;
     cpu.pipeline_refill_arm();
 }
 
@@ -49,8 +44,8 @@ pub fn data_processing<
     cpu: &mut Arm7tdmi,
     opcode: u32,
 ) {
-    use super::common::data_op::*;
     use super::common::arithmetic::*;
+    use super::common::arm_data_op::*;
 
     let rn = (opcode >> 16) & 0xF; // 1st operand register
     let rd = (opcode >> 12) & 0xF; // destination register of result
