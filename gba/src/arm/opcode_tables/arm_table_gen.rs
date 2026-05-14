@@ -1,4 +1,4 @@
-use super::common::data_op;
+use super::common::arm_data_op;
 use crate::arm::core::Arm7tdmi;
 
 pub type ArmHandler = fn(&mut Arm7tdmi, u32);
@@ -23,22 +23,22 @@ pub const fn generate_arm_table() -> [ArmHandler; ARM_TABLE_SIZE] {
 macro_rules! data_processing {
     ($imm:expr, $data_opcode:expr, $set_cond:expr, $shift:expr) => {
         match $data_opcode {
-            data_op::AND => _data_processing_inner!($imm, { data_op::AND }, $set_cond, $shift),
-            data_op::EOR => _data_processing_inner!($imm, { data_op::EOR }, $set_cond, $shift),
-            data_op::SUB => _data_processing_inner!($imm, { data_op::SUB }, $set_cond, $shift),
-            data_op::RSB => _data_processing_inner!($imm, { data_op::RSB }, $set_cond, $shift),
-            data_op::ADD => _data_processing_inner!($imm, { data_op::ADD }, $set_cond, $shift),
-            data_op::ADC => _data_processing_inner!($imm, { data_op::ADC }, $set_cond, $shift),
-            data_op::SBC => _data_processing_inner!($imm, { data_op::SBC }, $set_cond, $shift),
-            data_op::RSC => _data_processing_inner!($imm, { data_op::RSC }, $set_cond, $shift),
-            data_op::TST => _data_processing_inner!($imm, { data_op::TST }, $set_cond, $shift),
-            data_op::TEQ => _data_processing_inner!($imm, { data_op::TEQ }, $set_cond, $shift),
-            data_op::CMP => _data_processing_inner!($imm, { data_op::CMP }, $set_cond, $shift),
-            data_op::CMN => _data_processing_inner!($imm, { data_op::CMN }, $set_cond, $shift),
-            data_op::ORR => _data_processing_inner!($imm, { data_op::ORR }, $set_cond, $shift),
-            data_op::MOV => _data_processing_inner!($imm, { data_op::MOV }, $set_cond, $shift),
-            data_op::BIC => _data_processing_inner!($imm, { data_op::BIC }, $set_cond, $shift),
-            data_op::MVN => _data_processing_inner!($imm, { data_op::MVN }, $set_cond, $shift),
+            arm_data_op::AND => _data_processing_inner!($imm, { arm_data_op::AND }, $set_cond, $shift),
+            arm_data_op::EOR => _data_processing_inner!($imm, { arm_data_op::EOR }, $set_cond, $shift),
+            arm_data_op::SUB => _data_processing_inner!($imm, { arm_data_op::SUB }, $set_cond, $shift),
+            arm_data_op::RSB => _data_processing_inner!($imm, { arm_data_op::RSB }, $set_cond, $shift),
+            arm_data_op::ADD => _data_processing_inner!($imm, { arm_data_op::ADD }, $set_cond, $shift),
+            arm_data_op::ADC => _data_processing_inner!($imm, { arm_data_op::ADC }, $set_cond, $shift),
+            arm_data_op::SBC => _data_processing_inner!($imm, { arm_data_op::SBC }, $set_cond, $shift),
+            arm_data_op::RSC => _data_processing_inner!($imm, { arm_data_op::RSC }, $set_cond, $shift),
+            arm_data_op::TST => _data_processing_inner!($imm, { arm_data_op::TST }, $set_cond, $shift),
+            arm_data_op::TEQ => _data_processing_inner!($imm, { arm_data_op::TEQ }, $set_cond, $shift),
+            arm_data_op::CMP => _data_processing_inner!($imm, { arm_data_op::CMP }, $set_cond, $shift),
+            arm_data_op::CMN => _data_processing_inner!($imm, { arm_data_op::CMN }, $set_cond, $shift),
+            arm_data_op::ORR => _data_processing_inner!($imm, { arm_data_op::ORR }, $set_cond, $shift),
+            arm_data_op::MOV => _data_processing_inner!($imm, { arm_data_op::MOV }, $set_cond, $shift),
+            arm_data_op::BIC => _data_processing_inner!($imm, { arm_data_op::BIC }, $set_cond, $shift),
+            arm_data_op::MVN => _data_processing_inner!($imm, { arm_data_op::MVN }, $set_cond, $shift),
             _ => panic!("Invalid data op!"),
         }
     };
