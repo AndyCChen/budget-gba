@@ -3,7 +3,7 @@ use std::num::Wrapping;
 use super::common::arithmetic::*;
 use crate::arm::{
     constants::access_code,
-    core::{Arm7tdmi, Mode},
+    core::{Arm7tdmi, CpuMode::*, Mode},
     opcode_tables::common::reg_constant::*,
 };
 
@@ -231,15 +231,12 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
             sub::<true>(cpu, op1, op2);
         }
         BX => {
-            // thumb mode
             if op2 & 1 == 1 {
-                cpu.status.cpsr.set_t(true);
+                cpu.status.cpsr.set_t(ThumbMode);
                 cpu.registers.r15.0 = op2 & !1;
                 cpu.pipeline_refill_thumb();
-            }
-            // arm mode
-            else {
-                cpu.status.cpsr.set_t(false);
+            } else {
+                cpu.status.cpsr.set_t(ArmMode);
                 cpu.registers.r15.0 = op2;
                 cpu.pipeline_refill_arm();
             }
@@ -652,7 +649,7 @@ pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u16) {
 
     cpu.status.cpsr.set_i(true);
     cpu.status.cpsr.set_mode_bits(Mode::Supervisor);
-    cpu.status.cpsr.set_t(false); // switch to arm mode
+    cpu.status.cpsr.set_t(ArmMode);
 
     cpu.pipeline_refill_arm();
 }
@@ -702,7 +699,7 @@ pub fn long_branch_with_link<
         };
 
         cpu.set_banked_register(LINK_REGISTER, lr_hi);
-        
+
         cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         cpu.registers.r15 += 2;
     }

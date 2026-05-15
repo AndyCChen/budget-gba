@@ -1,20 +1,25 @@
 use crate::arm::constants::access_code;
-use crate::arm::core::{Arm7tdmi, Mode, StatusRegister};
+use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::arm::opcode_tables::common::reg_constant::*;
 use std::num::Wrapping;
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     let branch_address = cpu.get_banked_register(opcode & 0xF);
-    let is_thumb_mode = (branch_address & 0x1) == 1;
-    cpu.status.cpsr.set_t(is_thumb_mode);
+    let mode = if (branch_address & 0x1) == 0 {
+        ArmMode
+    } else {
+        ThumbMode
+    };
+    cpu.status.cpsr.set_t(mode);
 
     cpu.registers.r15 = Wrapping(branch_address); // pc is updated so we need to refill instruction pipeline
 
-    if is_thumb_mode {
-        cpu.registers.r15 &= !1;
-        cpu.pipeline_refill_thumb();
-    } else {
-        cpu.pipeline_refill_arm();
+    match mode {
+        ArmMode => cpu.pipeline_refill_arm(),
+        ThumbMode => {
+            cpu.registers.r15 &= !1;
+            cpu.pipeline_refill_thumb();
+        }
     }
 }
 
@@ -30,7 +35,7 @@ pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     if opcode & (1 << 23) != 0 {
         offset |= 0xFC_000000;
     }
-    
+
     cpu.registers.r15 += offset;
     cpu.pipeline_refill_arm();
 }
@@ -145,10 +150,9 @@ pub fn data_processing<
         }
 
         if result.is_some() {
-            if cpu.status.cpsr.t() {
-                cpu.pipeline_refill_thumb();
-            } else {
-                cpu.pipeline_refill_arm();
+            match cpu.status.cpsr.t() {
+                ArmMode => cpu.pipeline_refill_arm(),
+                ThumbMode => cpu.pipeline_refill_thumb(),
             }
         }
     }
@@ -627,10 +631,9 @@ pub fn block_data_transfer<
     };
 
     if (LOAD && r15_in_transfer_list) || ((WRITE_BACK) && rn == 15) {
-        if cpu.status.cpsr.t() {
-            cpu.pipeline_refill_thumb();
-        } else {
-            cpu.pipeline_refill_arm();
+        match cpu.status.cpsr.t() {
+            ArmMode => cpu.pipeline_refill_arm(),
+            ThumbMode => cpu.pipeline_refill_thumb(),
         }
     }
 }

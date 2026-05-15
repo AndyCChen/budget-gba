@@ -1,18 +1,22 @@
 use crate::arm::constants::arm_condition_code::*;
-use crate::arm::decoder_tables::arm_decoder::{ArmInstruction, ArmInstructionInfo};
+use crate::arm::decoder_tables::arm_decoder::{ArmInstruction::*, ArmInstructionInfo};
 
 impl ArmInstructionInfo {
-    fn to_string(&self, pc: u32) -> String {
-        let condition_code_str = get_condition_str(self.condition);
+    pub fn to_asm_string(&self, pc: u32) -> String {
+        let cond_str = get_condition_str(self.condition);
 
         match self.instruction {
-            ArmInstruction::BX { rn } => format!("BX{condition_code_str} R{rn}"),
-            ArmInstruction::B { offset } => {
-                let dest = pc.wrapping_add(offset);
-                format!("B{condition_code_str} {dest}")
+            BX { rn } => format!("BX{cond_str} R{rn}"),
+            B { offset } => {
+                format!("B{cond_str} 0x{:08X}", pc.wrapping_add(offset))
             }
-            ArmInstruction::BL { offset } => format!("BL{condition_code_str} {offset}"),
-            ArmInstruction::MOV { set_condition, rd } => todo!(),
+            BL { offset } => {
+                format!("BL{cond_str} 0x{:08X}", pc.wrapping_add(offset))
+            }
+
+            MOV { set_condition, rd } => {
+                format!("MOV{cond_str}")
+            },
         }
     }
 }

@@ -7,25 +7,166 @@ use crate::bus::{Bus, GbaBus};
 
 use bitfield_struct::bitfield;
 
+#[derive(Default)]
+pub struct StatusRegisters {
+    pub cpsr: StatusRegister,
+    pub spsr_fiq: StatusRegister,
+    pub spsr_svc: StatusRegister,
+    pub spsr_abt: StatusRegister,
+    pub spsr_irq: StatusRegister,
+    pub spsr_und: StatusRegister,
+}
+
+#[derive(Default, Debug)]
+pub struct GeneralRegisters {
+    pub r0: u32,
+    pub r1: u32,
+    pub r2: u32,
+    pub r3: u32,
+    pub r4: u32,
+    pub r5: u32,
+    pub r6: u32,
+    pub r7: u32,
+
+    pub r8: u32,
+    pub r8_fiq: u32,
+
+    pub r9: u32,
+    pub r9_fiq: u32,
+
+    pub r10: u32,
+    pub r10_fiq: u32,
+
+    pub r11: u32,
+    pub r11_fiq: u32,
+
+    pub r12: u32,
+    pub r12_fiq: u32,
+
+    pub r13: u32, // stack pointer (sp)
+    pub r13_fiq: u32,
+    pub r13_svc: u32,
+    pub r13_abt: u32,
+    pub r13_irq: u32,
+    pub r13_und: u32,
+
+    pub r14: u32, // link registers (lr)
+    pub r14_fiq: u32,
+    pub r14_svc: u32,
+    pub r14_abt: u32,
+    pub r14_irq: u32,
+    pub r14_und: u32,
+
+    pub r15: Wrapping<u32>, // program counter (pc)
+}
+
+#[bitfield(u32)]
+pub struct StatusRegister {
+    // unsure if default mode starts in User or System mode.
+    // mgba seems to start in System mode and I think user and system mode are the same on the gba.
+    #[bits(5, default = Mode::System, from = Mode::from_bits)]
+    pub mode_bits: Mode,
+
+    #[bits(1, default = CpuMode::ArmMode, from = CpuMode::from_bits)]
+    pub t: CpuMode,
+
+    // 0: enable fiq, 1: disable fiq
+    pub f: bool,
+
+    // 0: enable irq, 1: disable irq
+    pub i: bool,
+
+    #[bits(20)]
+    // reserved
+    __: u32,
+
+    // overflow
+    pub v: bool,
+
+    // carry flag
+    pub c: bool,
+
+    // zero flag
+    pub z: bool,
+
+    // negative flag
+    pub n: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Mode {
+    User = 0b10000,
+    Fiq = 0b10001,
+    Irq = 0b10010,
+    Supervisor = 0b10011,
+    Abort = 0b10111,
+    Undefined = 0b11011,
+    System = 0b11111,
+}
+
+impl Mode {
+    const fn into_bits(self) -> u8 {
+        self as u8
+    }
+
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0b10000 => Mode::User,
+            0b10001 => Mode::Fiq,
+            0b10010 => Mode::Irq,
+            0b10011 => Mode::Supervisor,
+            0b10111 => Mode::Abort,
+            0b11011 => Mode::Undefined,
+            0b11111 => Mode::System,
+            _ => panic!("invalid mode"),
+        }
+    }
+}
+
 pub struct Arm7tdmi {
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
-    pub pipeline: [u32; 2], // make sure pipeline is filled first before running!
+    pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
     pub pipeline_state: u8,
     pub bus: Box<dyn Bus>,
 }
 
-enum PipelinePrefetchMode {
-    Arm,
-    Thumb,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CpuMode {
+    ArmMode = 0,
+    ThumbMode = 1,
 }
+
+impl CpuMode {
+    const fn into_bits(self) -> u8 {
+        self as u8
+    }
+
+    const fn from_bits(value: u8) -> Self {
+        match value {
+            0 => CpuMode::ArmMode,
+            1 => CpuMode::ThumbMode,
+            _ => panic!("Invalid cpu mode!"),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum CpuInstruction {
+    Arm(u32),
+    Thumb(u32),
+}
+
+use CpuInstruction::*;
 
 impl Arm7tdmi {
     pub fn new() -> Self {
         let mut cpu = Arm7tdmi {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
-            pipeline: [0, 0],
+            pipeline: [Arm(0), Arm(0)],
             pipeline_state: access_code::NONSEQUENTIAL,
             bus: Box::new(GbaBus::new()),
         };
@@ -34,6 +175,17 @@ impl Arm7tdmi {
     }
 
     pub fn from_test_state(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
+        let pipeline = match StatusRegister::from_bits(input_state.initial.CPSR).t() {
+            CpuMode::ArmMode => [
+                Arm(input_state.initial.pipeline[0]),
+                Arm(input_state.initial.pipeline[1]),
+            ],
+            CpuMode::ThumbMode => [
+                Thumb(input_state.initial.pipeline[0]),
+                Thumb(input_state.initial.pipeline[1]),
+            ],
+        };
+
         Self {
             registers: GeneralRegisters {
                 r0: input_state.initial.R[0],
@@ -84,10 +236,7 @@ impl Arm7tdmi {
                 spsr_irq: StatusRegister::from_bits(input_state.initial.SPSR[3]),
                 spsr_und: StatusRegister::from_bits(input_state.initial.SPSR[4]),
             },
-            pipeline: [
-                input_state.initial.pipeline[0],
-                input_state.initial.pipeline[1],
-            ],
+            pipeline,
             pipeline_state: input_state.initial.access,
             bus,
         }
@@ -96,29 +245,38 @@ impl Arm7tdmi {
     pub fn reset(&mut self) {
         self.registers = GeneralRegisters::default();
         self.status = StatusRegisters::default();
-        self.pipeline.fill(0);
+        self.pipeline.fill(Arm(0));
         self.pipeline_state = access_code::NONSEQUENTIAL;
 
         self.bus.reset();
     }
 
-    pub fn step(&mut self) {
-        let opcode = self.pipeline[0];
+    pub fn step(&mut self) -> (CpuInstruction, u32) {
+        let instruction = self.pipeline[0];
+        let pc = self.registers.r15.0;
 
-        if self.status.cpsr.t() {
-            self.pipeline_prefetch(PipelinePrefetchMode::Thumb);
-            let thumb_table_hash = (opcode >> 6) & 0x3FF;
-            THUMB_TABLE[thumb_table_hash as usize](self, opcode as u16);
-        } else {
-            self.pipeline_prefetch(PipelinePrefetchMode::Arm);
-            if self.condition_check((opcode >> 28) as u8) {
-                let arm_table_hash = ((opcode & 0x0FF00000) >> 16) | ((opcode & 0xF0) >> 4);
-                ARM_TABLE[arm_table_hash as usize](self, opcode);
-            } else {
-                self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
-                self.registers.r15 += 4;
+        match instruction {
+            CpuInstruction::Arm(arm_instr) => {
+                self.pipeline_prefetch(CpuMode::ArmMode);
+
+                if self.condition_check((arm_instr >> 28) as u8) {
+                    let arm_table_hash =
+                        ((arm_instr & 0x0FF00000) >> 16) | ((arm_instr & 0xF0) >> 4);
+                    ARM_TABLE[arm_table_hash as usize](self, arm_instr);
+                } else {
+                    self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+                    self.registers.r15 += 4;
+                }
+            }
+            CpuInstruction::Thumb(thumb_instr) => {
+                self.pipeline_prefetch(CpuMode::ThumbMode);
+
+                let thumb_table_hash = (thumb_instr >> 6) & 0x3FF;
+                THUMB_TABLE[thumb_table_hash as usize](self, thumb_instr as u16);
             }
         }
+
+        (instruction, pc)
     }
 
     /// Retrieve register in arm mode
@@ -248,14 +406,14 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for arm mode
     pub fn pipeline_refill_arm(&mut self) {
-        self.pipeline[0] = self.pipeline_read_word(
+        self.pipeline[0] = CpuInstruction::Arm(self.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
-        );
-        self.pipeline[1] = self.pipeline_read_word(
+        ));
+        self.pipeline[1] = CpuInstruction::Arm(self.pipeline_read_word(
             self.registers.r15.0.wrapping_add(4),
             access_code::CODE | access_code::SEQUENTIAL,
-        );
+        ));
 
         self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 8;
@@ -263,32 +421,34 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for thumb mode
     pub fn pipeline_refill_thumb(&mut self) {
-        self.pipeline[0] = self.pipeline_read_halfword(
+        self.pipeline[0] = CpuInstruction::Thumb(self.pipeline_read_halfword(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
-        );
-        self.pipeline[1] = self.pipeline_read_halfword(
+        ));
+        self.pipeline[1] = CpuInstruction::Thumb(self.pipeline_read_halfword(
             self.registers.r15.0.wrapping_add(2),
             access_code::CODE | access_code::SEQUENTIAL,
-        );
+        ));
 
         self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 4;
     }
 
     /// fetch opcode and push into pipeline
-    fn pipeline_prefetch(&mut self, mode: PipelinePrefetchMode) {
+    fn pipeline_prefetch(&mut self, mode: CpuMode) {
         self.pipeline.copy_within(1.., 0);
         match mode {
-            PipelinePrefetchMode::Arm => {
+            CpuMode::ArmMode => {
                 self.registers.r15 &= !0x3;
-                self.pipeline[1] =
-                    self.pipeline_read_word(self.registers.r15.0, self.pipeline_state);
+                self.pipeline[1] = CpuInstruction::Arm(
+                    self.pipeline_read_word(self.registers.r15.0, self.pipeline_state),
+                );
             }
-            PipelinePrefetchMode::Thumb => {
+            CpuMode::ThumbMode => {
                 self.registers.r15 &= !0x1;
-                self.pipeline[1] =
-                    self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state);
+                self.pipeline[1] = CpuInstruction::Thumb(
+                    self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state),
+                );
             }
         }
     }
@@ -321,123 +481,6 @@ impl Arm7tdmi {
             }
         }
     }
-}
-
-#[derive(Default)]
-pub struct StatusRegisters {
-    pub cpsr: StatusRegister,
-    pub spsr_fiq: StatusRegister,
-    pub spsr_svc: StatusRegister,
-    pub spsr_abt: StatusRegister,
-    pub spsr_irq: StatusRegister,
-    pub spsr_und: StatusRegister,
-}
-
-#[derive(Default, Debug)]
-pub struct GeneralRegisters {
-    pub r0: u32,
-    pub r1: u32,
-    pub r2: u32,
-    pub r3: u32,
-    pub r4: u32,
-    pub r5: u32,
-    pub r6: u32,
-    pub r7: u32,
-
-    pub r8: u32,
-    pub r8_fiq: u32,
-
-    pub r9: u32,
-    pub r9_fiq: u32,
-
-    pub r10: u32,
-    pub r10_fiq: u32,
-
-    pub r11: u32,
-    pub r11_fiq: u32,
-
-    pub r12: u32,
-    pub r12_fiq: u32,
-
-    pub r13: u32, // stack pointer (sp)
-    pub r13_fiq: u32,
-    pub r13_svc: u32,
-    pub r13_abt: u32,
-    pub r13_irq: u32,
-    pub r13_und: u32,
-
-    pub r14: u32, // link registers (lr)
-    pub r14_fiq: u32,
-    pub r14_svc: u32,
-    pub r14_abt: u32,
-    pub r14_irq: u32,
-    pub r14_und: u32,
-
-    pub r15: Wrapping<u32>, // program counter (pc)
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum Mode {
-    User = 0b10000,
-    Fiq = 0b10001,
-    Irq = 0b10010,
-    Supervisor = 0b10011,
-    Abort = 0b10111,
-    Undefined = 0b11011,
-    System = 0b11111,
-}
-
-impl Mode {
-    const fn into_bits(self) -> u8 {
-        self as u8
-    }
-
-    const fn from_bits(value: u8) -> Self {
-        match value {
-            0b10000 => Mode::User,
-            0b10001 => Mode::Fiq,
-            0b10010 => Mode::Irq,
-            0b10011 => Mode::Supervisor,
-            0b10111 => Mode::Abort,
-            0b11011 => Mode::Undefined,
-            0b11111 => Mode::System,
-            _ => panic!("invalid mode"),
-        }
-    }
-}
-
-#[bitfield(u32)]
-pub struct StatusRegister {
-    // unsure if default mode starts in User or System mode.
-    // mgba seems to start in System mode and I think user and system mode are the same on the gba.
-    #[bits(5, default = Mode::System, from = Mode::from_bits)]
-    pub mode_bits: Mode,
-
-    // 0: arm mode, 1: thumb mode,
-    pub t: bool,
-
-    // 0: enable fiq, 1: disable fiq
-    pub f: bool,
-
-    // 0: enable irq, 1: disable irq
-    pub i: bool,
-
-    #[bits(20)]
-    // reserved
-    __: u32,
-
-    // overflow
-    pub v: bool,
-
-    // carry flag
-    pub c: bool,
-
-    // zero flag
-    pub z: bool,
-
-    // negative flag
-    pub n: bool,
 }
 
 #[rustfmt::skip]
@@ -532,8 +575,13 @@ mod test_utils {
         assert_eq!(cpu.registers.r13_und, final_state.R_und[0], "{input_state:#?} r13_und, test: {test_num}");
         assert_eq!(cpu.registers.r14_und, final_state.R_und[1], "{input_state:#?} r14_und, test: {test_num}");
 
-        assert_eq!(cpu.pipeline[0], final_state.pipeline[0], "{input_state:#?} pipeline_0, test: {test_num}");
-        assert_eq!(cpu.pipeline[1], final_state.pipeline[1], "{input_state:#?} pipeline_1, test: {test_num}");
+        let pipeline = cpu.pipeline.map(|instruction| match instruction {
+            Arm(instr) => instr,
+            Thumb(instr) => (instr),
+        });
+
+        assert_eq!(pipeline[0], final_state.pipeline[0], "{input_state:#?} pipeline_0, test: {test_num}");
+        assert_eq!(pipeline[1], final_state.pipeline[1], "{input_state:#?} pipeline_1, test: {test_num}");
     }
 }
 
