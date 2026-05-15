@@ -146,8 +146,8 @@ impl CpuMode {
 
     const fn from_bits(value: u8) -> Self {
         match value {
-            0 => CpuMode::ArmMode,
-            1 => CpuMode::ThumbMode,
+            0 => ArmMode,
+            1 => ThumbMode,
             _ => panic!("Invalid cpu mode!"),
         }
     }
@@ -160,6 +160,7 @@ pub enum CpuInstruction {
 }
 
 use CpuInstruction::*;
+use CpuMode::*;
 
 impl Arm7tdmi {
     pub fn new() -> Self {
@@ -176,11 +177,11 @@ impl Arm7tdmi {
 
     pub fn from_test_state(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
         let pipeline = match StatusRegister::from_bits(input_state.initial.CPSR).t() {
-            CpuMode::ArmMode => [
+            ArmMode => [
                 Arm(input_state.initial.pipeline[0]),
                 Arm(input_state.initial.pipeline[1]),
             ],
-            CpuMode::ThumbMode => [
+            ThumbMode => [
                 Thumb(input_state.initial.pipeline[0]),
                 Thumb(input_state.initial.pipeline[1]),
             ],
@@ -256,8 +257,8 @@ impl Arm7tdmi {
         let pc = self.registers.r15.0;
 
         match instruction {
-            CpuInstruction::Arm(arm_instr) => {
-                self.pipeline_prefetch(CpuMode::ArmMode);
+            Arm(arm_instr) => {
+                self.pipeline_prefetch(ArmMode);
 
                 if self.condition_check((arm_instr >> 28) as u8) {
                     let arm_table_hash =
@@ -268,8 +269,8 @@ impl Arm7tdmi {
                     self.registers.r15 += 4;
                 }
             }
-            CpuInstruction::Thumb(thumb_instr) => {
-                self.pipeline_prefetch(CpuMode::ThumbMode);
+            Thumb(thumb_instr) => {
+                self.pipeline_prefetch(ThumbMode);
 
                 let thumb_table_hash = (thumb_instr >> 6) & 0x3FF;
                 THUMB_TABLE[thumb_table_hash as usize](self, thumb_instr as u16);
@@ -406,11 +407,11 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for arm mode
     pub fn pipeline_refill_arm(&mut self) {
-        self.pipeline[0] = CpuInstruction::Arm(self.pipeline_read_word(
+        self.pipeline[0] = Arm(self.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
         ));
-        self.pipeline[1] = CpuInstruction::Arm(self.pipeline_read_word(
+        self.pipeline[1] = Arm(self.pipeline_read_word(
             self.registers.r15.0.wrapping_add(4),
             access_code::CODE | access_code::SEQUENTIAL,
         ));
@@ -421,11 +422,11 @@ impl Arm7tdmi {
 
     /// Flush and refills the pipeline for thumb mode
     pub fn pipeline_refill_thumb(&mut self) {
-        self.pipeline[0] = CpuInstruction::Thumb(self.pipeline_read_halfword(
+        self.pipeline[0] = Thumb(self.pipeline_read_halfword(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
         ));
-        self.pipeline[1] = CpuInstruction::Thumb(self.pipeline_read_halfword(
+        self.pipeline[1] = Thumb(self.pipeline_read_halfword(
             self.registers.r15.0.wrapping_add(2),
             access_code::CODE | access_code::SEQUENTIAL,
         ));
@@ -438,17 +439,15 @@ impl Arm7tdmi {
     fn pipeline_prefetch(&mut self, mode: CpuMode) {
         self.pipeline.copy_within(1.., 0);
         match mode {
-            CpuMode::ArmMode => {
+            ArmMode => {
                 self.registers.r15 &= !0x3;
-                self.pipeline[1] = CpuInstruction::Arm(
-                    self.pipeline_read_word(self.registers.r15.0, self.pipeline_state),
-                );
+                self.pipeline[1] =
+                    Arm(self.pipeline_read_word(self.registers.r15.0, self.pipeline_state));
             }
-            CpuMode::ThumbMode => {
+            ThumbMode => {
                 self.registers.r15 &= !0x1;
-                self.pipeline[1] = CpuInstruction::Thumb(
-                    self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state),
-                );
+                self.pipeline[1] =
+                    Thumb(self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state));
             }
         }
     }
@@ -577,7 +576,7 @@ mod test_utils {
 
         let pipeline = cpu.pipeline.map(|instruction| match instruction {
             Arm(instr) => instr,
-            Thumb(instr) => (instr),
+            Thumb(instr) => instr,
         });
 
         assert_eq!(pipeline[0], final_state.pipeline[0], "{input_state:#?} pipeline_0, test: {test_num}");
