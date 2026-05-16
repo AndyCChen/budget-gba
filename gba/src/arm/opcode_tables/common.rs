@@ -8,19 +8,6 @@ pub mod arithmetic {
     pub const ASR: u8 = 2;
     pub const ROR: u8 = 3;
 
-    fn update_flags_logical(cpu: &mut Arm7tdmi, result: u32, carry_from_shift: bool) {
-        cpu.status.cpsr.set_c(carry_from_shift);
-        cpu.status.cpsr.set_z(result == 0);
-        cpu.status.cpsr.set_n((result as i32).is_negative());
-    }
-
-    fn update_flags_arithmetic(cpu: &mut Arm7tdmi, result: u32, carry: bool, overflow: bool) {
-        cpu.status.cpsr.set_c(carry);
-        cpu.status.cpsr.set_v(overflow);
-        cpu.status.cpsr.set_z(result == 0);
-        cpu.status.cpsr.set_n((result as i32).is_negative());
-    }
-
     pub fn lsl(cpu: &Arm7tdmi, value_to_shift: u32, shift_amount: u32) -> (u32, bool) {
         if shift_amount == 0 {
             let carry_from_shift = cpu.status.cpsr.c();
@@ -109,7 +96,7 @@ pub mod arithmetic {
         }
     }
 
-    pub fn rrx(cpu: &Arm7tdmi, value_to_shift: u32) -> (u32, bool) {
+    fn rrx(cpu: &Arm7tdmi, value_to_shift: u32) -> (u32, bool) {
         let carry_in = u32::from(cpu.status.cpsr.c()) << 31;
         let carry_out = (value_to_shift & 1) != 0;
         let result = carry_in | (value_to_shift >> 1);
@@ -214,6 +201,19 @@ pub mod arithmetic {
         }
 
         value_to_move
+    }
+
+    fn update_flags_logical(cpu: &mut Arm7tdmi, result: u32, carry_from_shift: bool) {
+        cpu.status.cpsr.set_c(carry_from_shift);
+        cpu.status.cpsr.set_z(result == 0);
+        cpu.status.cpsr.set_n((result as i32).is_negative());
+    }
+
+    fn update_flags_arithmetic(cpu: &mut Arm7tdmi, result: u32, carry: bool, overflow: bool) {
+        cpu.status.cpsr.set_c(carry);
+        cpu.status.cpsr.set_v(overflow);
+        cpu.status.cpsr.set_z(result == 0);
+        cpu.status.cpsr.set_n((result as i32).is_negative());
     }
 }
 
