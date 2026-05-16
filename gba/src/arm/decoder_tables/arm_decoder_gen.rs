@@ -20,6 +20,10 @@ const fn generate_arm_decoder(instruction: usize) -> ArmDecoder {
         branch_and_exchange
     } else if (instruction & 0b1110_0000_0000) == 0b1010_0000_0000 {
         branch_and_link
+    } else if ((instruction & 0b1110_0000_0000) == 0b0010_0000_0000)
+        || ((instruction & 0b1110_0000_0000) == 0 && (instruction & 0b1001) != 0b1001)
+    {
+        data_processing
     } else {
         undefined_arm
     }
