@@ -148,7 +148,7 @@ pub enum Shift {
     Lsr(ShiftOperand),
     Asr(ShiftOperand),
     Ror(ShiftOperand),
-    Rxx,
+    Rrx,
 }
 
 #[derive(Clone, Copy)]
@@ -196,7 +196,7 @@ pub fn data_processing(opcode: u32) -> ArmInstructionInfo {
             LSL => ArmDataOp2::Rm(rm, if !register_specified_shift && is_zero_shift { Shift::None } else {Shift::Lsl(shift_operand) }),
             LSR => ArmDataOp2::Rm(rm, Shift::Lsr(shift_operand) ),
             ASR => ArmDataOp2::Rm(rm, Shift::Asr(shift_operand) ),
-            ROR => ArmDataOp2::Rm(rm, if !register_specified_shift && is_zero_shift { Shift::Rxx } else { Shift::Ror(shift_operand) }),
+            ROR => ArmDataOp2::Rm(rm, if !register_specified_shift && is_zero_shift { Shift::Rrx } else { Shift::Ror(shift_operand) }),
             _ => panic!("Invalid shift type {shift_type}"),
         };
         operand2

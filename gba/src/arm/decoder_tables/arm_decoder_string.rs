@@ -48,24 +48,24 @@ fn format_data_processing_mode_0(
 
     #[rustfmt::skip]
     let arm_str = match op2 {
-        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str} {s} R{rd},#{expr}"),
+        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}{s} R{rd},#{expr}"),
         ArmDataOp2::Rm(rm, shift) => {
             match shift {
-                Shift::None =>                                format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}"),
+                Shift::None =>                                format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}"),
 
-                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Lsl #{expr}"),
-                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Lsl R{rs}"),
+                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Lsl #{expr}"),
+                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Lsl R{rs}"),
 
-                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Lsr #{expr}"),
-                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Lsr R{rs}"),
+                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Lsr #{expr}"),
+                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Lsr R{rs}"),
 
-                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Asr #{expr}"),
-                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Asr R{rs}"),
+                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Asr #{expr}"),
+                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Asr R{rs}"),
 
-                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Ror #{expr}"),
-                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, Ror R{rs}"),
+                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Ror #{expr}"),
+                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, Ror R{rs}"),
 
-                Shift::Rxx =>                                 format!("{mnemonic}{cond_str} {s} R{rd}, R{rm}, RRX"),
+                Shift::Rrx =>                                 format!("{mnemonic}{cond_str}{s} R{rd}, R{rm}, RRX"),
             }
         },
     };
@@ -98,7 +98,7 @@ fn format_data_processing_mode_1(
                 Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}S R{rn}, R{rm}, Ror #{expr}"),
                 Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}S R{rn}, R{rm}, Ror R{rs}"),
 
-                Shift::Rxx =>                                 format!("{mnemonic}{cond_str}S R{rn}, R{rm}, RRX"),
+                Shift::Rrx =>                                 format!("{mnemonic}{cond_str}S R{rn}, R{rm}, RRX"),
             }
         },
     };
@@ -118,24 +118,24 @@ fn format_data_processing_mode_2(
 
     #[rustfmt::skip]
     let arm_str = match op2 {
-        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, #{expr}"),
+        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, #{expr}"),
         ArmDataOp2::Rm(rm, shift) => {
             match shift {
-                Shift::None =>                                format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, R{rm}"),
+                Shift::None =>                                format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, R{rm}"),
 
-                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, Lsl #{expr}"),
-                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, R{rm}, Lsl R{rs}"),
+                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, Lsl #{expr}"),
+                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, R{rm}, Lsl R{rs}"),
 
-                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, Lsr #{expr}"),
-                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, R{rm}, Lsr R{rs}"),
+                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, Lsr #{expr}"),
+                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, R{rm}, Lsr R{rs}"),
 
-                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, Asr #{expr}"),
-                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, R{rm}, Asr R{rs}"),
+                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, Asr #{expr}"),
+                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, R{rm}, Asr R{rs}"),
 
-                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, Ror #{expr}"),
-                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, R{rm}, Ror R{rs}"),
+                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, Ror #{expr}"),
+                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, R{rm}, Ror R{rs}"),
 
-                Shift::Rxx =>                                 format!("{mnemonic}{cond_str} {s} R{rd}, R{rn}, RRX"),
+                Shift::Rrx =>                                 format!("{mnemonic}{cond_str}{s} R{rd}, R{rn}, RRX"),
             }
         },
     };
