@@ -102,6 +102,52 @@ pub enum ArmInstruction {
         rd: u8,
         op2: ArmDataOp2,
     },
+
+    Mrs {
+        spsr_dest: bool,
+        rd: u8,
+    },
+    Msr {
+        spsr_dest: bool,
+        rm: u8,
+    },
+    MsrFlagOnly {
+        source_operand: ShiftOperand,
+        spsr_dest: bool,
+    },
+
+    // multiply
+    Mul {
+        set_condition: bool,
+        rd: u8,
+        rm: u8,
+        rs: u8,
+    },
+    Mla {
+        set_condition: bool,
+        rd: u8,
+        rm: u8,
+        rs: u8,
+        rn: u8,
+    },
+
+    // multiply long
+    Mull {
+        set_condition: bool,
+        is_signed: bool,
+        rdlo: u8,
+        rdhi: u8,
+        rm: u8,
+        rs: u8,
+    },
+    Mlal {
+        set_condition: bool,
+        is_signed: bool,
+        rdlo: u8,
+        rdhi: u8,
+        rm: u8,
+        rs: u8,
+    },
 }
 
 pub fn branch_and_exchange(opcode: u32) -> ArmInstructionInfo {
@@ -227,6 +273,96 @@ pub fn data_processing(opcode: u32) -> ArmInstructionInfo {
         instruction,
         condition: (opcode >> 28) as u8,
     }
+}
+
+pub fn read_status_mrs(opcode: u32) -> ArmInstructionInfo {
+    let spsr_dest = (opcode >> 22) & 1 == 1;
+    let rd = (opcode >> 12) as u8;
+
+    let instruction = ArmInstruction::Mrs { spsr_dest, rd };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+pub fn write_status_msr(opcode: u32) -> ArmInstructionInfo {
+    let is_immediate = (opcode >> 25) & 1 == 1;
+    let spsr_dest = (opcode >> 22) & 1 == 1;
+    let set_flag_only = (opcode >> 16) & 0xF == 0b1000;
+    let rm = (opcode & 0xF) as u8;
+
+    let instruction = if set_flag_only {
+        let source_operand = if is_immediate {
+            let rotate = ((opcode >> 8) & 0xF) * 2;
+            let value_to_rotate = opcode & 0xFF;
+            ShiftOperand::Expression(value_to_rotate.rotate_right(rotate))
+        } else {
+            ShiftOperand::Register(rm)
+        };
+
+        ArmInstruction::MsrFlagOnly {
+            source_operand,
+            spsr_dest,
+        }
+    } else {
+        ArmInstruction::Msr { spsr_dest, rm }
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+pub fn multiply(opcode: u32) -> ArmInstructionInfo {
+    let is_accumulate = (opcode >> 21) == 1;
+    let set_condition = (opcode >> 20) == 1;
+    let rd = ((opcode >> 16) & 0xF) as u8;
+    let rn = ((opcode >> 12) & 0xF) as u8;
+    let rs = ((opcode >> 8) & 0xF) as u8;
+    let rm = (opcode & 0xF) as u8;
+
+    #[rustfmt::skip]
+    let instruction = if is_accumulate {
+        ArmInstruction::Mla { set_condition, rd, rm, rs, rn }
+    } else {
+        ArmInstruction::Mul { set_condition, rd, rm, rs }
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+pub fn multiply_long(opcode: u32) -> ArmInstructionInfo {
+    let is_signed = (opcode >> 22) == 1;
+    let is_accumulate = (opcode >> 21) == 1;
+    let set_condition = (opcode >> 20) == 1;
+
+    let rdhi = ((opcode >> 16) & 0xF) as u8;
+    let rdlo = ((opcode >> 12) & 0xF) as u8;
+    let rs = ((opcode >> 8) & 0xF) as u8;
+    let rm = (opcode & 0xF) as u8;
+
+    #[rustfmt::skip]
+    let instruction = if is_accumulate {
+        ArmInstruction::Mlal { set_condition, is_signed, rdlo, rdhi, rm, rs }
+    } else {
+        ArmInstruction::Mull { set_condition, is_signed, rdlo, rdhi, rm, rs }
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
+    let is_immediate = (opcode >> 25) & 1 == 1;
+    todo!()
 }
 
 pub fn undefined_arm(_opcode: u32) -> ArmInstructionInfo {
