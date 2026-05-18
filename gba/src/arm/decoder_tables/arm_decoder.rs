@@ -3,151 +3,42 @@ pub struct ArmInstructionInfo {
     pub condition: u8,
 }
 
+#[rustfmt::skip]
 pub enum ArmInstruction {
     // branch instructions
-    Bx {
-        rn: u8,
-    },
-    B {
-        offset: u32,
-    },
-    Bl {
-        offset: u32,
-    },
+    Bx { rn: u8 },
+    B { offset: u32 },
+    Bl { offset: u32 },
 
     // data processing instructions
-    And {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Eor {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Sub {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Rsb {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Add {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Adc {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Sbc {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Rsc {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Tst {
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Teq {
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Cmp {
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Cmn {
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Orr {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Mov {
-        set_condition: bool,
-        rd: u8,
-        op2: ArmDataOp2,
-    },
-    Bic {
-        set_condition: bool,
-        rd: u8,
-        rn: u8,
-        op2: ArmDataOp2,
-    },
-    Mvn {
-        set_condition: bool,
-        rd: u8,
-        op2: ArmDataOp2,
-    },
+    And { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Eor { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Sub { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Rsb { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Add { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Adc { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Sbc { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Rsc { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Tst { rn: u8, op2: ArmDataOp2 },
+    Teq { rn: u8, op2: ArmDataOp2 },
+    Cmp { rn: u8, op2: ArmDataOp2 },
+    Cmn { rn: u8, op2: ArmDataOp2 },
+    Orr { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Mov { set_condition: bool, rd: u8, op2: ArmDataOp2 },
+    Bic { set_condition: bool, rd: u8, rn: u8, op2: ArmDataOp2 },
+    Mvn { set_condition: bool, rd: u8, op2: ArmDataOp2 },
 
-    Mrs {
-        spsr_dest: bool,
-        rd: u8,
-    },
-    Msr {
-        spsr_dest: bool,
-        rm: u8,
-    },
-    MsrFlagOnly {
-        source_operand: ShiftOperand,
-        spsr_dest: bool,
-    },
+    Mrs { spsr_dest: bool, rd: u8 },
+    Msr { spsr_dest: bool, rm: u8 },
+    MsrFlagOnly { source_operand: ShiftOperand, spsr_dest: bool },
 
     // multiply
-    Mul {
-        set_condition: bool,
-        rd: u8,
-        rm: u8,
-        rs: u8,
-    },
-    Mla {
-        set_condition: bool,
-        rd: u8,
-        rm: u8,
-        rs: u8,
-        rn: u8,
-    },
+    Mul { set_condition: bool, rd: u8, rm: u8, rs: u8 },
+    Mla { set_condition: bool, rd: u8, rm: u8, rs: u8, rn: u8 },
 
     // multiply long
-    Mull {
-        set_condition: bool,
-        is_signed: bool,
-        rdlo: u8,
-        rdhi: u8,
-        rm: u8,
-        rs: u8,
-    },
-    Mlal {
-        set_condition: bool,
-        is_signed: bool,
-        rdlo: u8,
-        rdhi: u8,
-        rm: u8,
-        rs: u8,
-    },
+    Mull { set_condition: bool, is_signed: bool, rdlo: u8, rdhi: u8, rm: u8, rs: u8 },
+    Mlal { set_condition: bool, is_signed: bool, rdlo: u8, rdhi: u8, rm: u8, rs: u8 },
 }
 
 pub fn branch_and_exchange(opcode: u32) -> ArmInstructionInfo {
