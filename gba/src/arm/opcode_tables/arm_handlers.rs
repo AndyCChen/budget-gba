@@ -415,6 +415,7 @@ pub fn single_data_transfer<
         }
 
         // handle extra i cycle from load
+        cpu.bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
