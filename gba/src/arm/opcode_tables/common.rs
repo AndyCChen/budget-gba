@@ -242,3 +242,8 @@ pub mod reg_constant {
     pub const LINK_REGISTER: u32 = 14;
     pub const PROGRAM_COUNTER: u32 = 15;
 }
+
+/// Retrieve raw binary representation of a negative number as a unsigned integer
+pub fn to_negative_u32(input: u32) -> u32 {
+    (!input).wrapping_add(1)
+}

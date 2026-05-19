@@ -1,6 +1,7 @@
 use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::arm::opcode_tables::common::reg_constant::*;
+use crate::arm::opcode_tables::to_negative_u32;
 use std::num::Wrapping;
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
@@ -390,7 +391,7 @@ pub fn single_data_transfer<
     };
 
     if !INC {
-        offset = to_negative(offset); // convert to negative binary representation if subtracting with 2's complement
+        offset = to_negative_u32(offset); // convert to negative binary representation if subtracting with 2's complement
     }
 
     let address = if PRE_INDEX {
@@ -462,7 +463,7 @@ pub fn halfword_and_signed_data_transfer<
         };
 
         if !INC {
-            temp = to_negative(temp);
+            temp = to_negative_u32(temp);
         }
 
         temp
@@ -692,19 +693,4 @@ pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u32) {
 
 pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
     todo!("handle undefined opcode: {opcode}");
-}
-
-trait Negative<T> {
-    fn negative(input: T) -> Self;
-}
-
-impl Negative<u32> for u32 {
-    fn negative(input: u32) -> Self {
-        (!input).wrapping_add(1)
-    }
-}
-
-/// Retrieve raw binary representation of a negative number as a unsigned integer
-fn to_negative<T: Negative<T>>(input: T) -> T {
-    Negative::<T>::negative(input)
 }

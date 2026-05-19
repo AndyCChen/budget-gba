@@ -39,6 +39,10 @@ pub enum ArmInstruction {
     // multiply long
     Mull { set_condition: bool, is_signed: bool, rdlo: u8, rdhi: u8, rm: u8, rs: u8 },
     Mlal { set_condition: bool, is_signed: bool, rdlo: u8, rdhi: u8, rm: u8, rs: u8 },
+
+    // ldr/str
+    Ldr { is_byte: bool, rd: u8, address: LdrStrAddress },
+    Str { is_byte: bool, rd: u8, address: LdrStrAddress },
 }
 
 pub fn branch_and_exchange(opcode: u32) -> ArmInstructionInfo {
@@ -75,7 +79,7 @@ pub fn branch_and_link(opcode: u32) -> ArmInstructionInfo {
 #[derive(Clone, Copy)]
 pub enum ArmDataOp2 {
     Expression(u32),
-    Rm(u8, Shift),
+    Rm { rm: u8, shift: Shift },
 }
 
 #[derive(Clone, Copy)]
@@ -117,26 +121,27 @@ pub fn data_processing(opcode: u32) -> ArmInstructionInfo {
         let shift_operand = if register_specified_shift {
             ShiftOperand::Register(((opcode >> 8) & 0xF) as u8)
         } else {
-            let mut expr = (opcode >> 7) & 0x1F;
-            is_zero_shift = expr == 0;
+            let mut shift_amount = (opcode >> 7) & 0x1F;
+            is_zero_shift = shift_amount == 0;
 
             // LSR #0 and ASR #0 encodes #32 bit shifts
             if is_zero_shift && matches!(shift_type as u8, LSR | ASR) {
-                expr = 32;
+                shift_amount = 32;
             }
 
-            ShiftOperand::Expression(expr)
+            ShiftOperand::Expression(shift_amount)
         };
 
         #[rustfmt::skip]
-        let operand2 = match shift_type as u8 {
-            LSL => ArmDataOp2::Rm(rm, if !register_specified_shift && is_zero_shift { Shift::None } else {Shift::Lsl(shift_operand) }),
-            LSR => ArmDataOp2::Rm(rm, Shift::Lsr(shift_operand) ),
-            ASR => ArmDataOp2::Rm(rm, Shift::Asr(shift_operand) ),
-            ROR => ArmDataOp2::Rm(rm, if !register_specified_shift && is_zero_shift { Shift::Rrx } else { Shift::Ror(shift_operand) }),
+        let shift = match shift_type as u8 {
+            LSL => if !register_specified_shift && is_zero_shift { Shift::None } else { Shift::Lsl(shift_operand) },
+            LSR => Shift::Lsr(shift_operand),
+            ASR => Shift::Asr(shift_operand),
+            ROR => if !register_specified_shift && is_zero_shift { Shift::Rrx } else { Shift::Ror(shift_operand) },
             _ => panic!("Invalid shift type {shift_type}"),
         };
-        operand2
+
+        ArmDataOp2::Rm { rm, shift }
     };
 
     #[rustfmt::skip]
@@ -251,9 +256,104 @@ pub fn multiply_long(opcode: u32) -> ArmInstructionInfo {
     }
 }
 
+#[rustfmt::skip]
+#[derive(Clone, Copy)]
+pub enum LdrStrAddress {
+    PcRelative(u32),
+
+    PreIndexZero  { rn: u8 },
+    PostIndexZero { rn: u8 },
+
+    PreIndexExpression  { rn: u8, is_increment: bool, expr: u32, is_write_back: bool },
+    PostIndexExpression { rn: u8, is_increment: bool, expr: u32 },
+
+    PreIndexShifted     { rn: u8, is_increment: bool, rm: u8, shift: LdrStrAddressShift, is_write_back: bool },
+    PostIndexShifted    { rn: u8, is_increment: bool, rm: u8, shift: LdrStrAddressShift },
+}
+
+#[derive(Clone, Copy)]
+pub enum LdrStrAddressShift {
+    None,
+    Lsl(u32),
+    Lsr(u32),
+    Asr(u32),
+    Ror(u32),
+    Rrx,
+}
+
 pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
-    let is_immediate = (opcode >> 25) & 1 == 1;
-    todo!()
+    use crate::arm::opcode_tables::to_negative_u32;
+    use crate::arm::opcode_tables::{ASR, LSL, LSR, ROR};
+
+    let is_immediate = (opcode >> 25) & 1 == 0;
+    let is_pre_index = (opcode >> 24) & 1 == 1;
+    let is_increment = (opcode >> 23) & 1 == 1;
+    let is_byte = (opcode >> 22) & 1 == 1;
+    let is_write_back = (opcode >> 21) & 1 == 1;
+    let is_load = (opcode >> 20) & 1 == 1;
+    let rn = ((opcode >> 16) & 0xF) as u8;
+    let rd = ((opcode >> 12) & 0xF) as u8;
+
+    let address = if is_immediate && rn == 0xF {
+        let mut offset = opcode & 0xFFF;
+        if !is_increment {
+            offset = to_negative_u32(offset)
+        }
+
+        LdrStrAddress::PcRelative(offset)
+    } else if is_immediate {
+        let expr = opcode & 0xFFF;
+        let is_zero = expr == 0;
+
+        #[rustfmt::skip]
+        let adr = match (is_zero, is_pre_index) {
+            (true, true) =>   LdrStrAddress::PreIndexZero        { rn },
+            (true, false) =>  LdrStrAddress::PostIndexZero       { rn },
+            (false, true) =>  LdrStrAddress::PreIndexExpression  { rn, is_increment, expr, is_write_back },
+            (false, false) => LdrStrAddress::PostIndexExpression { rn, is_increment, expr },
+        };
+
+        adr
+    } else {
+        let mut shift_amount = (opcode >> 7) & 0x1F;
+        let shift_type = (opcode >> 5) & 0b11;
+        let rm = (opcode & 0xF) as u8;
+
+        let is_zero_shift = shift_amount == 0;
+
+        // LSR #0 and ASR #0 encodes #32 bit shifts
+        if is_zero_shift && matches!(shift_type as u8, LSR | ASR) {
+            shift_amount = 32;
+        }
+
+        #[rustfmt::skip]
+        let shift = match shift_type as u8 {
+            LSL => if is_zero_shift { LdrStrAddressShift::None } else { LdrStrAddressShift::Lsl(shift_amount) },
+            LSR => LdrStrAddressShift::Lsr(shift_amount),
+            ASR => LdrStrAddressShift::Asr(shift_amount),
+            ROR => if is_zero_shift { LdrStrAddressShift::Rrx } else { LdrStrAddressShift::Ror(shift_amount) },
+            _ => panic!("Invalid shift type {shift_type}"),
+        };
+
+        #[rustfmt::skip]
+        let adr = match is_pre_index {
+            true => LdrStrAddress::PreIndexShifted   { rn, is_increment, rm, shift, is_write_back },
+            false => LdrStrAddress::PostIndexShifted { rn, is_increment, rm, shift },
+        };
+
+        adr
+    };
+
+    #[rustfmt::skip]
+    let instruction = match is_load {
+        true => ArmInstruction::Ldr { is_byte, rd, address },
+        false => ArmInstruction::Str { is_byte, rd, address },
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
 }
 
 pub fn undefined_arm(_opcode: u32) -> ArmInstructionInfo {

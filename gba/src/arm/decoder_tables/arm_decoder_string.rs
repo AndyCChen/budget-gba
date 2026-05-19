@@ -2,6 +2,7 @@ use crate::arm::constants::arm_condition_code::*;
 use crate::arm::decoder_tables::arm_decoder::{
     ArmDataOp2, ArmInstruction::*, ArmInstructionInfo, Shift, ShiftOperand,
 };
+use super::arm_decoder::{LdrStrAddress, LdrStrAddressShift}; 
 
 impl ArmInstructionInfo {
     pub fn to_asm_string(&self, pc: u32) -> String {
@@ -49,6 +50,11 @@ impl ArmInstructionInfo {
             // multiply long
             Mull { set_condition, is_signed, rdlo, rdhi, rm, rs } => format!("{}mull{cond_str}{} r{rdlo}, r{rdhi}, r{rm}, r{rs}", if set_condition { "s" } else { "" }, if is_signed { "s" } else { "" }),
             Mlal { set_condition, is_signed, rdlo, rdhi, rm, rs } => format!("{}mlal{cond_str}{} r{rdlo}, r{rdhi}, r{rm}, r{rs}", if set_condition { "s" } else { "" }, if is_signed { "s" } else { "" }),
+        
+            // load / store
+            Ldr { is_byte, rd, address } => format_single_data_transfer("ldr", cond_str, pc, is_byte, rd, address),
+            Str { is_byte, rd, address } => format_single_data_transfer("str", cond_str, pc, is_byte, rd, address),
+         
         };
         arm_str
     }
@@ -67,7 +73,7 @@ fn format_data_processing_mode_0(
     #[rustfmt::skip]
     let arm_str = match op2 {
         ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}{s} r{rd},#{expr}"),
-        ArmDataOp2::Rm(rm, shift) => {
+        ArmDataOp2::Rm{ rm, shift } => {
             match shift {
                 Shift::None =>                                format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}"),
 
@@ -100,7 +106,7 @@ fn format_data_processing_mode_1(
     #[rustfmt::skip]
     let arm_str = match op2 {
         ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}s r{rn}, #{expr}"),
-        ArmDataOp2::Rm(rm, shift) => {
+        ArmDataOp2::Rm{ rm, shift } => {
             match shift {
                 Shift::None =>                                format!("{mnemonic}{cond_str}s r{rn}, r{rm}"),
 
@@ -137,7 +143,7 @@ fn format_data_processing_mode_2(
     #[rustfmt::skip]
     let arm_str = match op2 {
         ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, #{expr}"),
-        ArmDataOp2::Rm(rm, shift) => {
+        ArmDataOp2::Rm{ rm, shift } => {
             match shift {
                 Shift::None =>                                format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, r{rm}"),
 
@@ -158,6 +164,50 @@ fn format_data_processing_mode_2(
         },
     };
     arm_str
+}
+
+#[inline]
+fn format_single_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, is_byte: bool, rd: u8, address: LdrStrAddress) -> String {
+    use LdrStrAddress::*;
+    use LdrStrAddressShift::*;
+
+    let b = if is_byte {"b"} else {""};
+
+    match address {
+        PcRelative(expr) =>                           format!("{mnemonic}{cond_str}{b} r{rd}, 0x{:08X}", pc.wrapping_add(expr)),
+        PreIndexZero { rn } | PostIndexZero { rn } => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}]"),
+        
+        PreIndexExpression { rn, is_increment, expr, is_write_back } => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}#{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+        PostIndexExpression { rn, is_increment, expr } =>               format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}#{expr}", if is_increment {"+"} else {"-"}),
+
+        PreIndexShifted { rn, is_increment, rm, shift, is_write_back } => {
+            match shift {
+                None =>      format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+
+                Lsl(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, lsl #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Lsr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, lsr #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Asr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, asr #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Ror(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, ror #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+
+                Rrx =>       format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, rrx]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+            }
+        },
+        
+        PostIndexShifted { rn, is_increment, rm, shift } => {
+            match shift {
+                None =>      format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}]", if is_increment {"+"} else {"-"}),
+
+                Lsl(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, lsl #{expr}", if is_increment {"+"} else {"-"}),
+                Lsr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, lsr #{expr}", if is_increment {"+"} else {"-"}),
+                Asr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, asr #{expr}", if is_increment {"+"} else {"-"}),
+                Ror(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, ror #{expr}", if is_increment {"+"} else {"-"}),
+
+                Rrx =>       format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, rrx", if is_increment {"+"} else {"-"}),
+            }
+        },
+    };
+
+    todo!()
 }
 
 fn get_condition_str(condition_code: u8) -> &'static str {

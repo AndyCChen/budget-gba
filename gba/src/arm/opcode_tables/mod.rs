@@ -11,6 +11,7 @@ pub use arm_table_gen::ARM_TABLE_SIZE;
 pub use common::{
     arithmetic::{ASR, LSL, LSR, ROR},
     arm_data_op,
+    to_negative_u32
 };
 pub use thumb_table_gen::THUMB_TABLE_SIZE;
 
