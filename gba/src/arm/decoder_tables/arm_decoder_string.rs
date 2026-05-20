@@ -2,7 +2,7 @@ use crate::arm::constants::arm_condition_code::*;
 use crate::arm::decoder_tables::arm_decoder::{
     ArmDataOp2, ArmInstruction::*, ArmInstructionInfo, Shift, ShiftOperand,
 };
-use super::arm_decoder::{LdrStrAddress, LdrStrAddressShift, LdrhStrhAddress}; 
+use super::arm_decoder::{LdrStrAddress, LdrStrAddressShift, LdrhStrhAddress, BlockTransferAddressing}; 
 
 impl ArmInstructionInfo {
     pub fn to_asm_string(&self, pc: u32) -> String {
@@ -54,12 +54,16 @@ impl ArmInstructionInfo {
             // load / store
             Ldr { is_byte, rd, address } => format_single_data_transfer("ldr", cond_str, pc, is_byte, rd, address),
             Str { is_byte, rd, address } => format_single_data_transfer("str", cond_str, pc, is_byte, rd, address),
-         
+  
             // load byte/halfword & store halfword
             Ldrh { rd, address } =>  format_halfword_and_signed_data_transfer("ldr", cond_str, pc, "h", rd, address),
             Strh { rd, address } =>  format_halfword_and_signed_data_transfer("str", cond_str, pc, "h", rd, address),
             Ldrsb { rd, address } => format_halfword_and_signed_data_transfer("ldr", cond_str, pc, "sb", rd, address),
             Ldrsh { rd, address } => format_halfword_and_signed_data_transfer("ldr", cond_str, pc, "sh", rd, address),
+
+            // block transfers
+            Ldm { addressing_mode, rn, is_write_back, rlist, is_s_bit } => format_block_transfer("ldm", cond_str, addressing_mode, rn, is_write_back, rlist, is_s_bit),
+            Stm { addressing_mode, rn, is_write_back, rlist, is_s_bit } => format_block_transfer("stm", cond_str, addressing_mode, rn, is_write_back, rlist, is_s_bit),
         };
         arm_str
     }
@@ -168,7 +172,14 @@ fn format_data_processing_mode_2(
     arm_str
 }
 
-fn format_single_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, is_byte: bool, rd: u8, address: LdrStrAddress) -> String {
+fn format_single_data_transfer(
+    mnemonic: &str, 
+    cond_str: &str, 
+    pc: u32, 
+    is_byte: bool, 
+    rd: u8, 
+    address: LdrStrAddress
+) -> String {
     use LdrStrAddress::*;
     use LdrStrAddressShift::*;
 
@@ -212,7 +223,14 @@ fn format_single_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, is_byte:
    arm_str
 }
 
-fn format_halfword_and_signed_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, mode: &str, rd: u8, address: LdrhStrhAddress) -> String  {
+fn format_halfword_and_signed_data_transfer(
+    mnemonic: &str, 
+    cond_str: &str, 
+    pc: u32, 
+    mode: &str, 
+    rd: u8, 
+    address: LdrhStrhAddress
+) -> String  {
     use LdrhStrhAddress::*;
 
      match address {
@@ -224,6 +242,36 @@ fn format_halfword_and_signed_data_transfer(mnemonic: &str, cond_str: &str, pc: 
 
         PreIndexRegister { rn, is_increment, rm, is_write_back } =>     format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
         PostIndexRegister { rn, is_increment, rm } =>                   format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}], {}r{rm}", if is_increment {"+"} else {"-"}),
+    }
+}
+
+fn format_block_transfer(
+    mnemonic: &str, 
+    cond_str: &str, 
+    addressing_mode: BlockTransferAddressing,
+    rn: u8, 
+    is_write_back: bool, 
+    rlist: u16, 
+    is_s_bit: bool 
+) -> String {
+    use BlockTransferAddressing::*;
+
+    let write_back = if is_write_back {"!"} else {""};
+    let s_bit = if is_s_bit {"^"} else {""};
+
+    let rlist_string: String = (0..16).filter(|b| (rlist >> b) & 1 == 1).map(|reg| format!("r{reg},")).collect();
+    let rlist_string = rlist_string.as_str().trim_end_matches(",");
+
+    match addressing_mode {
+        IncrementBefore => format!("{mnemonic}{cond_str}ib r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
+        IncrementAfter => format!("{mnemonic}{cond_str}ia r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
+        DecrementBefore => format!("{mnemonic}{cond_str}db r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
+        DecrementAfter => format!("{mnemonic}{cond_str}da r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
+
+        EmptyStackDescend => format!("{mnemonic}{cond_str}ed sp{write_back}, {{{rlist_string}}}{s_bit}"),
+        FullStackDescend => format!("{mnemonic}{cond_str}fd sp{write_back}, {{{rlist_string}}}{s_bit}"),
+        EmptyStackAscend => format!("{mnemonic}{cond_str}ea sp{write_back}, {{{rlist_string}}}{s_bit}"),
+        FullStackAscend => format!("{mnemonic}{cond_str}fa sp{write_back}, {{{rlist_string}}}{s_bit}"),
     }
 }
 

@@ -38,6 +38,8 @@ const fn generate_arm_decoder(instruction: usize) -> ArmDecoder {
         single_data_transfer
     } else if (instruction & 0b1110_0000_0000) == 0b1010_0000_0000 {
         branch_and_link
+    } else if (instruction & 0b1110_0000_0000) == 0b1000_0000_0000 {
+        block_data_transfer
     } else {
         undefined_arm
     }

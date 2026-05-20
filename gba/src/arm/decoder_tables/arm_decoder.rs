@@ -1,3 +1,5 @@
+use crate::arm::opcode_tables::reg_constant::{PROGRAM_COUNTER, STACK_POINTER};
+
 pub struct ArmInstructionInfo {
     pub instruction: ArmInstruction,
     pub condition: u8,
@@ -49,6 +51,10 @@ pub enum ArmInstruction {
     Strh { rd: u8, address: LdrhStrhAddress },
     Ldrsb { rd: u8, address: LdrhStrhAddress },
     Ldrsh { rd: u8, address: LdrhStrhAddress },
+
+    // block transfers
+    Ldm { addressing_mode: BlockTransferAddressing, rn: u8, is_write_back: bool, rlist: u16, is_s_bit: bool },
+    Stm { addressing_mode: BlockTransferAddressing, rn: u8, is_write_back: bool, rlist: u16, is_s_bit: bool }
 }
 
 pub fn branch_and_exchange(opcode: u32) -> ArmInstructionInfo {
@@ -300,7 +306,7 @@ pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
     let rn = ((opcode >> 16) & 0xF) as u8;
     let rd = ((opcode >> 12) & 0xF) as u8;
 
-    let address = if is_immediate && rn == 0xF {
+    let address = if is_immediate && u32::from(rn) == PROGRAM_COUNTER {
         let mut offset = opcode & 0xFFF;
         if !is_increment {
             offset = to_negative_u32(offset)
@@ -391,7 +397,7 @@ pub fn halfword_and_signed_data_transfer(opcode: u32) -> ArmInstructionInfo {
     let is_signed = (opcode >> 6) & 1 == 1;
     let is_halfword = (opcode >> 5) & 1 == 1;
 
-    let address = if is_immediate && rn == 0xF {
+    let address = if is_immediate && u32::from(rn) == PROGRAM_COUNTER {
         let mut offset = ((opcode >> 4) & 0xF) | (opcode & 0xF);
         if !is_increment {
             offset = to_negative_u32(offset)
@@ -436,6 +442,57 @@ pub fn halfword_and_signed_data_transfer(opcode: u32) -> ArmInstructionInfo {
         (false, true, false) => panic!("Store signed byte not allowed!"),
         (false, false, true) => ArmInstruction::Strh { rd, address },
         (false, false, false) => panic!("Reserved for swp!"),
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum BlockTransferAddressing {
+    IncrementBefore,
+    IncrementAfter,
+    DecrementBefore,
+    DecrementAfter,
+
+    EmptyStackDescend,
+    FullStackDescend,
+    EmptyStackAscend,
+    FullStackAscend,
+}
+
+pub fn block_data_transfer(opcode: u32) -> ArmInstructionInfo {
+    use BlockTransferAddressing::*;
+
+    let is_pre_index = (opcode >> 24) & 1 == 1;
+    let is_increment = (opcode >> 23) & 1 == 1;
+    let is_s_bit = (opcode >> 22) & 1 == 1; // load psr or force user mode when set
+    let is_write_back = (opcode >> 21) & 1 == 1;
+    let is_load = (opcode >> 20) & 1 == 1;
+    let rn = ((opcode >> 16) & 0xF) as u8;
+    let rlist = (opcode & 0xFF) as u16;
+
+    let is_stack = u32::from(rn) == STACK_POINTER;
+
+    #[rustfmt::skip]
+    let addressing_mode = match (is_load, is_pre_index, is_increment) {
+        (true, true, true) => if is_stack {EmptyStackDescend} else {IncrementBefore},
+        (true, true, false) => if is_stack {EmptyStackAscend} else {DecrementBefore},
+        (true, false, true) => if is_stack {FullStackDescend} else {IncrementAfter},
+        (true, false, false) => if is_stack {FullStackAscend} else {DecrementAfter},
+
+        (false, true, true) => if is_stack {FullStackAscend} else {IncrementBefore},
+        (false, true, false) => if is_stack {FullStackDescend} else {DecrementBefore},
+        (false, false, true) => if is_stack {EmptyStackAscend} else {IncrementAfter},
+        (false, false, false) => if is_stack {EmptyStackDescend} else {DecrementAfter},
+    };
+
+    #[rustfmt::skip]
+    let instruction = match is_load {
+        true => ArmInstruction::Ldm { addressing_mode, rn, is_write_back, rlist, is_s_bit },
+        false => ArmInstruction::Stm { addressing_mode, rn, is_write_back, rlist, is_s_bit },
     };
 
     ArmInstructionInfo {

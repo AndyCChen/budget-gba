@@ -14,6 +14,7 @@ pub use common::{
     to_negative_u32
 };
 pub use thumb_table_gen::THUMB_TABLE_SIZE;
+pub use common::reg_constant;
 
 pub static ARM_TABLE: [ArmHandler; ARM_TABLE_SIZE] = generate_arm_table();
 pub static THUMB_TABLE: [ThumbHandler; THUMB_TABLE_SIZE] = generate_thumb_table();
