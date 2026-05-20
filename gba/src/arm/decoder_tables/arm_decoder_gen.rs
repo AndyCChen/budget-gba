@@ -18,8 +18,8 @@ pub const fn generate_arm_decoder_table() -> [ArmDecoder; ARM_TABLE_SIZE] {
 const fn generate_arm_decoder(instruction: usize) -> ArmDecoder {
     if instruction == 0b0001_0010_0001 {
         branch_and_exchange
-    } else if (instruction & 0b1110_0000_0000) == 0b1010_0000_0000 {
-        branch_and_link
+    } else if (instruction & 0b1110_0000_1001) == 0b0000_0000_1001 && (instruction & 0b0110) != 0 {
+        halfword_and_signed_data_transfer
     } else if (instruction & 0b1111_1011_0000) == 0b0001_0000_0000 {
         read_status_mrs
     } else if (instruction & 0b1101_1011_0000) == 0b0001_0010_0000 {
@@ -36,6 +36,8 @@ const fn generate_arm_decoder(instruction: usize) -> ArmDecoder {
         undefined_arm
     } else if (instruction & 0b1100_0000_0000) == 0b0100_0000_0000 {
         single_data_transfer
+    } else if (instruction & 0b1110_0000_0000) == 0b1010_0000_0000 {
+        branch_and_link
     } else {
         undefined_arm
     }

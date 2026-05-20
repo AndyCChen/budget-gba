@@ -43,6 +43,12 @@ pub enum ArmInstruction {
     // ldr/str
     Ldr { is_byte: bool, rd: u8, address: LdrStrAddress },
     Str { is_byte: bool, rd: u8, address: LdrStrAddress },
+
+    // ldr/str for halfword and byte
+    Ldrh { rd: u8, address: LdrhStrhAddress },
+    Strh { rd: u8, address: LdrhStrhAddress },
+    Ldrsb { rd: u8, address: LdrhStrhAddress },
+    Ldrsh { rd: u8, address: LdrhStrhAddress },
 }
 
 pub fn branch_and_exchange(opcode: u32) -> ArmInstructionInfo {
@@ -348,6 +354,88 @@ pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
     let instruction = match is_load {
         true => ArmInstruction::Ldr { is_byte, rd, address },
         false => ArmInstruction::Str { is_byte, rd, address },
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+#[rustfmt::skip]
+#[derive(Clone, Copy)]
+pub enum LdrhStrhAddress {
+    PcRelative(u32),
+
+    PreIndexZero  { rn: u8 },
+    PostIndexZero { rn: u8 },
+
+    PreIndexExpression  { rn: u8, is_increment: bool, expr: u32, is_write_back: bool },
+    PostIndexExpression { rn: u8, is_increment: bool, expr: u32 },
+
+    PreIndexRegister     { rn: u8, is_increment: bool, rm: u8, is_write_back: bool },
+    PostIndexRegister    { rn: u8, is_increment: bool, rm: u8},
+}
+
+pub fn halfword_and_signed_data_transfer(opcode: u32) -> ArmInstructionInfo {
+    use crate::arm::opcode_tables::to_negative_u32;
+
+    let is_pre_index = (opcode >> 24) & 1 == 1;
+    let is_increment = (opcode >> 23) & 1 == 1;
+    let is_immediate = (opcode >> 22) & 1 == 1;
+    let is_write_back = (opcode >> 21) & 1 == 1;
+    let is_load = (opcode >> 20) & 1 == 1;
+
+    let rn = ((opcode >> 16) & 0xF) as u8;
+    let rd = ((opcode >> 12) & 0xF) as u8;
+    let is_signed = (opcode >> 6) & 1 == 1;
+    let is_halfword = (opcode >> 5) & 1 == 1;
+
+    let address = if is_immediate && rn == 0xF {
+        let mut offset = ((opcode >> 4) & 0xF) | (opcode & 0xF);
+        if !is_increment {
+            offset = to_negative_u32(offset)
+        }
+
+        LdrhStrhAddress::PcRelative(offset)
+    } else if is_immediate {
+        let expr = ((opcode >> 4) & 0xF) | (opcode & 0xF);
+        let is_zero = expr == 0;
+
+        #[rustfmt::skip]
+        let adr = match (is_zero, is_pre_index) {
+            (true, true) => LdrhStrhAddress::PreIndexZero   { rn },
+            (true, false) => LdrhStrhAddress::PostIndexZero { rn },
+
+            (false, true) => LdrhStrhAddress::PreIndexExpression   { rn, is_increment, expr, is_write_back },
+            (false, false) => LdrhStrhAddress::PostIndexExpression { rn, is_increment, expr },
+        };
+
+        adr
+    } else {
+        let rm = (opcode & 0xF) as u8;
+
+        #[rustfmt::skip]
+        let adr = match is_pre_index {
+            true => LdrhStrhAddress::PreIndexRegister   { rn, is_increment, rm, is_write_back },
+            false => LdrhStrhAddress::PostIndexRegister { rn, is_increment, rm },
+        };
+
+        adr
+    };
+
+    let instruction = match (is_load, is_signed, is_halfword) {
+        // load
+        (true, true, true) => ArmInstruction::Ldrsh { rd, address },
+        (true, true, false) => ArmInstruction::Ldrsb { rd, address },
+        (true, false, true) => ArmInstruction::Ldrh { rd, address },
+        (true, false, false) => panic!("Reserved for swp!"),
+
+        // store
+        (false, true, true) => panic!("Store signed halfword not allowwed!"),
+        (false, true, false) => panic!("Store signed byte not allowed!"),
+        (false, false, true) => ArmInstruction::Strh { rd, address },
+        (false, false, false) => panic!("Reserved for swp!"),
     };
 
     ArmInstructionInfo {

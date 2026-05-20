@@ -2,7 +2,7 @@ use crate::arm::constants::arm_condition_code::*;
 use crate::arm::decoder_tables::arm_decoder::{
     ArmDataOp2, ArmInstruction::*, ArmInstructionInfo, Shift, ShiftOperand,
 };
-use super::arm_decoder::{LdrStrAddress, LdrStrAddressShift}; 
+use super::arm_decoder::{LdrStrAddress, LdrStrAddressShift, LdrhStrhAddress}; 
 
 impl ArmInstructionInfo {
     pub fn to_asm_string(&self, pc: u32) -> String {
@@ -55,12 +55,16 @@ impl ArmInstructionInfo {
             Ldr { is_byte, rd, address } => format_single_data_transfer("ldr", cond_str, pc, is_byte, rd, address),
             Str { is_byte, rd, address } => format_single_data_transfer("str", cond_str, pc, is_byte, rd, address),
          
+            // load byte/halfword & store halfword
+            Ldrh { rd, address } =>  format_halfword_and_signed_data_transfer("ldr", cond_str, pc, "h", rd, address),
+            Strh { rd, address } =>  format_halfword_and_signed_data_transfer("str", cond_str, pc, "h", rd, address),
+            Ldrsb { rd, address } => format_halfword_and_signed_data_transfer("ldr", cond_str, pc, "sb", rd, address),
+            Ldrsh { rd, address } => format_halfword_and_signed_data_transfer("ldr", cond_str, pc, "sh", rd, address),
         };
         arm_str
     }
 }
 
-#[inline]
 fn format_data_processing_mode_0(
     mnemonic: &str,
     cond_str: &str,
@@ -96,7 +100,6 @@ fn format_data_processing_mode_0(
     arm_str
 }
 
-#[inline]
 fn format_data_processing_mode_1(
     mnemonic: &str,
     cond_str: &str,
@@ -129,7 +132,6 @@ fn format_data_processing_mode_1(
     arm_str
 }
 
-#[inline]
 fn format_data_processing_mode_2(
     mnemonic: &str,
     cond_str: &str,
@@ -166,14 +168,14 @@ fn format_data_processing_mode_2(
     arm_str
 }
 
-#[inline]
 fn format_single_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, is_byte: bool, rd: u8, address: LdrStrAddress) -> String {
     use LdrStrAddress::*;
     use LdrStrAddressShift::*;
 
     let b = if is_byte {"b"} else {""};
 
-    match address {
+    #[rustfmt::skip]
+    let arm_str = match address {
         PcRelative(expr) =>                           format!("{mnemonic}{cond_str}{b} r{rd}, 0x{:08X}", pc.wrapping_add(expr)),
         PreIndexZero { rn } | PostIndexZero { rn } => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}]"),
         
@@ -207,7 +209,22 @@ fn format_single_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, is_byte:
         },
     };
 
-    todo!()
+   arm_str
+}
+
+fn format_halfword_and_signed_data_transfer(mnemonic: &str, cond_str: &str, pc: u32, mode: &str, rd: u8, address: LdrhStrhAddress) -> String  {
+    use LdrhStrhAddress::*;
+
+     match address {
+        PcRelative(expr) =>                           format!("{mnemonic}{cond_str}{mode} r{rd}, #{}", pc.wrapping_add(expr)),
+        PreIndexZero { rn } | PostIndexZero { rn } => format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}]"),
+
+        PreIndexExpression { rn, is_increment, expr, is_write_back } => format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}, {}#{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+        PostIndexExpression { rn, is_increment, expr } =>               format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}], {}#{expr}", if is_increment {"+"} else {"-"}),
+
+        PreIndexRegister { rn, is_increment, rm, is_write_back } =>     format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+        PostIndexRegister { rn, is_increment, rm } =>                   format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}], {}r{rm}", if is_increment {"+"} else {"-"}),
+    }
 }
 
 fn get_condition_str(condition_code: u8) -> &'static str {
