@@ -259,7 +259,38 @@ fn format_block_transfer(
     let write_back = if is_write_back {"!"} else {""};
     let s_bit = if is_s_bit {"^"} else {""};
 
-    let rlist_string: String = (0..16).filter(|b| (rlist >> b) & 1 == 1).map(|reg| format!("r{reg},")).collect();
+    enum RegisterList {
+        Range{ lo: u8, hi: u8 },
+        Single(u8)
+    }
+
+    let mut register_list = Vec::with_capacity(16);
+    let mut stack = Vec::with_capacity(16);
+
+    for b in 0..16 {
+        if (rlist >> b) & 1 == 1 {
+            stack.push(b);
+        } else if let Some(last) = stack.last() {
+            if stack.len() <= 2 {
+                for reg_num in stack.iter().copied() {
+                    register_list.push(RegisterList::Single(reg_num))
+                }
+                stack.clear();
+            } else {
+                let hi = *last;
+                stack.truncate(1);
+                let lo = stack.pop().expect("Expect 1 last item in stack!");
+                register_list.push(RegisterList::Range { lo, hi })
+            }
+        }
+    }
+
+    let rlist_string: String = register_list.iter().map(|rlist_type| {
+        match rlist_type {
+            RegisterList::Range { lo, hi } => format!("r{lo}-r{hi},"),
+            RegisterList::Single(reg_num) => format!("r{reg_num},"),
+        }
+    }).collect();
     let rlist_string = rlist_string.as_str().trim_end_matches(",");
 
     match addressing_mode {
