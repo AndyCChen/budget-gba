@@ -54,7 +54,14 @@ pub enum ArmInstruction {
 
     // block transfers
     Ldm { addressing_mode: BlockTransferAddressing, rn: u8, is_write_back: bool, rlist: u16, is_s_bit: bool },
-    Stm { addressing_mode: BlockTransferAddressing, rn: u8, is_write_back: bool, rlist: u16, is_s_bit: bool }
+    Stm { addressing_mode: BlockTransferAddressing, rn: u8, is_write_back: bool, rlist: u16, is_s_bit: bool },
+
+    // swap
+    Swp { is_byte: bool, rd: u8, rm: u8, rn: u8 },
+
+    Swi { expr: u32 },
+
+    Und { opcode: u32 }
 }
 
 pub fn branch_and_exchange(opcode: u32) -> ArmInstructionInfo {
@@ -472,7 +479,7 @@ pub fn block_data_transfer(opcode: u32) -> ArmInstructionInfo {
     let is_write_back = (opcode >> 21) & 1 == 1;
     let is_load = (opcode >> 20) & 1 == 1;
     let rn = ((opcode >> 16) & 0xF) as u8;
-    let rlist = (opcode & 0xFF) as u16;
+    let rlist = (opcode & 0xFFFF) as u16;
 
     let is_stack = u32::from(rn) == STACK_POINTER;
 
@@ -501,6 +508,39 @@ pub fn block_data_transfer(opcode: u32) -> ArmInstructionInfo {
     }
 }
 
-pub fn undefined_arm(_opcode: u32) -> ArmInstructionInfo {
-    todo!("Handle undefined instruction?")
+pub fn data_swap(opcode: u32) -> ArmInstructionInfo {
+    let is_byte = (opcode >> 22) & 1 == 1;
+    let rn = ((opcode >> 16) & 0xF) as u8;
+    let rd = ((opcode >> 12) & 0xF) as u8;
+    let rm = (opcode & 0xF) as u8;
+
+    let instruction = ArmInstruction::Swp {
+        is_byte,
+        rd,
+        rm,
+        rn,
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+pub fn software_interrupt(opcode: u32) -> ArmInstructionInfo {
+    let instruction = ArmInstruction::Swi {
+        expr: opcode & 0x00FF_FFFF,
+    };
+
+    ArmInstructionInfo {
+        instruction,
+        condition: (opcode >> 28) as u8,
+    }
+}
+
+pub fn undefined_arm(opcode: u32) -> ArmInstructionInfo {
+    ArmInstructionInfo {
+        instruction: ArmInstruction::Und { opcode },
+        condition: (opcode >> 28) as u8,
+    }
 }

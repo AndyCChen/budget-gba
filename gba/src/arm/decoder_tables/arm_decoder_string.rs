@@ -64,7 +64,14 @@ impl ArmInstructionInfo {
             // block transfers
             Ldm { addressing_mode, rn, is_write_back, rlist, is_s_bit } => format_block_transfer("ldm", cond_str, addressing_mode, rn, is_write_back, rlist, is_s_bit),
             Stm { addressing_mode, rn, is_write_back, rlist, is_s_bit } => format_block_transfer("stm", cond_str, addressing_mode, rn, is_write_back, rlist, is_s_bit),
+
+            Swp { is_byte, rd, rm, rn } => format!("swp{cond_str}{} r{rd}, r{rm}, [r{rn}]", if is_byte {"b"} else {""}),
+
+            Swi { expr } => format!("swi{cond_str} 0x{expr:08X}"),
+
+            Und { opcode } => format!("undefined{cond_str} 0x{opcode:08X}"),
         };
+        
         arm_str
     }
 }
