@@ -691,6 +691,14 @@ pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u32) {
     cpu.pipeline_refill_arm();
 }
 
-pub fn undefined_arm(_cpu: &mut Arm7tdmi, opcode: u32) {
-    todo!("handle undefined opcode: {opcode}");
+pub fn undefined_arm(cpu: &mut Arm7tdmi, _opcode: u32) {
+    cpu.registers.r14_und = (cpu.registers.r15 - Wrapping(4)).0;
+
+    cpu.registers.r15 = Wrapping(4);
+    cpu.status.spsr_und = cpu.status.cpsr;
+
+    cpu.status.cpsr.set_i(true);
+    cpu.status.cpsr.set_mode_bits(Mode::Undefined);
+
+    cpu.pipeline_refill_arm();
 }
