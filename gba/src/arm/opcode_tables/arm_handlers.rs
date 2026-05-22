@@ -216,7 +216,7 @@ pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7td
         transfer_value |= 0b1_0000;
 
         // when in user mode, only flag field of cpsr can be updated
-        if cpu.status.cpsr.mode_bits() == Mode::User {
+        if matches!(cpu.status.cpsr.mode_bits(), Mode::User) {
             mask &= 0xFF00_0000;
         }
     }

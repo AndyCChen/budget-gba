@@ -93,7 +93,7 @@ pub struct StatusRegister {
     pub n: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[repr(u8)]
 pub enum Mode {
     User = 0b10000,
