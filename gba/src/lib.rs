@@ -6,7 +6,10 @@ mod ppu;
 
 use godot::{classes::Input, prelude::*};
 
-use crate::arm::{ARM7TDMI_CLOCK_RATE, Arm7tdmi, decoder_tables::decode_arm};
+use crate::arm::{
+    ARM7TDMI_CLOCK_RATE, Arm7tdmi,
+    decoder_tables::{decode_arm, decode_thumb},
+};
 
 struct GbaExtension;
 
@@ -45,7 +48,7 @@ impl BudgetGba {
                 let (instr, pc) = self.cpu.step();
                 let intr_str = match (instr, pc) {
                     (arm::CpuInstruction::Arm(opcode), _) => decode_arm(opcode).to_asm_string(pc),
-                    (arm::CpuInstruction::Thumb(_opcode), _) => todo!("No thumb decoding yet!"),
+                    (arm::CpuInstruction::Thumb(opcode), _) => decode_thumb(opcode as u16).to_asm_string(pc),
                 };
                 godot_print!("0x{:08X} {intr_str}", pc.wrapping_sub(8));
             }
