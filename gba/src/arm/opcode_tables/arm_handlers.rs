@@ -11,7 +11,7 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     } else {
         ThumbMode
     };
-    cpu.status.cpsr.set_t(mode);
+    cpu.status.cpsr.set_t(mode.clone());
 
     cpu.registers.r15 = Wrapping(branch_address); // pc is updated so we need to refill instruction pipeline
 

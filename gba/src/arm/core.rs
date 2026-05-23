@@ -124,15 +124,7 @@ impl Mode {
     }
 }
 
-pub struct Arm7tdmi {
-    pub registers: GeneralRegisters,
-    pub status: StatusRegisters,
-    pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
-    pub pipeline_state: u8,
-    pub bus: Box<dyn Bus>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 #[repr(u8)]
 pub enum CpuMode {
     ArmMode = 0,
@@ -151,6 +143,14 @@ impl CpuMode {
             _ => panic!("Invalid cpu mode!"),
         }
     }
+}
+
+pub struct Arm7tdmi {
+    pub registers: GeneralRegisters,
+    pub status: StatusRegisters,
+    pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
+    pub pipeline_state: u8,
+    pub bus: Box<dyn Bus>,
 }
 
 #[derive(Clone, Copy)]
