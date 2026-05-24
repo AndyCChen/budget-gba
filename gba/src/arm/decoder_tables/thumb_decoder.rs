@@ -23,6 +23,15 @@ pub enum ThumbInstruction {
 
     PcRelativeLoad { rd: u8, offset: u16 },
 
+    LdrRegister { is_byte: bool, rd: u8, rb: u8, ro: u8 },
+    StrRegister { is_byte: bool, rd: u8, rb: u8, ro: u8 },
+
+    LoadSignedByteHalfword { is_byte: bool, is_signed: bool, rd: u8, rb: u8, ro: u8 },
+    StoreHalfword { rd: u8, rb: u8, ro: u8 },
+
+    LoadImm { is_byte: bool, rd: u8, rb: u8, offset: u8 },
+    StoreImm { is_byte: bool, rd: u8, rb: u8, offset: u8 },
+
     Und { opcode: u16 },
 }
 
@@ -183,6 +192,48 @@ pub fn pc_relative_load(opcode: u16) -> ThumbInstruction {
     let offset = (opcode & 0xFF) << 2;
 
     ThumbInstruction::PcRelativeLoad { rd, offset }
+}
+
+pub fn load_store_register_offset(opcode: u16) -> ThumbInstruction {
+    let is_load = (opcode >> 11) & 1 == 1;
+    let is_byte = (opcode >> 10) & 1 == 1;
+
+    let ro = ((opcode >> 6) & 0b111) as u8;
+    let rb = ((opcode >> 3) & 0b111) as u8;
+    let rd = (opcode & 0b111) as u8;
+
+    match is_load {
+        true => ThumbInstruction::LdrRegister { is_byte, rd, rb, ro },
+        false => ThumbInstruction::StrRegister { is_byte, rd, rb, ro }
+    }
+}
+
+pub fn load_store_sign_extended(opcode: u16) -> ThumbInstruction {
+    let op = (opcode >> 10) & 0b11;
+    let ro = ((opcode >> 6) & 0b111) as u8;
+    let rb = ((opcode >> 3) & 0b111) as u8;
+    let rd = (opcode & 0b111) as u8;
+
+    match op {
+        0 => ThumbInstruction::StoreHalfword { rd, rb, ro },
+        1 => ThumbInstruction::LoadSignedByteHalfword { is_byte: false, is_signed: false, rd, rb, ro },
+        2 => ThumbInstruction::LoadSignedByteHalfword { is_byte: true, is_signed: true, rd, rb, ro },
+        3 => ThumbInstruction::LoadSignedByteHalfword { is_byte: false, is_signed: true, rd, rb, ro },
+        _ => panic!("Invallid op: {op}!"),
+    }
+}
+
+pub fn load_store_immediate_offset(opcode: u16) -> ThumbInstruction {
+    let is_byte = (opcode >> 12) & 1 == 1;
+    let is_load = (opcode >> 11) & 1 == 1;
+    let offset = (((opcode >> 6) & 0x1F) as u8) << if is_byte { 0 } else { 2 };
+    let rb = ((opcode >> 3) & 0b111) as u8;
+    let rd = (opcode & 0b111) as u8;
+
+    match is_load  {
+        true => ThumbInstruction::LoadImm { is_byte, rd, rb, offset },
+        false => ThumbInstruction::StoreImm { is_byte, rd, rb, offset },
+    }
 }
 
 pub fn undefined_thumb(opcode: u16) -> ThumbInstruction {

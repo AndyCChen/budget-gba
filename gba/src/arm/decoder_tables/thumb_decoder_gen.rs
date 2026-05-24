@@ -29,6 +29,12 @@ const fn generate_thumb_decoder(instruction: usize) -> ThumbDecoder {
         add_cmp_mov_hi
     } else if (instruction & 0b11_1110_0000) == 0b01_0010_0000 {
         pc_relative_load
+    } else if (instruction & 0b11_1100_1000) == 0b01_0100_0000 {
+        load_store_register_offset
+    } else if (instruction & 0b11_1100_1000) == 0b01_0100_1000 {
+        load_store_sign_extended
+    } else if (instruction & 0b11_1000_0000) == 0b01_1000_0000 {
+        load_store_immediate_offset
     } else {
         undefined_thumb
     }

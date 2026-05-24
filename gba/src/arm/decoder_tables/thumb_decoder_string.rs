@@ -1,23 +1,24 @@
-use crate::arm::decoder_tables::thumb_decoder::{AddSubOp, ThumbInstruction, AluOperation};
+use crate::arm::decoder_tables::thumb_decoder::{AddSubOp, AluOperation, ThumbInstruction};
 
 impl ThumbInstruction {
     pub fn to_asm_string(&self, _pc: u32) -> String {
-        match self {
+        #[rustfmt::skip]
+        let asm_string = match self {
             ThumbInstruction::Lsl { shift, rs, rd } => format!("lsl r{rd}, r{rs}, #{shift}"),
             ThumbInstruction::Lsr { shift, rs, rd } => format!("lsr r{rd}, r{rs}, #{shift}"),
             ThumbInstruction::Asr { shift, rs, rd } => format!("asr r{rd}, r{rs}, #{shift}"),
 
             ThumbInstruction::Add { rd, rs, op } => match op {
-                AddSubOp::Register(rn) => format!("add r{rd}, r{rs}, r{rn}"),
+                AddSubOp::Register(rn) =>    format!("add r{rd}, r{rs}, r{rn}"),
                 AddSubOp::Immediate(expr) => format!("add r{rd}, r{rs}, #{expr}"),
             },
             ThumbInstruction::Sub { rd, rs, op } => match op {
-                AddSubOp::Register(rn) => format!("sub r{rd}, r{rs}, r{rn}"),
+                AddSubOp::Register(rn) =>    format!("sub r{rd}, r{rs}, r{rn}"),
                 AddSubOp::Immediate(expr) => format!("sub r{rd}, r{rs}, #{expr}"),
             },
 
-            ThumbInstruction::Mov { rd, offset } => format!("mov r{rd}, #{offset}"),
-            ThumbInstruction::Cmp { rd, offset } => format!("cmp r{rd}, #{offset}"),
+            ThumbInstruction::Mov { rd, offset } =>    format!("mov r{rd}, #{offset}"),
+            ThumbInstruction::Cmp { rd, offset } =>    format!("cmp r{rd}, #{offset}"),
             ThumbInstruction::AddImm { rd, offset } => format!("add r{rd}, #{offset}"),
             ThumbInstruction::SubImm { rd, offset } => format!("sub r{rd}, #{offset}"),
 
@@ -45,12 +46,30 @@ impl ThumbInstruction {
             ThumbInstruction::AddHi { rd, rs } => format!("add r{rd}, r{rs}"),
             ThumbInstruction::CmpHi { rd, rs } => format!("cmp r{rd}, r{rs}"),
             ThumbInstruction::MovHi { rd, rs } => format!("mov r{rd}, r{rs}"),
-            ThumbInstruction::BxHi { rs } => format!("bx r{rs}"),
+            ThumbInstruction::BxHi { rs } =>      format!("bx r{rs}"),
 
             ThumbInstruction::PcRelativeLoad { rd, offset } => format!("ldr r{rd}, [PC, #{offset}]"),
 
+            ThumbInstruction::LdrRegister { is_byte, rd, rb, ro } => format!("ldr{} r{rd}, [r{rb}, r{ro}]", if *is_byte {"b"} else {""}),
+            ThumbInstruction::StrRegister { is_byte, rd, rb, ro } => format!("str{} r{rd}, [r{rb}, r{ro}]", if *is_byte {"b"} else {""}),
+
+            ThumbInstruction::LoadSignedByteHalfword { is_byte, is_signed, rd, rb, ro } => {
+                match (is_byte, is_signed) {
+                    (true, true) =>   format!("ldsb r{rd}, [r{rb}, r{ro}]"),
+                    (false, true) =>  format!("ldsh r{rd}, [r{rb}, r{ro}]"),
+                    (false, false) => format!("ldrh r{rd}, [r{rb}, r{ro}]"),
+                    (true, false) =>  panic!("Invalid op for load!"),
+                }
+            }
+            ThumbInstruction::StoreHalfword { rd, rb, ro } => format!("strh r{rd}, [r{rb}, r{ro}]"),
+
+            ThumbInstruction::LoadImm { is_byte, rd, rb, offset } =>  format!("ldr{} r{rd}, [r{rb}, #{offset}]", if *is_byte {"b"} else {""}),
+            ThumbInstruction::StoreImm { is_byte, rd, rb, offset } => format!("str{} r{rd}, [r{rb}, #{offset}]", if *is_byte {"b"} else {""}),
+
             ThumbInstruction::Und { opcode } => format!("undefined 0x{opcode:08X}"),
-        }
+        };
+
+        asm_string
     }
 }
 
