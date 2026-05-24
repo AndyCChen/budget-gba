@@ -1,7 +1,7 @@
 use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::arm::opcode_tables::common::reg_constant::*;
-use crate::arm::opcode_tables::to_negative_u32;
+use crate::arm::opcode_tables::to_negative;
 use std::num::Wrapping;
 
 pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
@@ -391,7 +391,7 @@ pub fn single_data_transfer<
     };
 
     if !INC {
-        offset = to_negative_u32(offset); // convert to negative binary representation if subtracting with 2's complement
+        offset = to_negative(offset); // convert to negative binary representation if subtracting with 2's complement
     }
 
     let address = if PRE_INDEX {
@@ -463,7 +463,7 @@ pub fn halfword_and_signed_data_transfer<
         };
 
         if !INC {
-            temp = to_negative_u32(temp);
+            temp = to_negative(temp);
         }
 
         temp

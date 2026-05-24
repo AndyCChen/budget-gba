@@ -35,6 +35,26 @@ const fn generate_thumb_decoder(instruction: usize) -> ThumbDecoder {
         load_store_sign_extended
     } else if (instruction & 0b11_1000_0000) == 0b01_1000_0000 {
         load_store_immediate_offset
+    } else if (instruction & 0b11_1100_0000) == 0b10_0000_0000 {
+        load_store_halfword_immediate_offset
+    } else if (instruction & 0b11_1100_0000) == 0b10_0100_0000 {
+        sp_load_store_relative_offset
+    } else if (instruction & 0b11_1100_0000) == 0b10_1000_0000 {
+        pc_sp_load_address
+    } else if (instruction & 0b11_1111_1100) == 0b10_1100_0000 {
+        add_sub_sp
+    } else if (instruction & 0b11_1101_1000) == 0b10_1101_0000 {
+        push_pop_register
+    } else if (instruction & 0b11_1100_0000) == 0b11_0000_0000 {
+        multiple_load_store
+    } else if (instruction & 0b11_1111_1100) == 0b11_0111_1100 {
+        software_interrupt
+    } else if (instruction & 0b11_1100_0000) == 0b11_0100_0000 {
+        conditional_branch
+    } else if (instruction & 0b11_1110_0000) == 0b11_1000_0000 {
+        unconditional_branch
+    } else if (instruction & 0b11_1100_0000) == 0b11_1100_0000 {
+        long_branch_with_link
     } else {
         undefined_thumb
     }

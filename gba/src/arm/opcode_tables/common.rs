@@ -243,7 +243,22 @@ pub mod reg_constant {
     pub const PROGRAM_COUNTER: u32 = 15;
 }
 
+use num_traits::{PrimInt, Unsigned, WrappingAdd};
+
 /// Retrieve raw binary representation of a negative number as a unsigned integer
-pub fn to_negative_u32(input: u32) -> u32 {
-    (!input).wrapping_add(1)
+pub fn to_negative<T: Unsigned + PrimInt + WrappingAdd>(input: T) -> T {
+    (!input).wrapping_add(&T::one())
+}
+
+#[cfg(test)]
+mod test {
+    use super::to_negative;
+
+    #[test]
+    fn test_negative() {
+        assert_eq!(to_negative(5u8), (-5i8) as u8);
+        assert_eq!(to_negative(0x100u16), (-256i16) as u16);
+        assert_eq!(to_negative(0xFFFF), (-0xFFFFi32) as u32);
+        assert_eq!(to_negative(128), (-128i64) as u64);
+    }
 }

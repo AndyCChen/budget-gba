@@ -1,4 +1,5 @@
 use crate::arm::opcode_tables::reg_constant::{PROGRAM_COUNTER, STACK_POINTER};
+use crate::arm::opcode_tables::to_negative;
 
 pub struct ArmInstructionInfo {
     pub instruction: ArmInstruction,
@@ -301,7 +302,6 @@ pub enum LdrStrAddressShift {
 }
 
 pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
-    use crate::arm::opcode_tables::to_negative_u32;
     use crate::arm::opcode_tables::{ASR, LSL, LSR, ROR};
 
     let is_immediate = (opcode >> 25) & 1 == 0;
@@ -316,7 +316,7 @@ pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
     let address = if is_immediate && u32::from(rn) == PROGRAM_COUNTER {
         let mut offset = opcode & 0xFFF;
         if !is_increment {
-            offset = to_negative_u32(offset)
+            offset = to_negative(offset)
         }
 
         LdrStrAddress::PcRelative(offset)
@@ -391,8 +391,6 @@ pub enum LdrhStrhAddress {
 }
 
 pub fn halfword_and_signed_data_transfer(opcode: u32) -> ArmInstructionInfo {
-    use crate::arm::opcode_tables::to_negative_u32;
-
     let is_pre_index = (opcode >> 24) & 1 == 1;
     let is_increment = (opcode >> 23) & 1 == 1;
     let is_immediate = (opcode >> 22) & 1 == 1;
@@ -407,7 +405,7 @@ pub fn halfword_and_signed_data_transfer(opcode: u32) -> ArmInstructionInfo {
     let address = if is_immediate && u32::from(rn) == PROGRAM_COUNTER {
         let mut offset = ((opcode >> 4) & 0xF) | (opcode & 0xF);
         if !is_increment {
-            offset = to_negative_u32(offset)
+            offset = to_negative(offset)
         }
 
         LdrhStrhAddress::PcRelative(offset)

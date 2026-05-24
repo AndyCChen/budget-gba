@@ -1,4 +1,4 @@
-use crate::arm::opcode_tables::{ASR, LSL, LSR};
+use crate::arm::opcode_tables::{ASR, LSL, LSR, to_negative, };
 
 #[rustfmt::skip]
 pub enum ThumbInstruction {
@@ -31,6 +31,31 @@ pub enum ThumbInstruction {
 
     LoadImm { is_byte: bool, rd: u8, rb: u8, offset: u8 },
     StoreImm { is_byte: bool, rd: u8, rb: u8, offset: u8 },
+
+    LoadOffsetHalfword { rd: u8, rb: u8, offset: u8 },
+    StoreOffsetHalfword { rd: u8, rb: u8, offset: u8 },
+
+    LoadSpRelative { rd: u8, offset: u16 },
+    StoreSpRelative { rd: u8, offset: u16 },
+
+    PcSpLoad { is_stack_pointer: bool, rd: u8, offset: u16 },
+
+    SpAddOffset { offset: i16 },
+
+    Push{ transfer_sp_pc: bool, rlist: u8 },
+    Pop { transfer_sp_pc: bool, rlist: u8 },
+
+    Ldm { rb: u8, rlist: u8 },
+    Stm { rb: u8, rlist: u8 },
+
+    ConditionalBranch { cond: ConditionBranchType, offset: u32 },
+
+    Swi { comment_field: u8 },
+
+    UnconditionalBranch { offset: u32 },
+
+    LongBranchLinkFirst { offset: u32 },
+    LongBranchLinkSecond { offset: u32 },
 
     Und { opcode: u16 },
 }
@@ -233,6 +258,149 @@ pub fn load_store_immediate_offset(opcode: u16) -> ThumbInstruction {
     match is_load  {
         true => ThumbInstruction::LoadImm { is_byte, rd, rb, offset },
         false => ThumbInstruction::StoreImm { is_byte, rd, rb, offset },
+    }
+}
+
+pub fn load_store_halfword_immediate_offset(opcode: u16) -> ThumbInstruction {
+    let is_load = (opcode >> 11) & 1 == 1;
+    let offset = (((opcode >> 6) & 0x1F) as u8) << 1;
+    let rb = ((opcode >> 3) & 0b111) as u8;
+    let rd = (opcode & 0b111) as u8;
+
+    match is_load {
+        true => ThumbInstruction::LoadOffsetHalfword { rd, rb, offset },
+        false => ThumbInstruction::StoreOffsetHalfword { rd, rb, offset },
+    }
+}
+
+pub fn sp_load_store_relative_offset(opcode: u16) -> ThumbInstruction {
+    let is_load = (opcode >> 11) & 1 == 1;
+    let rd = ((opcode >> 8) & 0b111) as u8;
+    let offset = (opcode & 0xFF) << 2;
+
+    match is_load {
+        true => ThumbInstruction::LoadSpRelative { rd, offset },
+        false => ThumbInstruction::StoreSpRelative { rd, offset },
+    }
+}
+
+pub fn pc_sp_load_address(opcode: u16) -> ThumbInstruction {
+    let is_stack_pointer = (opcode >> 1) & 1 == 1;
+    let rd = ((opcode >> 8) & 0b111) as u8;
+    let offset = (opcode & 0xFF) << 2;
+
+    ThumbInstruction::PcSpLoad { is_stack_pointer, rd, offset }
+}
+
+pub fn add_sub_sp(opcode: u16) -> ThumbInstruction {
+    let is_signed = (opcode >> 7) & 1 == 1;
+    let mut offset = (opcode & 0x7F) << 2;
+
+    if is_signed {
+        offset = to_negative(offset);
+    }
+
+    ThumbInstruction::SpAddOffset { offset: offset as i16 }
+}
+
+pub fn push_pop_register(opcode: u16) -> ThumbInstruction {
+    let is_pop = (opcode >> 11) & 1 == 1;
+    let transfer_sp_pc = (opcode >> 8) & 1 == 1;
+    let rlist = (opcode & 0xFF) as u8;
+
+    match is_pop {
+        true => ThumbInstruction::Pop { transfer_sp_pc, rlist },
+        false => ThumbInstruction::Push { transfer_sp_pc, rlist },
+    }
+}
+
+pub fn multiple_load_store(opcode: u16) -> ThumbInstruction {
+    let is_load = (opcode >> 11) & 1 == 1;
+    let rb = ((opcode >> 8) & 0b111) as u8;
+    let rlist = (opcode & 0xFF) as u8;
+
+    match is_load {
+        true => ThumbInstruction::Ldm { rb, rlist },
+        false => ThumbInstruction::Stm { rb, rlist },
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum ConditionBranchType {
+    EQ,
+    NE,
+    CS,
+    CC,
+    MI,
+    PL,
+    VS,
+    VC,
+    HI,
+    LS,
+    GE,
+    LT,
+    GT,
+    LE,
+}
+
+pub fn conditional_branch(opcode: u16) -> ThumbInstruction {
+    use crate::arm::constants::arm_condition_code::*;
+
+    let cond = ((opcode >> 8) & 0xF) as u8;
+    let mut offset = u32::from((opcode & 0xFF) << 1);
+
+    let cond = match cond {
+        EQ => ConditionBranchType::EQ,
+        NE => ConditionBranchType::NE,
+        CS => ConditionBranchType::CS,
+        CC => ConditionBranchType::CC,
+        MI => ConditionBranchType::MI,
+        PL => ConditionBranchType::PL,
+        VS => ConditionBranchType::VS,
+        VC => ConditionBranchType::VC,
+        HI => ConditionBranchType::HI,
+        LS => ConditionBranchType::LS,
+        GE => ConditionBranchType::GE,
+        LT => ConditionBranchType::LT,
+        GT => ConditionBranchType::GT,
+        LE => ConditionBranchType::LE,        
+        14 => panic!("Condition 14 is undefined!"),
+        15 => panic!("Condition 15 defines SWI instruction"),
+        _ => panic!("Invalid cond: {cond}"),
+    };
+
+    // negative
+    if offset & 0x100 != 0 {
+        offset |= 0xFFFF_FF00;
+    } 
+
+    ThumbInstruction::ConditionalBranch { cond, offset }
+}
+
+pub fn software_interrupt(opcode: u16) -> ThumbInstruction {
+    ThumbInstruction::Swi { comment_field: (opcode & 0xFF) as u8 }
+}
+
+pub fn unconditional_branch(opcode: u16) -> ThumbInstruction {
+    let mut offset = u32::from((opcode & 0x7FF) << 1);
+
+    // negative
+    if offset & 0x800 != 0 {
+        offset |= 0xFFFF_F800;
+    } 
+
+    ThumbInstruction::UnconditionalBranch { offset }
+}
+
+// todo: figure out way to decode this 32 bit instruction which is split into 2 16 bit instructions
+// need to store some intermediate state to hold previous address to form the full branch target address.
+pub fn long_branch_with_link(opcode: u16) -> ThumbInstruction {
+    let offset_lo = (opcode >> 11) & 1 == 1;
+    let offset = u32::from(opcode & 0x7FF);
+
+    match offset_lo {
+        true => ThumbInstruction::LongBranchLinkSecond { offset: offset << 1 },
+        false => ThumbInstruction::LongBranchLinkFirst { offset: offset << 12 },
     }
 }
 
