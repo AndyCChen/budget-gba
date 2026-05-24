@@ -21,6 +21,14 @@ const fn generate_thumb_decoder(instruction: usize) -> ThumbDecoder {
         add_subtract
     } else if (instruction & 0b11_1000_0000) == 0b00_0000_0000 {
         move_shifted
+    } else if (instruction & 0b11_1000_0000) == 0b00_1000_0000 {
+        mov_cmp_add_sub_immediate
+    } else if (instruction & 0b11_1111_0000) == 0b01_0000_0000 {
+        alu_operations
+    } else if (instruction & 0b11_1111_0000) == 0b01_0001_0000 {
+        add_cmp_mov_hi
+    } else if (instruction & 0b11_1110_0000) == 0b01_0010_0000 {
+        pc_relative_load
     } else {
         undefined_thumb
     }
