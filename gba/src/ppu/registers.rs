@@ -87,7 +87,7 @@ pub struct LcdStatus {
     pub vcount: u8,
 }
 
-impl WriteIoHalfword for LcdStatus {
+impl WriteIo16 for LcdStatus {
     fn write(&mut self, value: u8, byte_select: HalfwordIo) {
         let value = u16::from(value);
         let v = self.into_bits();

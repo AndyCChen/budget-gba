@@ -12,7 +12,7 @@ pub fn read16_io_macro_derive(input: TokenStream) -> TokenStream {
 fn impl_read16_io_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let generated = quote! {
-        impl ReadIoHalfWord for #name {
+        impl ReadIo16 for #name {
             fn read(&self, byte_select: HalfwordIo) -> u8 {
                 match byte_select {
                     HalfwordIo::B0 => self.into_bits() as u8,
@@ -33,7 +33,7 @@ pub fn read32_io_macro_derive(input: TokenStream) -> TokenStream {
 fn impl_read32_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let generated = quote! {
-        impl ReadIoWord for #name {
+        impl ReadIo32 for #name {
             fn read(&self, byte_select: WordIo) -> u8 {
                 match byte_select {
                     WordIo::B0 => self.into_bits() as u8,
@@ -56,7 +56,7 @@ pub fn write16_io_macro_derive(input: TokenStream) -> TokenStream {
 fn impl_write16_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let generated = quote! {
-        impl WriteIoHalfword for #name {
+        impl WriteIo16 for #name {
             fn write(&mut self, value: u8, byte_select: HalfwordIo) {
                 let shift = match byte_select {
                     HalfwordIo::B0 => 0,
@@ -83,7 +83,7 @@ pub fn write32_io_macro_derive(input: TokenStream) -> TokenStream {
 fn impl_write32_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let generated = quote! {
-        impl WriteIoword for #name {
+        impl WriteIo32 for #name {
             fn write(&mut self, value: u8, byte_select: Word) {
                 let shift = match byte_select {
                     WordIo::B0 => 0,

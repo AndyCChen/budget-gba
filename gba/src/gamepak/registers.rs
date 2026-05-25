@@ -58,6 +58,7 @@ pub struct WaitStateControl {
 
     __: bool, // unused
 
+    #[bits(1, default = true, access = RO)]
     pub gamepak_prefetch_enable: bool,
 
     #[bits(1, default = GamePakType::Gba, from = GamePakType::from_bits)]
@@ -66,15 +67,16 @@ pub struct WaitStateControl {
     __: u16, // unused
 }
 
-impl WriteIoWord for WaitStateControl {
+impl WriteIo32 for WaitStateControl {
     fn write(&mut self, value: u8, byte_select: WordIo) {
+        
         let shift = match byte_select {
             WordIo::B0 => 0,
             WordIo::B1 => 8,
             WordIo::B2 => 16,
             WordIo::B3 => 24,
         };
-        
+
         let value = u32::from(value);
         let dst_value = self.into_bits();
 
