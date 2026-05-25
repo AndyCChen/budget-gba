@@ -68,14 +68,23 @@ pub struct WaitStateControl {
 
 impl WriteIoWord for WaitStateControl {
     fn write(&mut self, value: u8, byte_select: WordIo) {
+        let shift = match byte_select {
+            WordIo::B0 => 0,
+            WordIo::B1 => 8,
+            WordIo::B2 => 16,
+            WordIo::B3 => 24,
+        };
+        
         let value = u32::from(value);
-        let v = self.into_bits();
+        let dst_value = self.into_bits();
+
+        let mask: u32 = 0xFFFF_FFFF ^ (0xFF << shift);
 
         *self = match byte_select {
-            WordIo::B0 => Self::from_bits((v & 0x0000_FF00) | value),
-            WordIo::B1 => Self::from_bits((v & 0x0000_00FF) | ((value & !0x80) << 8)), // bit 15 is read only
-            WordIo::B2 => Self::from_bits((v & 0xFF00_FFFF) | (value << 16)),
-            WordIo::B3 => Self::from_bits((v & 0x00FF_FFFF) | (value << 24)),
+            WordIo::B0 => Self::from_bits((dst_value & mask) | value),
+            WordIo::B1 => Self::from_bits((dst_value & mask) | ((value & !0x80) << 8)), // bit 15 is read only
+            WordIo::B2 => Self::from_bits((dst_value & mask) | (value << 16)),
+            WordIo::B3 => Self::from_bits((dst_value & mask) | (value << 24)),
         }
     }
 }

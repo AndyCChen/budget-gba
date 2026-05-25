@@ -58,12 +58,16 @@ fn impl_write16_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
     let generated = quote! {
         impl WriteIoHalfword for #name {
             fn write(&mut self, value: u8, byte_select: HalfwordIo) {
-                let value = u16::from(value);
-                let v = self.into_bits();
-                match byte_select {
-                    HalfwordIo::B0 => *self = Self::from_bits((v & 0xFF00) | value),
-                    HalfwordIo::B1 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
-                }
+                let shift = match byte_select {
+                    HalfwordIo::B0 => 0,
+                    HalfwordIo::B1 => 8
+                };
+
+                let value = u16::from(value) << shift;
+                let dst_value = self.into_bits();
+
+                let mask: u16 = 0xFFFF ^ (0xFF << shift);
+                *self = Self::from_bits( (dst_value & mask) | value )
             }
         }
     };
@@ -81,14 +85,18 @@ fn impl_write32_io_macro_derive(ast: &syn::DeriveInput) -> TokenStream {
     let generated = quote! {
         impl WriteIoword for #name {
             fn write(&mut self, value: u8, byte_select: Word) {
-                let value = u32::from(value);
-                let v = self.into_bits();
-                match byte_select {
-                    Word::B0 => *self = Self::from_bits((v & 0xFFFF_FF00) | value),
-                    Word::B1 => *self = Self::from_bits((v & 0xFFFF_00FF) | (value << 8)),
-                    Word::B2 => *self = Self::from_bits((v & 0xFF00_FFFF) | (value << 16)),
-                    Word::B3 => *self = Self::from_bits((v & 0x00FF_FFFF) | (value << 24)),
-                }
+                let shift = match byte_select {
+                    WordIo::B0 => 0,
+                    WordIo::B1 => 8,
+                    WordIo::B2 => 16,
+                    WordIo::B3 => 24,
+                };
+
+                let value = u32::from(value) << shift;
+                let dst_value = self.into_bits();
+
+                let mask: u32 = 0xFFFF_FFFF ^ (0xFF << shift);
+                *self = Self::from_bits((dst_value & mask) | value)
             }
         }
     };
