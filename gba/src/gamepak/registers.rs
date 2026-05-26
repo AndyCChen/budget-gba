@@ -1,6 +1,6 @@
 use crate::io::*;
 use bitfield_struct::bitfield;
-use register_macros::ReadIo32;
+use register_macros::{ReadIo32, register_write};
 
 pub struct Registers {
     pub waitstate_control: WaitStateControl,
@@ -37,6 +37,7 @@ impl GamePakType {
 
 #[bitfield(u32)]
 #[derive(ReadIo32)]
+#[register_write(u32, mask = 0xFFFF_3FFF)]
 pub struct WaitStateControl {
     #[bits(2)]
     pub sram_wait_control: u8,
@@ -69,7 +70,6 @@ pub struct WaitStateControl {
 
 impl WriteIo32 for WaitStateControl {
     fn write(&mut self, value: u8, byte_select: WordIo) {
-        
         let shift = match byte_select {
             WordIo::B0 => 0,
             WordIo::B1 => 8,
@@ -88,5 +88,18 @@ impl WriteIo32 for WaitStateControl {
             WordIo::B2 => Self::from_bits((dst_value & mask) | (value << 16)),
             WordIo::B3 => Self::from_bits((dst_value & mask) | (value << 24)),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::WaitStateControl;
+    use crate::io::*;
+
+    #[test]
+    fn test_regsiter() {
+        let mut reg = WaitStateControl::default();
+        reg.write(0x3F, WordIo::B1);
+        println!("{reg:#?}");
     }
 }
