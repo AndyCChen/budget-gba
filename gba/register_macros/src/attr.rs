@@ -1,4 +1,5 @@
-use syn::{Token, parse::Parse};
+use proc_macro2::TokenStream;
+use syn::parse::Parse;
 
 pub enum MaskType {
     Mask32(u32),
@@ -21,24 +22,28 @@ impl Parse for MaskType {
             }
         };
 
-        if input.is_empty() {
-            return Ok(mask_type);
-        }
+        // We only care about the type which is u16 or u32, 
+        // so we consume and discard the rest of the parse stream.
+        let _ = input.parse::<TokenStream>();
 
-        <Token![,]>::parse(input)?;
-        if let Ok(mask_ident) = syn::Ident::parse(input)
-            && mask_ident != "mask"
-        {
-            return Err(syn::Error::new(mask_ident.span(), "unknown argument"));
-        }
+        // if input.is_empty() {
+        //     return Ok(mask_type);
+        // }
 
-        <Token![=]>::parse(input)?;
-        let mask = syn::LitInt::parse(input)?;
+        // <Token![,]>::parse(input)?;
+        // if let Ok(mask_ident) = syn::Ident::parse(input)
+        //     && mask_ident != "mask"
+        // {
+        //     return Err(syn::Error::new(mask_ident.span(), "unknown argument"));
+        // }
 
-        let mask_type = match mask_type {
-            MaskType::Mask32(_) => MaskType::Mask32(mask.base10_parse()?),
-            MaskType::Mask16(_) => MaskType::Mask16(mask.base10_parse()?),
-        };
+        // <Token![=]>::parse(input)?;
+        // let mask = syn::LitInt::parse(input)?;
+
+        // let mask_type = match mask_type {
+        //     MaskType::Mask32(_) => MaskType::Mask32(mask.base10_parse()?),
+        //     MaskType::Mask16(_) => MaskType::Mask16(mask.base10_parse()?),
+        // };
 
         Ok(mask_type)
     }
@@ -63,5 +68,23 @@ fn uint_type_info(ty: &syn::Type) -> TypeClass {
         _ if ident == "u16" => TypeClass::U16,
         _ if ident == "u32" => TypeClass::U32,
         _ => TypeClass::Other,
+    }
+}
+
+pub struct BitsAttr {
+    pub bits: Option<usize>,
+}
+
+impl Parse for BitsAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut output = Self { bits: None };
+
+        if let Ok(bits) = syn::LitInt::parse(input) {
+            output.bits = Some(bits.base10_parse()?);
+        }
+
+        let _ = input.parse::<TokenStream>(); // consume and discard rest of parse stream
+
+        Ok(output)
     }
 }
