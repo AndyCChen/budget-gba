@@ -1,12 +1,13 @@
 use proc_macro2::TokenStream;
 use syn::parse::Parse;
 
-pub enum MaskType {
-    Mask32(u32),
-    Mask16(u16),
+pub enum RegisterType {
+    RegisterU8,
+    RegisterU16,
+    RegisterU32,
 }
 
-impl Parse for MaskType {
+impl Parse for RegisterType {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let Ok(ty) = syn::Type::parse(input) else {
             return Err(syn::Error::new(input.span(), "unknown type"));
@@ -15,41 +16,23 @@ impl Parse for MaskType {
         let class = uint_type_info(&ty);
 
         let mask_type = match class {
-            TypeClass::U16 => MaskType::Mask16(u16::MAX),
-            TypeClass::U32 => MaskType::Mask32(u32::MAX),
+            TypeClass::U8 => RegisterType::RegisterU8,
+            TypeClass::U16 => RegisterType::RegisterU16,
+            TypeClass::U32 => RegisterType::RegisterU32,
             TypeClass::Other => {
-                return Err(syn::Error::new(input.span(), "type must be u16 or u32"));
+                return Err(syn::Error::new(input.span(), "type must be u8, u16, u32"));
             }
         };
 
-        // We only care about the type which is u16 or u32, 
+        // We only care about the type which is u16 or u32,
         // so we consume and discard the rest of the parse stream.
         let _ = input.parse::<TokenStream>();
-
-        // if input.is_empty() {
-        //     return Ok(mask_type);
-        // }
-
-        // <Token![,]>::parse(input)?;
-        // if let Ok(mask_ident) = syn::Ident::parse(input)
-        //     && mask_ident != "mask"
-        // {
-        //     return Err(syn::Error::new(mask_ident.span(), "unknown argument"));
-        // }
-
-        // <Token![=]>::parse(input)?;
-        // let mask = syn::LitInt::parse(input)?;
-
-        // let mask_type = match mask_type {
-        //     MaskType::Mask32(_) => MaskType::Mask32(mask.base10_parse()?),
-        //     MaskType::Mask16(_) => MaskType::Mask16(mask.base10_parse()?),
-        // };
-
         Ok(mask_type)
     }
 }
 
 enum TypeClass {
+    U8,
     U16,
     U32,
     Other,
@@ -65,6 +48,7 @@ fn uint_type_info(ty: &syn::Type) -> TypeClass {
     };
 
     match ident {
+        _ if ident == "u8" => TypeClass::U8,
         _ if ident == "u16" => TypeClass::U16,
         _ if ident == "u32" => TypeClass::U32,
         _ => TypeClass::Other,
