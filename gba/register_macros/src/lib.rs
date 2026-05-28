@@ -87,10 +87,10 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
                 #[bitfield(#args)]
                 #input
                 impl #name {
-                    #vis fn write(&mut self, value: u8, byte_select: HalfwordIo) {
+                    #vis fn write(&mut self, value: u8, byte_select: crate::io::HalfwordIo) {
                         let shift = match byte_select {
-                            HalfwordIo::B0 => 0,
-                            HalfwordIo::B1 => 8,
+                            crate::io::HalfwordIo::B0 => 0,
+                            crate::io::HalfwordIo::B1 => 8,
                         };
 
                         let value = (u16::from(value) << shift) & #write_mask;
@@ -100,10 +100,10 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
                         *self = Self::from_bits((dst_value & !mask) | value);
                     }
 
-                    #vis fn read(&self, byte_select: HalfwordIo) -> u8 {
+                    #vis fn read(&self, byte_select: crate::io::HalfwordIo) -> u8 {
                         let shift = match byte_select {
-                            HalfwordIo::B0 => 0,
-                            HalfwordIo::B1 => 8,
+                            crate::io::HalfwordIo::B0 => 0,
+                            crate::io::HalfwordIo::B1 => 8,
                         };
 
                         let read_value = self.into_bits() & #read_mask;
@@ -119,12 +119,12 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
                 #[bitfield(#args)]
                 #input
                 impl #name {
-                    #vis fn write(&mut self, value: u8, byte_select: WordIo) {
+                    #vis fn write(&mut self, value: u8, byte_select: crate::io::WordIo) {
                         let shift = match byte_select {
-                            WordIo::B0 => 0,
-                            WordIo::B1 => 8,
-                            WordIo::B2 => 16,
-                            WordIo::B3 => 24,
+                            crate::io::WordIo::B0 => 0,
+                            crate::io::WordIo::B1 => 8,
+                            crate::io::WordIo::B2 => 16,
+                            crate::io::WordIo::B3 => 24,
                         };
 
                         let value = (u32::from(value) << shift) & #write_mask;
@@ -134,12 +134,12 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
                         *self = Self::from_bits((dst_value & !mask) | value);
                     }
 
-                    #vis fn read(&self, byte_select: WordIo) -> u8 {
+                    #vis fn read(&self, byte_select:  crate::io::WordIo) -> u8 {
                         let shift = match byte_select {
-                            WordIo::B0 => 0,
-                            WordIo::B1 => 8,
-                            WordIo::B2 => 16,
-                            WordIo::B3 => 24,
+                            crate::io::WordIo::B0 => 0,
+                            crate::io::WordIo::B1 => 8,
+                            crate::io::WordIo::B2 => 16,
+                            crate::io::WordIo::B3 => 24,
                         };
 
                         let read_value = self.into_bits() & #read_mask;

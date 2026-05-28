@@ -1,6 +1,5 @@
 use bitfield_struct::bitfield;
-use register_macros::{ReadIo16, WriteIo16};
-use crate::io::*;
+use register_macros::gba_register;
 
 pub struct Registers {
     pub lcd_control: LcdControl,
@@ -49,8 +48,7 @@ impl BgMode {
     }
 }
 
-#[bitfield(u16)]
-#[derive(ReadIo16, WriteIo16)]
+#[gba_register(u16)]
 pub struct LcdControl {
     #[bits(3, default = BgMode::Mode0, from = BgMode::from_bits)]
     pub bg_mode: BgMode,
@@ -69,11 +67,14 @@ pub struct LcdControl {
     pub obj_window_enable: bool,
 }
 
-#[bitfield(u16)]
-#[derive(ReadIo16)]
+
+#[gba_register(u16)]
 pub struct LcdStatus {
+    #[readonly]
     pub vblank_flag: bool,
+    #[readonly]
     pub hblank_flag: bool,
+    #[readonly]
     pub v_counter_flag: bool,
 
     pub vblank_irq_enable: bool,
@@ -87,26 +88,16 @@ pub struct LcdStatus {
     pub vcount: u8,
 }
 
-impl WriteIo16 for LcdStatus {
-    fn write(&mut self, value: u8, byte_select: HalfwordIo) {
-        let value = u16::from(value);
-        let v = self.into_bits();
-        match byte_select {
-            HalfwordIo::B0 => *self = Self::from_bits((v & 0xFF00) | (value & !7)), // bits 0..2 are read only
-            HalfwordIo::B1 => *self = Self::from_bits((v & 0x00FF) | (value << 8)),
-        }
-    }
-}
-
-#[bitfield(u16)]
-#[derive(ReadIo16)]
+#[gba_register(u16)]
 pub struct VerticalCounter {
+    #[readonly]
     pub scanline_count: u8,
+
+    #[readonly]
     __: u8,
 }
 
-#[bitfield(u16)]
-#[derive(WriteIo16, ReadIo16)]
+#[gba_register(u16)]
 pub struct BgControl0 {
     #[bits(2)]
     pub bg_priority: u8,
