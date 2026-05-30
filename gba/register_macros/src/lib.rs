@@ -63,7 +63,7 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
             let write_mask = write_mask as u8;
             let read_mask = read_mask as u8;
             quote! {
-                #[bitfield(#args)]
+                #[bitfield_struct::bitfield(#args)]
                 #input
 
                 impl #name {
@@ -84,7 +84,7 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
             let write_mask = write_mask as u16;
             let read_mask = read_mask as u16;
             quote! {
-                #[bitfield(#args)]
+                #[bitfield_struct::bitfield(#args)]
                 #input
                 impl #name {
                     #vis fn write(&mut self, value: u8, byte_select: crate::io::HalfwordIo) {
@@ -116,7 +116,7 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
             let write_mask = write_mask as u32;
             let read_mask = read_mask as u32;
             quote! {
-                #[bitfield(#args)]
+                #[bitfield_struct::bitfield(#args)]
                 #input
                 impl #name {
                     #vis fn write(&mut self, value: u8, byte_select: crate::io::WordIo) {
@@ -285,3 +285,4 @@ fn type_info(ty: &syn::Type) -> (TypeClass, usize) {
         _ => (TypeClass::Other, 0),
     }
 }
+

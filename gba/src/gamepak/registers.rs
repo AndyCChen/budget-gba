@@ -1,4 +1,3 @@
-use bitfield_struct::bitfield;
 use register_macros::gba_register;
 
 pub struct Registers {
@@ -57,7 +56,8 @@ pub struct WaitStateControl {
 
     __: bool, // unused
 
-    #[bits(1, default = true, access = RO)]
+    #[bits(1, default = true)]
+    #[readonly]
     pub gamepak_prefetch_enable: bool,
 
     #[bits(1, default = GamePakType::Gba, from = GamePakType::from_bits)]

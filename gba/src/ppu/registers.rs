@@ -1,4 +1,3 @@
-use bitfield_struct::bitfield;
 use register_macros::gba_register;
 
 pub struct Registers {
