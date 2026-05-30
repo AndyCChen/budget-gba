@@ -11,9 +11,9 @@ impl ArmInstructionInfo {
         #[rustfmt::skip]
         let arm_str = match self.instruction {
             // branches
-            Bx { rn } =>     format!("bx{cond_str} R{rn}"),
-            B { offset } =>  format!("b{cond_str} 0x{:08X}", pc.wrapping_add(offset)),
-            Bl { offset } => format!("bl{cond_str} 0x{:08X}", pc.wrapping_add(offset)),
+            Bx { rn } =>     format!("{:10} R{rn}", format!("bx{cond_str}")),
+            B { offset } =>  format!("{:10} 0x{:08X}", format!("b{cond_str}"), pc.wrapping_add(offset)),
+            Bl { offset } => format!("{:10} 0x{:08X}", format!("bl{cond_str}"), pc.wrapping_add(offset)),
 
             // data processing
             And { set_condition, rd, rn, op2 } => format_data_processing_mode_2("and", cond_str, set_condition, rd, rn, op2),
@@ -34,22 +34,22 @@ impl ArmInstructionInfo {
             Mvn { set_condition, rd, op2 } =>     format_data_processing_mode_0("mvn", cond_str, set_condition, rd, op2),
 
             // mrs and msr instructions
-            Mrs { spsr_dest, rd } =>                  format!("mrs{cond_str} r{rd}, {}", if spsr_dest { "SPSR" } else { "CPSR" }),
-            Msr { spsr_dest, rm } =>                  format!("msr{cond_str} {}, r{rm}", if spsr_dest { "SPSR" } else { "CPSR" }),
+            Mrs { spsr_dest, rd } =>                  format!("{:10} r{rd}, {}", format!("mrs{cond_str}"), if spsr_dest { "SPSR" } else { "CPSR" }),
+            Msr { spsr_dest, rm } =>                  format!("{:10} {}, r{rm}", format!("msr{cond_str}"), if spsr_dest { "SPSR" } else { "CPSR" }),
             MsrFlagOnly { source_operand, spsr_dest } => {
                 match source_operand {
-                    ShiftOperand::Register(rm) =>     format!("msr{cond_str} {}, r{rm}",   if spsr_dest { "SPSR_flg" } else { "CPSR_flg" }),
-                    ShiftOperand::Expression(expr) => format!("msr{cond_str} {}, #{expr}", if spsr_dest { "SPSR_flg" } else { "CPSR_flg" }),
+                    ShiftOperand::Register(rm) =>     format!("{:10} {}, r{rm}",   format!("msr{cond_str}"), if spsr_dest { "SPSR_flg" } else { "CPSR_flg" }),
+                    ShiftOperand::Expression(expr) => format!("{:10} {}, #{expr}", format!("msr{cond_str}"), if spsr_dest { "SPSR_flg" } else { "CPSR_flg" }),
                 }
             }
 
             // multiply
-            Mul { set_condition, rd, rm, rs } =>     format!("mul{cond_str}{} r{rd}, r{rm}, {rs}",         if set_condition { "s" } else { "" }),
-            Mla { set_condition, rd, rm, rs, rn } => format!("mla{cond_str}{} r{rd}, r{rm}, r{rs}, r{rn}", if set_condition { "s" } else { "" }),
+            Mul { set_condition, rd, rm, rs } =>     format!("{:10} r{rd}, r{rm}, {rs}",         format!("mul{cond_str}{}", if set_condition { "s" } else { "" })),
+            Mla { set_condition, rd, rm, rs, rn } => format!("{:10} r{rd}, r{rm}, r{rs}, r{rn}", format!("mla{cond_str}{}", if set_condition { "s" } else { "" })),
        
             // multiply long
-            Mull { set_condition, is_signed, rdlo, rdhi, rm, rs } => format!("{}mull{cond_str}{} r{rdlo}, r{rdhi}, r{rm}, r{rs}", if set_condition { "s" } else { "" }, if is_signed { "s" } else { "" }),
-            Mlal { set_condition, is_signed, rdlo, rdhi, rm, rs } => format!("{}mlal{cond_str}{} r{rdlo}, r{rdhi}, r{rm}, r{rs}", if set_condition { "s" } else { "" }, if is_signed { "s" } else { "" }),
+            Mull { set_condition, is_signed, rdlo, rdhi, rm, rs } => format!("{:10} r{rdlo}, r{rdhi}, r{rm}, r{rs}", format!("{}mull{cond_str}{}", if set_condition { "s" } else { "" }, if is_signed { "s" } else { "" })),
+            Mlal { set_condition, is_signed, rdlo, rdhi, rm, rs } => format!("{:10} r{rdlo}, r{rdhi}, r{rm}, r{rs}", format!("{}mlal{cond_str}{}", if set_condition { "s" } else { "" }, if is_signed { "s" } else { "" })),
         
             // load / store
             Ldr { is_byte, rd, address } => format_single_data_transfer("ldr", cond_str, pc, is_byte, rd, address),
@@ -65,11 +65,11 @@ impl ArmInstructionInfo {
             Ldm { addressing_mode, rn, is_write_back, rlist, is_s_bit } => format_block_transfer("ldm", cond_str, addressing_mode, rn, is_write_back, rlist, is_s_bit),
             Stm { addressing_mode, rn, is_write_back, rlist, is_s_bit } => format_block_transfer("stm", cond_str, addressing_mode, rn, is_write_back, rlist, is_s_bit),
 
-            Swp { is_byte, rd, rm, rn } => format!("swp{cond_str}{} r{rd}, r{rm}, [r{rn}]", if is_byte {"b"} else {""}),
+            Swp { is_byte, rd, rm, rn } => format!("{:10} r{rd}, r{rm}, [r{rn}]", format!("swp{cond_str}{}", if is_byte {"b"} else {""})),
 
-            Swi { expr } => format!("swi{cond_str} 0x{expr:08X}"),
+            Swi { expr } => format!("{:10} 0x{expr:08X}", format!("swi{cond_str}")),
 
-            Und { opcode } => format!("undefined{cond_str} 0x{opcode:08X}"),
+            Und { opcode } => format!("{:10} 0x{opcode:08X}", format!("undef{cond_str}")),
         };
         
         arm_str
@@ -84,27 +84,28 @@ fn format_data_processing_mode_0(
     op2: ArmDataOp2,
 ) -> String {
     let s = if set_condition { "s" } else { "" };
+    let head = format!("{mnemonic}{cond_str}{s}");
 
     #[rustfmt::skip]
     let arm_str = match op2 {
-        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}{s} r{rd},#{expr}"),
+        ArmDataOp2::Expression(expr) =>                       format!("{head:10} r{rd}, #{expr}"),
         ArmDataOp2::Rm{ rm, shift } => {
             match shift {
-                Shift::None =>                                format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}"),
+                Shift::None =>                                format!("{head:10} r{rd}, r{rm}"),
 
-                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, lsl #{expr}"),
-                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, lsl r{rs}"),
+                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rm}, lsl #{expr}"),
+                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rm}, lsl r{rs}"),
 
-                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, lsr #{expr}"),
-                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, lsr r{rs}"),
+                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rm}, lsr #{expr}"),
+                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rm}, lsr r{rs}"),
 
-                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, asr #{expr}"),
-                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, asr r{rs}"),
+                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rm}, asr #{expr}"),
+                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rm}, asr r{rs}"),
 
-                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, ror #{expr}"),
-                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, ror r{rs}"),
+                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rm}, ror #{expr}"),
+                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rm}, ror r{rs}"),
 
-                Shift::Rrx =>                                 format!("{mnemonic}{cond_str}{s} r{rd}, r{rm}, rrX"),
+                Shift::Rrx =>                                 format!("{head:10} r{rd}, r{rm}, rrX"),
             }
         },
     };
@@ -117,26 +118,28 @@ fn format_data_processing_mode_1(
     rn: u8,
     op2: ArmDataOp2,
 ) -> String {
+    let head = format!("{mnemonic}{cond_str}s");
+    
     #[rustfmt::skip]
     let arm_str = match op2 {
-        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}s r{rn}, #{expr}"),
+        ArmDataOp2::Expression(expr) =>                       format!("{head:10} r{rn}, #{expr}"),
         ArmDataOp2::Rm{ rm, shift } => {
             match shift {
-                Shift::None =>                                format!("{mnemonic}{cond_str}s r{rn}, r{rm}"),
+                Shift::None =>                                format!("{head:10} r{rn}, r{rm}"),
 
-                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}s r{rn}, r{rm}, lsl #{expr}"),
-                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}s r{rn}, r{rm}, lsl r{rs}"),
+                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{head:10} r{rn}, r{rm}, lsl #{expr}"),
+                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rn}, r{rm}, lsl r{rs}"),
 
-                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}s r{rn}, r{rm}, lsr #{expr}"),
-                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}s r{rn}, r{rm}, lsr r{rs}"),
+                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{head:10} r{rn}, r{rm}, lsr #{expr}"),
+                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rn}, r{rm}, lsr r{rs}"),
 
-                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}s r{rn}, r{rm}, asr #{expr}"),
-                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}s r{rn}, r{rm}, asr r{rs}"),
+                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{head:10} r{rn}, r{rm}, asr #{expr}"),
+                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rn}, r{rm}, asr r{rs}"),
 
-                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}s r{rn}, r{rm}, ror #{expr}"),
-                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}s r{rn}, r{rm}, ror r{rs}"),
+                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{head:10} r{rn}, r{rm}, ror #{expr}"),
+                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rn}, r{rm}, ror r{rs}"),
 
-                Shift::Rrx =>                                 format!("{mnemonic}{cond_str}s r{rn}, r{rm}, rrx"),
+                Shift::Rrx =>                                 format!("{head:10} r{rn}, r{rm}, rrx"),
             }
         },
     };
@@ -152,27 +155,28 @@ fn format_data_processing_mode_2(
     op2: ArmDataOp2,
 ) -> String {
     let s = if set_condition { "s" } else { "" };
+    let head = format!("{mnemonic}{cond_str}{s}");
 
     #[rustfmt::skip]
     let arm_str = match op2 {
-        ArmDataOp2::Expression(expr) =>                       format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, #{expr}"),
+        ArmDataOp2::Expression(expr) =>                       format!("{head:10} r{rd}, r{rn}, #{expr}"),
         ArmDataOp2::Rm{ rm, shift } => {
             match shift {
-                Shift::None =>                                format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, r{rm}"),
+                Shift::None =>                                format!("{head:10} r{rd}, r{rn}, r{rm}"),
 
-                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, lsl #{expr}"),
-                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, r{rm}, lsl r{rs}"),
+                Shift::Lsl(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rn}, lsl #{expr}"),
+                Shift::Lsl(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rn}, r{rm}, lsl r{rs}"),
 
-                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, lsr #{expr}"),
-                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, r{rm}, lsr r{rs}"),
+                Shift::Lsr(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rn}, lsr #{expr}"),
+                Shift::Lsr(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rn}, r{rm}, lsr r{rs}"),
 
-                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, asr #{expr}"),
-                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, r{rm}, asr r{rs}"),
+                Shift::Asr(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rn}, asr #{expr}"),
+                Shift::Asr(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rn}, r{rm}, asr r{rs}"),
 
-                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, ror #{expr}"),
-                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, r{rm}, ror r{rs}"),
+                Shift::Ror(ShiftOperand::Expression(expr)) => format!("{head:10} r{rd}, r{rn}, ror #{expr}"),
+                Shift::Ror(ShiftOperand::Register(rs)) =>     format!("{head:10} r{rd}, r{rn}, r{rm}, ror r{rs}"),
 
-                Shift::Rrx =>                                 format!("{mnemonic}{cond_str}{s} r{rd}, r{rn}, rrx"),
+                Shift::Rrx =>                                 format!("{head:10} r{rd}, r{rn}, rrx"),
             }
         },
     };
@@ -191,38 +195,39 @@ fn format_single_data_transfer(
     use LdrStrAddressShift::*;
 
     let b = if is_byte {"b"} else {""};
+    let head = format!("{mnemonic}{cond_str}{b}");
 
     #[rustfmt::skip]
     let arm_str = match address {
-        PcRelative(expr) =>                           format!("{mnemonic}{cond_str}{b} r{rd}, 0x{:08X}", pc.wrapping_add(expr)),
-        PreIndexZero { rn } | PostIndexZero { rn } => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}]"),
+        PcRelative(expr) =>                           format!("{head:10} r{rd}, 0x{:08X}", pc.wrapping_add(expr)),
+        PreIndexZero { rn } | PostIndexZero { rn } => format!("{head:10} r{rd}, [r{rn}]"),
         
-        PreIndexExpression { rn, is_increment, expr, is_write_back } => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}#{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
-        PostIndexExpression { rn, is_increment, expr } =>               format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}#{expr}", if is_increment {"+"} else {"-"}),
+        PreIndexExpression { rn, is_increment, expr, is_write_back } => format!("{head:10} r{rd}, [r{rn}, {}#{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+        PostIndexExpression { rn, is_increment, expr } =>               format!("{head:10} r{rd}, [r{rn}], {}#{expr}", if is_increment {"+"} else {"-"}),
 
         PreIndexShifted { rn, is_increment, rm, shift, is_write_back } => {
             match shift {
-                None =>      format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                None =>      format!("{head:10} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
 
-                Lsl(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, lsl #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
-                Lsr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, lsr #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
-                Asr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, asr #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
-                Ror(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, ror #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Lsl(expr) => format!("{head:10} r{rd}, [r{rn}, {}r{rm}, lsl #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Lsr(expr) => format!("{head:10} r{rd}, [r{rn}, {}r{rm}, lsr #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Asr(expr) => format!("{head:10} r{rd}, [r{rn}, {}r{rm}, asr #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Ror(expr) => format!("{head:10} r{rd}, [r{rn}, {}r{rm}, ror #{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
 
-                Rrx =>       format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}, rrx]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+                Rrx =>       format!("{head:10} r{rd}, [r{rn}, {}r{rm}, rrx]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
             }
         },
         
         PostIndexShifted { rn, is_increment, rm, shift } => {
             match shift {
-                None =>      format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}, {}r{rm}]", if is_increment {"+"} else {"-"}),
+                None =>      format!("{head:10} r{rd}, [r{rn}, {}r{rm}]", if is_increment {"+"} else {"-"}),
 
-                Lsl(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, lsl #{expr}", if is_increment {"+"} else {"-"}),
-                Lsr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, lsr #{expr}", if is_increment {"+"} else {"-"}),
-                Asr(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, asr #{expr}", if is_increment {"+"} else {"-"}),
-                Ror(expr) => format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, ror #{expr}", if is_increment {"+"} else {"-"}),
+                Lsl(expr) => format!("{head:10} r{rd}, [r{rn}], {}r{rm}, lsl #{expr}", if is_increment {"+"} else {"-"}),
+                Lsr(expr) => format!("{head:10} r{rd}, [r{rn}], {}r{rm}, lsr #{expr}", if is_increment {"+"} else {"-"}),
+                Asr(expr) => format!("{head:10} r{rd}, [r{rn}], {}r{rm}, asr #{expr}", if is_increment {"+"} else {"-"}),
+                Ror(expr) => format!("{head:10} r{rd}, [r{rn}], {}r{rm}, ror #{expr}", if is_increment {"+"} else {"-"}),
 
-                Rrx =>       format!("{mnemonic}{cond_str}{b} r{rd}, [r{rn}], {}r{rm}, rrx", if is_increment {"+"} else {"-"}),
+                Rrx =>       format!("{head:10} r{rd}, [r{rn}], {}r{rm}, rrx", if is_increment {"+"} else {"-"}),
             }
         },
     };
@@ -239,16 +244,17 @@ fn format_halfword_and_signed_data_transfer(
     address: LdrhStrhAddress
 ) -> String  {
     use LdrhStrhAddress::*;
+    let head = format!("{mnemonic}{cond_str}{mode}");
 
-     match address {
-        PcRelative(expr) =>                           format!("{mnemonic}{cond_str}{mode} r{rd}, #{}", pc.wrapping_add(expr)),
-        PreIndexZero { rn } | PostIndexZero { rn } => format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}]"),
+    match address {
+        PcRelative(expr) =>                           format!("{head:10} r{rd}, #{}", pc.wrapping_add(expr)),
+        PreIndexZero { rn } | PostIndexZero { rn } => format!("{head:10} r{rd}, [r{rn}]"),
 
-        PreIndexExpression { rn, is_increment, expr, is_write_back } => format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}, {}#{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
-        PostIndexExpression { rn, is_increment, expr } =>               format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}], {}#{expr}", if is_increment {"+"} else {"-"}),
+        PreIndexExpression { rn, is_increment, expr, is_write_back } => format!("{head:10} r{rd}, [r{rn}, {}#{expr}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+        PostIndexExpression { rn, is_increment, expr } =>               format!("{head:10} r{rd}, [r{rn}], {}#{expr}", if is_increment {"+"} else {"-"}),
 
-        PreIndexRegister { rn, is_increment, rm, is_write_back } =>     format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
-        PostIndexRegister { rn, is_increment, rm } =>                   format!("{mnemonic}{cond_str}{mode} r{rd}, [r{rn}], {}r{rm}", if is_increment {"+"} else {"-"}),
+        PreIndexRegister { rn, is_increment, rm, is_write_back } =>     format!("{head:10} r{rd}, [r{rn}, {}r{rm}]{}", if is_increment {"+"} else {"-"}, if is_write_back {"!"} else {""}),
+        PostIndexRegister { rn, is_increment, rm } =>                   format!("{head:10} r{rd}, [r{rn}], {}r{rm}", if is_increment {"+"} else {"-"}),
     }
 }
 
@@ -300,16 +306,18 @@ fn format_block_transfer(
     }).collect();
     let rlist_string = rlist_string.as_str().trim_end_matches(",");
 
-    match addressing_mode {
-        IncrementBefore => format!("{mnemonic}{cond_str}ib r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
-        IncrementAfter => format!("{mnemonic}{cond_str}ia r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
-        DecrementBefore => format!("{mnemonic}{cond_str}db r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
-        DecrementAfter => format!("{mnemonic}{cond_str}da r{rn}{write_back}, {{{rlist_string}}}{s_bit}"),
+    let head = format!("{mnemonic}{cond_str}");
 
-        EmptyStackDescend => format!("{mnemonic}{cond_str}ed sp{write_back}, {{{rlist_string}}}{s_bit}"),
-        FullStackDescend => format!("{mnemonic}{cond_str}fd sp{write_back}, {{{rlist_string}}}{s_bit}"),
-        EmptyStackAscend => format!("{mnemonic}{cond_str}ea sp{write_back}, {{{rlist_string}}}{s_bit}"),
-        FullStackAscend => format!("{mnemonic}{cond_str}fa sp{write_back}, {{{rlist_string}}}{s_bit}"),
+    match addressing_mode {
+        IncrementBefore => format!("{:10} r{rn}{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}ib")),
+        IncrementAfter => format!("{:10} r{rn}{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}ia")),
+        DecrementBefore => format!("{:10} r{rn}{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}db")),
+        DecrementAfter => format!("{:10} r{rn}{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}da")),
+
+        EmptyStackDescend => format!("{:10} sp{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}ed")),
+        FullStackDescend => format!("{:10} sp{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}fd")),
+        EmptyStackAscend => format!("{:10} sp{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}ea")),
+        FullStackAscend => format!("{:10} sp{write_back}, {{{rlist_string}}}{s_bit}", format!("{head}fa")),
     }
 }
 

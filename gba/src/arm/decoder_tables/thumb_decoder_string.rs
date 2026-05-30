@@ -4,94 +4,94 @@ impl ThumbInstruction {
     pub fn to_asm_string(&self, opcode_address: u32) -> String {
         #[rustfmt::skip]
         let asm_string = match self {
-            ThumbInstruction::Lsl { shift, rs, rd } => format!("lsl r{rd}, r{rs}, #{shift}"),
-            ThumbInstruction::Lsr { shift, rs, rd } => format!("lsr r{rd}, r{rs}, #{shift}"),
-            ThumbInstruction::Asr { shift, rs, rd } => format!("asr r{rd}, r{rs}, #{shift}"),
+            ThumbInstruction::Lsl { shift, rs, rd } => format!("{:10} r{rd}, r{rs}, #{shift}", "lsl"),
+            ThumbInstruction::Lsr { shift, rs, rd } => format!("{:10} r{rd}, r{rs}, #{shift}", "lsr"),
+            ThumbInstruction::Asr { shift, rs, rd } => format!("{:10} r{rd}, r{rs}, #{shift}", "asr"),
 
             ThumbInstruction::Add { rd, rs, op } => match op {
-                AddSubOp::Register(rn) =>    format!("add r{rd}, r{rs}, r{rn}"),
-                AddSubOp::Immediate(expr) => format!("add r{rd}, r{rs}, #{expr}"),
+                AddSubOp::Register(rn) =>    format!("{:10} r{rd}, r{rs}, r{rn}", "add"),
+                AddSubOp::Immediate(expr) => format!("{:10} r{rd}, r{rs}, #{expr}", "add"),
             },
             ThumbInstruction::Sub { rd, rs, op } => match op {
-                AddSubOp::Register(rn) =>    format!("sub r{rd}, r{rs}, r{rn}"),
-                AddSubOp::Immediate(expr) => format!("sub r{rd}, r{rs}, #{expr}"),
+                AddSubOp::Register(rn) =>    format!("{:10} r{rd}, r{rs}, r{rn}", "sub"),
+                AddSubOp::Immediate(expr) => format!("{:10} r{rd}, r{rs}, #{expr}", "sub"),
             },
 
-            ThumbInstruction::Mov { rd, offset } =>    format!("mov r{rd}, #{offset}"),
-            ThumbInstruction::Cmp { rd, offset } =>    format!("cmp r{rd}, #{offset}"),
-            ThumbInstruction::AddImm { rd, offset } => format!("add r{rd}, #{offset}"),
-            ThumbInstruction::SubImm { rd, offset } => format!("sub r{rd}, #{offset}"),
+            ThumbInstruction::Mov { rd, offset } =>    format!("{:10} r{rd}, #{offset}", "mov"),
+            ThumbInstruction::Cmp { rd, offset } =>    format!("{:10} r{rd}, #{offset}", "cmp"),
+            ThumbInstruction::AddImm { rd, offset } => format!("{:10} r{rd}, #{offset}", "add"),
+            ThumbInstruction::SubImm { rd, offset } => format!("{:10} r{rd}, #{offset}", "sub"),
 
             ThumbInstruction::AluOp { op, rs, rd } => {
                 match op {
-                    AluOperation::And => format!("and r{rd}, r{rs}"),
-                    AluOperation::Eor => format!("eor r{rd}, r{rs}"),
-                    AluOperation::Lsl => format!("lsl r{rd}, r{rs}"),
-                    AluOperation::Lsr => format!("lsr r{rd}, r{rs}"),
-                    AluOperation::Asr => format!("asr r{rd}, r{rs}"),
-                    AluOperation::Adc => format!("adc r{rd}, r{rs}"),
-                    AluOperation::Sbc => format!("sbc r{rd}, r{rs}"),
-                    AluOperation::Ror => format!("ror r{rd}, r{rs}"),
-                    AluOperation::Tst => format!("tst r{rd}, r{rs}"),
-                    AluOperation::Neg => format!("neg r{rd}, r{rs}"),
-                    AluOperation::Cmp => format!("cmp r{rd}, r{rs}"),
-                    AluOperation::Cmn => format!("cmn r{rd}, r{rs}"),
-                    AluOperation::Orr => format!("orr r{rd}, r{rs}"),
-                    AluOperation::Mul => format!("mul r{rd}, r{rs}"),
-                    AluOperation::Bic => format!("bic r{rd}, r{rs}"),
-                    AluOperation::Mvn => format!("mvn r{rd}, r{rs}"),
+                    AluOperation::And => format!("{:10} r{rd}, r{rs}", "and"),
+                    AluOperation::Eor => format!("{:10} r{rd}, r{rs}", "eor"),
+                    AluOperation::Lsl => format!("{:10} r{rd}, r{rs}", "lsl"),
+                    AluOperation::Lsr => format!("{:10} r{rd}, r{rs}", "lsr"),
+                    AluOperation::Asr => format!("{:10} r{rd}, r{rs}", "asr"),
+                    AluOperation::Adc => format!("{:10} r{rd}, r{rs}", "adc"),
+                    AluOperation::Sbc => format!("{:10} r{rd}, r{rs}", "sbc"),
+                    AluOperation::Ror => format!("{:10} r{rd}, r{rs}", "ror"),
+                    AluOperation::Tst => format!("{:10} r{rd}, r{rs}", "tst"),
+                    AluOperation::Neg => format!("{:10} r{rd}, r{rs}", "neg"),
+                    AluOperation::Cmp => format!("{:10} r{rd}, r{rs}", "cmp"),
+                    AluOperation::Cmn => format!("{:10} r{rd}, r{rs}", "cmn"),
+                    AluOperation::Orr => format!("{:10} r{rd}, r{rs}", "orr"),
+                    AluOperation::Mul => format!("{:10} r{rd}, r{rs}", "mul"),
+                    AluOperation::Bic => format!("{:10} r{rd}, r{rs}", "bic"),
+                    AluOperation::Mvn => format!("{:10} r{rd}, r{rs}", "mvn"),
                 }
             }
 
-            ThumbInstruction::AddHi { rd, rs } => format!("add r{rd}, r{rs}"),
-            ThumbInstruction::CmpHi { rd, rs } => format!("cmp r{rd}, r{rs}"),
-            ThumbInstruction::MovHi { rd, rs } => format!("mov r{rd}, r{rs}"),
-            ThumbInstruction::BxHi { rs } =>      format!("bx r{rs}"),
+            ThumbInstruction::AddHi { rd, rs } => format!("{:10} r{rd}, r{rs}", "add"),
+            ThumbInstruction::CmpHi { rd, rs } => format!("{:10} r{rd}, r{rs}", "cmp"),
+            ThumbInstruction::MovHi { rd, rs } => format!("{:10} r{rd}, r{rs}", "mov"),
+            ThumbInstruction::BxHi { rs } =>      format!("{:10} r{rs}", "bx"),
 
-            ThumbInstruction::PcRelativeLoad { rd, offset } => format!("ldr r{rd}, [PC, #{offset}]"),
+            ThumbInstruction::PcRelativeLoad { rd, offset } => format!("{:10} r{rd}, [PC, #{offset}]", "ldr"),
 
-            ThumbInstruction::LdrRegister { is_byte, rd, rb, ro } => format!("ldr{} r{rd}, [r{rb}, r{ro}]", if *is_byte {"b"} else {""}),
-            ThumbInstruction::StrRegister { is_byte, rd, rb, ro } => format!("str{} r{rd}, [r{rb}, r{ro}]", if *is_byte {"b"} else {""}),
+            ThumbInstruction::LdrRegister { is_byte, rd, rb, ro } => format!("{:10} r{rd}, [r{rb}, r{ro}]", format!("ldr{}", if *is_byte {"b"} else {""})),
+            ThumbInstruction::StrRegister { is_byte, rd, rb, ro } => format!("{:10} r{rd}, [r{rb}, r{ro}]", format!("str{}", if *is_byte {"b"} else {""})),
 
             ThumbInstruction::LoadSignedByteHalfword { is_byte, is_signed, rd, rb, ro } => {
                 match (is_byte, is_signed) {
-                    (true, true) =>   format!("ldsb r{rd}, [r{rb}, r{ro}]"),
-                    (false, true) =>  format!("ldsh r{rd}, [r{rb}, r{ro}]"),
-                    (false, false) => format!("ldrh r{rd}, [r{rb}, r{ro}]"),
+                    (true, true) =>   format!("{:10} r{rd}, [r{rb}, r{ro}]", "ldsb"),
+                    (false, true) =>  format!("{:10} r{rd}, [r{rb}, r{ro}]", "ldsh"),
+                    (false, false) => format!("{:10} r{rd}, [r{rb}, r{ro}]", "ldrh"),
                     (true, false) =>  panic!("Invalid op for load!"),
                 }
             }
-            ThumbInstruction::StoreHalfword { rd, rb, ro } => format!("strh r{rd}, [r{rb}, r{ro}]"),
+            ThumbInstruction::StoreHalfword { rd, rb, ro } => format!("{:10} r{rd}, [r{rb}, r{ro}]", "strh"),
 
-            ThumbInstruction::LoadImm { is_byte, rd, rb, offset } =>  format!("ldr{} r{rd}, [r{rb}, #{offset}]", if *is_byte {"b"} else {""}),
-            ThumbInstruction::StoreImm { is_byte, rd, rb, offset } => format!("str{} r{rd}, [r{rb}, #{offset}]", if *is_byte {"b"} else {""}),
+            ThumbInstruction::LoadImm { is_byte, rd, rb, offset } =>  format!("{:10} r{rd}, [r{rb}, #{offset}]", format!("ldr{}", if *is_byte {"b"} else {""})),
+            ThumbInstruction::StoreImm { is_byte, rd, rb, offset } => format!("{:10} r{rd}, [r{rb}, #{offset}]", format!("str{}", if *is_byte {"b"} else {""})),
 
-            ThumbInstruction::LoadOffsetHalfword { rd, rb, offset } => format!("ldrh r{rd}, [r{rb}, #{offset}]"),
-            ThumbInstruction::StoreOffsetHalfword { rd, rb, offset } => format!("strh r{rd}, [r{rb}, #{offset}]"),
+            ThumbInstruction::LoadOffsetHalfword { rd, rb, offset } => format!("{:10} r{rd}, [r{rb}, #{offset}]", "ldrh"),
+            ThumbInstruction::StoreOffsetHalfword { rd, rb, offset } => format!("{:10} r{rd}, [r{rb}, #{offset}]", "strh"),
 
-            ThumbInstruction::LoadSpRelative { rd, offset } => format!("ldr r{rd}, [SP, #{offset}]"),
-            ThumbInstruction::StoreSpRelative { rd, offset } => format!("str r{rd}, [SP, #{offset}]"),
+            ThumbInstruction::LoadSpRelative { rd, offset } => format!("{:10} r{rd}, [SP, #{offset}]", "ldr"),
+            ThumbInstruction::StoreSpRelative { rd, offset } => format!("{:10} r{rd}, [SP, #{offset}]", "str"),
 
-            ThumbInstruction::PcSpLoad { is_stack_pointer, rd, offset } => format!("add r{rd}, {}, #{offset}", if *is_stack_pointer {"SP"} else {"PC"}),
+            ThumbInstruction::PcSpLoad { is_stack_pointer, rd, offset } => format!("{:10} r{rd}, {}, #{offset}", if *is_stack_pointer {"SP"} else {"PC"}, "add"),
 
-            ThumbInstruction::SpAddOffset { offset } => format!("add SP, #{offset}"),
+            ThumbInstruction::SpAddOffset { offset } => format!("{:10} SP, #{offset}", "add"),
 
-            ThumbInstruction::Push { transfer_sp_pc, rlist } => format!("push {{{}{}}}", format_rlist(*rlist), if *transfer_sp_pc {", LR"} else {""}),
-            ThumbInstruction::Pop { transfer_sp_pc, rlist } => format!("pop {{{}{}}}", format_rlist(*rlist), if *transfer_sp_pc {", PC"} else {""}),
+            ThumbInstruction::Push { transfer_sp_pc, rlist } => format!("{:10} {{{}{}}}", "push", format_rlist(*rlist), if *transfer_sp_pc {", LR"} else {""}),
+            ThumbInstruction::Pop { transfer_sp_pc, rlist } => format!("{:10} {{{}{}}}", "pop", format_rlist(*rlist), if *transfer_sp_pc {", PC"} else {""}),
 
-            ThumbInstruction::Ldm { rb, rlist } => format!("ldmia r{rb}! {{{}}}", format_rlist(*rlist)),
-            ThumbInstruction::Stm { rb, rlist } => format!("stmia r{rb}! {{{}}}", format_rlist(*rlist)),
+            ThumbInstruction::Ldm { rb, rlist } => format!("{:10} r{rb}! {{{}}}", "ldmia", format_rlist(*rlist)),
+            ThumbInstruction::Stm { rb, rlist } => format!("{:10} r{rb}! {{{}}}", "stmia", format_rlist(*rlist)),
 
-            ThumbInstruction::ConditionalBranch { cond, offset } => format!("b{} 0x{:08X}", format_branch_condition(*cond), opcode_address.wrapping_add(*offset)),
+            ThumbInstruction::ConditionalBranch { cond, offset } => format!("{:10} 0x{:08X}", format!("b{}", format_branch_condition(*cond)), opcode_address.wrapping_add(*offset)),
 
-            ThumbInstruction::Swi { comment_field } => format!("swi 0x{comment_field:02X}"),
+            ThumbInstruction::Swi { comment_field } => format!("{:10} 0x{comment_field:02X}", "swi"),
 
-            ThumbInstruction::UnconditionalBranch { offset } => format!("b 0x{:08X}", opcode_address.wrapping_add(*offset)),
+            ThumbInstruction::UnconditionalBranch { offset } => format!("{:10} 0x{:08X}", "b", opcode_address.wrapping_add(*offset)),
 
-            ThumbInstruction::LongBranchLinkFirst { offset } => format!("bl hi 0x{offset:08X}"),
-            ThumbInstruction::LongBranchLinkSecond { offset } => format!("bl lo 0x{offset:08X}"),
+            ThumbInstruction::LongBranchLinkFirst { offset } => format!("{:10} hi 0x{offset:08X}", "bl"),
+            ThumbInstruction::LongBranchLinkSecond { offset } => format!("{:10} lo 0x{offset:08X}", "bl"),
 
-            ThumbInstruction::Und { opcode } => format!("undefined 0x{opcode:08X}"),
+            ThumbInstruction::Und { opcode } => format!("{:10} 0x{opcode:08X}", "undef"),
         };
 
         asm_string
