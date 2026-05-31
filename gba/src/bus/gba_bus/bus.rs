@@ -1,5 +1,5 @@
 use crate::bus::Bus;
-use crate::gamepak::{AccessType, GamePak, GamepakRegion};
+use crate::gamepak::core::{AccessType, GamePak, GamepakRegion};
 use crate::ppu::Ppu;
 use num_traits::FromPrimitive;
 

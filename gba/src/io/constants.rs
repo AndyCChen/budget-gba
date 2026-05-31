@@ -1,7 +1,7 @@
 use paste::paste;
 
-// helper macro to generate halfword io register addresses with
-// suffixes _0 and _1 because I'm lazy
+/// helper macro to generate halfword io register addresses with
+/// suffixes _0 and _1 because I'm lazy
 macro_rules! io_register_u16 {
     ($identifier:tt, $base_address:expr) => {
         paste! {
