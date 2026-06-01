@@ -3,7 +3,7 @@ use std::num::Wrapping;
 use crate::arm::arm_json_test_states::*;
 use crate::arm::constants::access_code;
 use crate::arm::opcode_tables::{ARM_TABLE, THUMB_TABLE};
-use crate::bus::{Bus, GbaBus};
+use crate::bus::BusInterface;
 
 use bitfield_struct::bitfield;
 
@@ -150,7 +150,7 @@ pub struct Arm7tdmi {
     pub status: StatusRegisters,
     pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
     pub pipeline_state: u8,
-    pub bus: Box<dyn Bus>,
+    // phantom_data: PhantomData<T>,
 }
 
 #[derive(Clone, Copy)]
@@ -163,19 +163,20 @@ use CpuInstruction::*;
 use CpuMode::*;
 
 impl Arm7tdmi {
-    pub fn new() -> Self {
+    pub fn new<T: BusInterface>(bus: &mut T) -> Self {
         let mut cpu = Arm7tdmi {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [Arm(0), Arm(0)],
             pipeline_state: access_code::NONSEQUENTIAL,
-            bus: Box::new(GbaBus::new()),
+            // phantom_data: PhantomData,
         };
-        cpu.pipeline_refill_arm();
+
+        cpu.pipeline_refill_arm(bus);
         cpu
     }
 
-    pub fn from_test_state(input_state: &InputStates, bus: Box<dyn Bus>) -> Self {
+    pub fn from_test_state(input_state: &InputStates) -> Self {
         let pipeline = match StatusRegister::from_bits(input_state.initial.CPSR).t() {
             ArmMode => [
                 Arm(input_state.initial.pipeline[0]),
@@ -239,7 +240,7 @@ impl Arm7tdmi {
             },
             pipeline,
             pipeline_state: input_state.initial.access,
-            bus,
+            // phantom_data: PhantomData,
         }
     }
 
@@ -248,32 +249,30 @@ impl Arm7tdmi {
         self.status = StatusRegisters::default();
         self.pipeline.fill(Arm(0));
         self.pipeline_state = access_code::NONSEQUENTIAL;
-
-        self.bus.reset();
     }
 
-    pub fn step(&mut self) -> (CpuInstruction, u32) {
+    pub fn step<T: BusInterface>(&mut self, bus: &mut T) -> (CpuInstruction, u32) {
         let instruction = self.pipeline[0];
         let pc = self.registers.r15.0;
 
         match instruction {
             Arm(arm_instr) => {
-                self.pipeline_prefetch(ArmMode);
+                self.pipeline_prefetch(bus, ArmMode);
 
                 if self.condition_check((arm_instr >> 28) as u8) {
                     let arm_table_hash =
                         ((arm_instr & 0x0FF00000) >> 16) | ((arm_instr & 0xF0) >> 4);
-                    ARM_TABLE[arm_table_hash as usize](self, arm_instr);
+                    ARM_TABLE[arm_table_hash as usize](self, bus, arm_instr);
                 } else {
                     self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
                     self.registers.r15 += 4;
                 }
             }
             Thumb(thumb_instr) => {
-                self.pipeline_prefetch(ThumbMode);
+                self.pipeline_prefetch(bus, ThumbMode);
 
                 let thumb_table_hash = (thumb_instr >> 6) & 0x3FF;
-                THUMB_TABLE[thumb_table_hash as usize](self, thumb_instr as u16);
+                THUMB_TABLE[thumb_table_hash as usize](self, bus, thumb_instr as u16);
             }
         }
 
@@ -406,12 +405,12 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for arm mode
-    pub fn pipeline_refill_arm(&mut self) {
-        self.pipeline[0] = Arm(self.pipeline_read_word(
+    pub fn pipeline_refill_arm<T: BusInterface>(&mut self, bus: &mut T) {
+        self.pipeline[0] = Arm(bus.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
         ));
-        self.pipeline[1] = Arm(self.pipeline_read_word(
+        self.pipeline[1] = Arm(bus.pipeline_read_word(
             self.registers.r15.0.wrapping_add(4),
             access_code::CODE | access_code::SEQUENTIAL,
         ));
@@ -421,33 +420,41 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for thumb mode
-    pub fn pipeline_refill_thumb(&mut self) {
-        self.pipeline[0] = Thumb(self.pipeline_read_halfword(
-            self.registers.r15.0,
-            access_code::CODE | access_code::NONSEQUENTIAL,
-        ));
-        self.pipeline[1] = Thumb(self.pipeline_read_halfword(
-            self.registers.r15.0.wrapping_add(2),
-            access_code::CODE | access_code::SEQUENTIAL,
-        ));
+    pub fn pipeline_refill_thumb<T: BusInterface>(&mut self, bus: &mut T) {
+        self.pipeline[0] = Thumb(
+            bus.pipeline_read_halfword(
+                self.registers.r15.0,
+                access_code::CODE | access_code::NONSEQUENTIAL,
+            )
+            .into(),
+        );
+        self.pipeline[1] = Thumb(
+            bus.pipeline_read_halfword(
+                self.registers.r15.0.wrapping_add(2),
+                access_code::CODE | access_code::SEQUENTIAL,
+            )
+            .into(),
+        );
 
         self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
         self.registers.r15 += 4;
     }
 
     /// fetch opcode and push into pipeline
-    fn pipeline_prefetch(&mut self, mode: CpuMode) {
+    fn pipeline_prefetch<T: BusInterface>(&mut self, bus: &mut T, mode: CpuMode) {
         self.pipeline.copy_within(1.., 0);
         match mode {
             ArmMode => {
                 self.registers.r15 &= !0x3;
                 self.pipeline[1] =
-                    Arm(self.pipeline_read_word(self.registers.r15.0, self.pipeline_state));
+                    Arm(bus.pipeline_read_word(self.registers.r15.0, self.pipeline_state));
             }
             ThumbMode => {
                 self.registers.r15 &= !0x1;
-                self.pipeline[1] =
-                    Thumb(self.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state));
+                self.pipeline[1] = Thumb(
+                    bus.pipeline_read_halfword(self.registers.r15.0, self.pipeline_state)
+                        .into(),
+                );
             }
         }
     }
@@ -486,9 +493,11 @@ impl Arm7tdmi {
 #[allow(dead_code)]
 mod test_utils {
     use crate::bus::TestBus;
+    use crate::arm::decoder_tables::*;
 
     use super::*;
     use std::fs;
+    use std::io::Write;
     use std::path::Path;
 
     pub fn load_test<P: AsRef<Path>>(
@@ -496,6 +505,8 @@ mod test_utils {
         check_state: fn(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize),
         skip: usize,
     ) {
+        let file_name = path.as_ref().file_stem().unwrap().to_str().unwrap().to_string();
+        
         let Ok(data) = fs::read_to_string(path) else {
             panic!("Failed to load test file!");
         };
@@ -503,10 +514,27 @@ mod test_utils {
         let items: Vec<InputStates> = serde_json::from_str(&data).unwrap();
         let it = items.iter().enumerate().skip(skip);
 
+        let mut instructions = Vec::with_capacity(items.len());
+
         for (count, item) in it {
-            let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
-            cpu.step();
+            let mut cpu = Arm7tdmi::from_test_state(item);
+            let mut bus = TestBus::new(&item.transactions);
+
+            let (instr, pc) = cpu.step(&mut bus);
+            instructions.push((instr, pc));
             check_state(&cpu, item, count);
+        }
+
+        fs::create_dir_all("decoder_output").expect("failed to create directory!");
+        let mut file = fs::File::create(format!("decoder_output/{file_name}.txt")).expect("failed to create file");
+
+        for (instruction, pc) in instructions {
+            let asm_string = match instruction {
+                Arm(opcode32) => decode_arm(opcode32).to_asm_string(pc),
+                Thumb(opcode16) => decode_thumb(opcode16 as u16).to_asm_string(pc),
+            };
+
+            writeln!(file, "{asm_string}").expect("write failed!");
         }
     }
 
@@ -708,8 +736,9 @@ mod thumb_16_tests {
             .filter(|item| !is_multiply(item.opcode))
             .enumerate()
             .for_each(|(count, item)| {
-                let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
-                cpu.step();
+                let mut cpu = Arm7tdmi::from_test_state(item);
+                let mut bus = TestBus::new(&item.transactions);
+                cpu.step(&mut bus);
                 verify_state(&cpu, item, count);
             });
 
@@ -718,8 +747,9 @@ mod thumb_16_tests {
             .filter(|item| is_multiply(item.opcode))
             .enumerate()
             .for_each(|(count, item)| {
-                let mut cpu = Arm7tdmi::from_test_state(item, Box::new(TestBus::new(&item.transactions)));
-                cpu.step();
+                let mut cpu = Arm7tdmi::from_test_state(item);
+                let mut bus = TestBus::new(&item.transactions);
+                cpu.step(&mut bus);
                 verify_state_no_carry(&cpu, item, count);
             });
     }

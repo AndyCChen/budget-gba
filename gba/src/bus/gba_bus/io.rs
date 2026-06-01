@@ -1,8 +1,8 @@
-use crate::bus::GbaBus;
+use crate::bus::Bus;
 use crate::io::constants::*;
 use crate::io::*;
 
-impl GbaBus {
+impl<'a> Bus<'a> {
     pub fn read_io_byte(&self, address: usize) -> u8 {
         match address {
             // lcd I/O registers

@@ -1,73 +1,67 @@
 mod arm;
+mod audio;
 mod bus;
 mod gamepak;
 mod io;
 mod ppu;
 
-use godot::{classes::Input, prelude::*};
+use crate::arm::Arm7tdmi;
+use crate::bus::{Bus, BusComponents};
+use crate::gamepak::core::GamePak;
+use crate::ppu::Ppu;
 
-use crate::arm::{
-    ARM7TDMI_CLOCK_RATE, Arm7tdmi,
-    decoder_tables::{decode_arm, decode_thumb},
-};
-
-struct GbaExtension;
-
-#[gdextension]
-unsafe impl ExtensionLibrary for GbaExtension {}
-
-#[derive(GodotClass)]
 struct BudgetGba {
     cpu: Arm7tdmi,
+    cycles: u64,
 
-    per_frame_cycle_counter: f32,
-    base: Base<RefCounted>,
+    bios_ram: Box<[u8]>,
+    wram_256: Box<[u8]>,
+    wram_32: Box<[u8]>,
+
+    ppu: Ppu,
+    gamepak: GamePak,
 }
 
-#[godot_api]
-impl IRefCounted for BudgetGba {
-    fn init(base: Base<RefCounted>) -> Self {
-        godot_print!("GBA init from rust!");
-        Self {
-            cpu: Arm7tdmi::new(),
-            per_frame_cycle_counter: 0.0,
-            base,
-        }
-    }
-}
-
-#[godot_api]
 impl BudgetGba {
-    #[func]
-    // must be called 60 times per second
-    fn on_update(&mut self, _delta: f64) {
-        let paused = true;
+    fn new() -> Self {
+        let BusComponents {
+            mut gamepak,
+            mut ppu,
+            mut bios_ram,
+            mut wram_256,
+            mut wram_32,
+            mut cycles,
+        } = BusComponents::new();
 
-        if paused {
-            if Input::singleton().is_action_just_pressed("step") {
-                let (instr, pc) = self.cpu.step();
-                let intr_str = match (instr, pc) {
-                    (arm::CpuInstruction::Arm(opcode), _) => decode_arm(opcode).to_asm_string(pc),
-                    (arm::CpuInstruction::Thumb(opcode), _) => decode_thumb(opcode as u16).to_asm_string(pc),
-                };
-                godot_print!("0x{:08X} {intr_str}", pc.wrapping_sub(8));
-            }
-        } else {
-            const CYCLES_PER_FRAME: f32 = ARM7TDMI_CLOCK_RATE as f32 / 60.0;
-            let start_timestamp = self.cpu.bus.cycles();
+        let cpu = Arm7tdmi::new(&mut Bus {
+            gamepak: &mut gamepak,
+            ppu: &mut ppu,
+            bios_ram: &mut bios_ram,
+            wram_256: &mut wram_256,
+            wram_32: &mut wram_32,
+            cycles: &mut cycles,
+        });
 
-            while self.per_frame_cycle_counter < CYCLES_PER_FRAME {
-                self.cpu.step();
-                self.per_frame_cycle_counter += (self.cpu.bus.cycles() - start_timestamp) as f32;
-            }
-
-            self.per_frame_cycle_counter -= CYCLES_PER_FRAME;
+        Self {
+            cpu,
+            gamepak,
+            ppu,
+            bios_ram,
+            wram_256,
+            wram_32,
+            cycles,
         }
     }
+}
 
-    #[func]
-    fn reset(&mut self) {
-        self.cpu.reset();
-        self.per_frame_cycle_counter = 0.0;
-    }
+fn thing() {
+    let mut gba = BudgetGba::new();
+    gba.cpu.step(&mut Bus {
+        gamepak: &mut gba.gamepak,
+        ppu: &mut gba.ppu,
+        bios_ram: &mut gba.bios_ram,
+        wram_256: &mut gba.wram_256,
+        wram_32: &mut gba.wram_32,
+        cycles: &mut gba.cycles,
+    });
 }

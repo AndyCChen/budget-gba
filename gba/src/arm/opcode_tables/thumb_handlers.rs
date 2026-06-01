@@ -6,8 +6,13 @@ use crate::arm::{
     core::{Arm7tdmi, CpuMode::*, Mode},
     opcode_tables::common::reg_constant::*,
 };
+use crate::bus::BusInterface;
 
-pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn move_shifted<T: BusInterface, const SHIFT_OP: u8>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -30,7 +35,11 @@ pub fn move_shifted<const SHIFT_OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.set_banked_register(rd, result);
 }
 
-pub fn add_subtract<const IMM: bool, const IS_SUBTRACT: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn add_subtract<T: BusInterface, const IMM: bool, const IS_SUBTRACT: bool>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -50,7 +59,11 @@ pub fn add_subtract<const IMM: bool, const IS_SUBTRACT: bool>(cpu: &mut Arm7tdmi
     cpu.set_banked_register(rd, result);
 }
 
-pub fn mov_cmp_add_sub_immediate<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn mov_cmp_add_sub_immediate<T: BusInterface, const OP: u8>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u16,
+) {
     const MOV: u8 = 0;
     const CMP: u8 = 1;
     const ADD: u8 = 2;
@@ -128,7 +141,11 @@ fn mul(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
     result
 }
 
-pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn alu_operations<T: BusInterface, const OP: u8>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -141,7 +158,7 @@ pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     if matches!(OP, alu_op::LSL | alu_op::LSR | alu_op::ASR | alu_op::ROR) {
         // handle extra i cycle from register specified shift
         cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
-        cpu.bus.i_cycle();
+        bus.i_cycle();
     }
 
     let result = match OP {
@@ -190,8 +207,9 @@ pub fn alu_operations<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
     }
 }
 
-pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
+pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: bool>(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u16,
 ) {
     const ADD: u8 = 0;
@@ -224,7 +242,7 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
 
             if rd == 15 {
                 cpu.registers.r15.0 &= !1;
-                cpu.pipeline_refill_thumb();
+                cpu.pipeline_refill_thumb(bus);
             }
         }
         CMP => {
@@ -234,11 +252,11 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
             if op2 & 1 == 1 {
                 cpu.status.cpsr.set_t(ThumbMode);
                 cpu.registers.r15.0 = op2 & !1;
-                cpu.pipeline_refill_thumb();
+                cpu.pipeline_refill_thumb(bus);
             } else {
                 cpu.status.cpsr.set_t(ArmMode);
                 cpu.registers.r15.0 = op2;
-                cpu.pipeline_refill_arm();
+                cpu.pipeline_refill_arm(bus);
             }
         }
 
@@ -246,23 +264,24 @@ pub fn add_cmp_mov_hi<const OP: u8, const H1: bool, const H2: bool>(
     };
 }
 
-pub fn pc_relative_load(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn pc_relative_load<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode: u16) {
     let rd: u32 = ((opcode >> 8) & 0x7).into();
     let offset: u32 = ((opcode & 0xFF) * 4).into();
 
     let address = (cpu.registers.r15.0 & !2).wrapping_add(offset);
-    let value = cpu.read_word(address, access_code::NONSEQUENTIAL);
+    let value = bus.read_word(address, access_code::NONSEQUENTIAL);
     cpu.set_banked_register(rd, value);
 
     // todo handle i cycle
-    cpu.bus.i_cycle();
+    bus.i_cycle();
 
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 }
 
-pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
+pub fn load_store_register_offset<T: BusInterface, const LOAD: bool, const TRANSFER_BYTE: bool>(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u16,
 ) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
@@ -278,27 +297,31 @@ pub fn load_store_register_offset<const LOAD: bool, const TRANSFER_BYTE: bool>(
 
     if LOAD {
         let load_value = if TRANSFER_BYTE {
-            cpu.read_byte(address, access_code::NONSEQUENTIAL)
+            bus.read_byte(address, access_code::NONSEQUENTIAL)
         } else {
-            cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
+            bus.read_rotate_word(address, access_code::NONSEQUENTIAL)
         };
 
         // todo handle i cycle for load op
-        cpu.bus.i_cycle();
+        bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
-            cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+            bus.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
         } else {
-            cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+            bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
         }
     }
 }
 
-pub fn load_store_sign_extended<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn load_store_sign_extended<T: BusInterface, const OP: u8>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -314,29 +337,30 @@ pub fn load_store_sign_extended<const OP: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
         // store halfword
         0 => {
             let store_value = cpu.get_banked_register(rd);
-            cpu.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+            bus.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
         }
         // load sign extended byte
         1 => {
-            let load_value = cpu.read_signed_byte(address, access_code::NONSEQUENTIAL);
+            let load_value = bus.read_signed_byte(address, access_code::NONSEQUENTIAL);
             cpu.set_banked_register(rd, load_value);
         }
         // load halfword
         2 => {
-            let load_value = cpu.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
+            let load_value = bus.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
             cpu.set_banked_register(rd, load_value);
         }
         // load sign extended halfword
         3 => {
-            let load_value = cpu.read_signed_halfword(address, access_code::NONSEQUENTIAL);
+            let load_value = bus.read_signed_halfword(address, access_code::NONSEQUENTIAL);
             cpu.set_banked_register(rd, load_value);
         }
         _ => panic!("Invalid OP! {OP}"),
     }
 }
 
-pub fn load_store_immediate_offset<const TRANSFER_BYTE: bool, const LOAD: bool>(
+pub fn load_store_immediate_offset<T: BusInterface, const TRANSFER_BYTE: bool, const LOAD: bool>(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u16,
 ) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
@@ -350,27 +374,31 @@ pub fn load_store_immediate_offset<const TRANSFER_BYTE: bool, const LOAD: bool>(
 
     if LOAD {
         let load_value = if TRANSFER_BYTE {
-            cpu.read_byte(address, access_code::NONSEQUENTIAL)
+            bus.read_byte(address, access_code::NONSEQUENTIAL)
         } else {
-            cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
+            bus.read_rotate_word(address, access_code::NONSEQUENTIAL)
         };
 
         // todo handle i cycle for load op
-        cpu.bus.i_cycle();
+        bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
-            cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+            bus.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
         } else {
-            cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+            bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
         }
     }
 }
 
-pub fn load_store_halfword_immediate_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn load_store_halfword_immediate_offset<T: BusInterface, const LOAD: bool>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -381,19 +409,23 @@ pub fn load_store_halfword_immediate_offset<const LOAD: bool>(cpu: &mut Arm7tdmi
     let address = cpu.get_banked_register(rb).wrapping_add(offset);
 
     if LOAD {
-        let load_value = cpu.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
+        let load_value = bus.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
 
         // todo handle i cycle from load op
-        cpu.bus.i_cycle();
+        bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
-        cpu.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+        bus.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
     }
 }
 
-pub fn sp_load_store_relative_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn sp_load_store_relative_offset<T: BusInterface, const LOAD: bool>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -403,19 +435,23 @@ pub fn sp_load_store_relative_offset<const LOAD: bool>(cpu: &mut Arm7tdmi, opcod
     let address = cpu.get_banked_register(STACK_POINTER).wrapping_add(offset);
 
     if LOAD {
-        let load_value = cpu.read_rotate_word(address, access_code::NONSEQUENTIAL);
+        let load_value = bus.read_rotate_word(address, access_code::NONSEQUENTIAL);
 
         // todo handle i cycle
-        cpu.bus.i_cycle();
+        bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
-        cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+        bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
     }
 }
 
-pub fn pc_sp_load_address<const SP: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn pc_sp_load_address<T: BusInterface, const SP: bool>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u16,
+) {
     let rd = u32::from((opcode >> 8) & 7);
     let offset = u32::from((opcode & 0xFF) << 2);
 
@@ -432,7 +468,11 @@ pub fn pc_sp_load_address<const SP: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
     cpu.registers.r15 += 2;
 }
 
-pub fn add_sub_sp<const NEGATIVE_OFFSET: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn add_sub_sp<T: BusInterface, const NEGATIVE_OFFSET: bool>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u16,
+) {
     let offset = u32::from((opcode & 0x7F) << 2);
 
     let result = if NEGATIVE_OFFSET {
@@ -448,10 +488,12 @@ pub fn add_sub_sp<const NEGATIVE_OFFSET: bool>(cpu: &mut Arm7tdmi, opcode: u16) 
 }
 
 pub fn push_pop_register<
+    T: BusInterface,
     const LOAD: bool,
     const PC_LR_BIT: bool, // 0: Leave LR/PC alone, 1: store LR or load PC
 >(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u16,
 ) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
@@ -465,15 +507,15 @@ pub fn push_pop_register<
         let access = access_code::NONSEQUENTIAL;
 
         if LOAD {
-            let pc_load_value = cpu.read_word(base, access);
+            let pc_load_value = bus.read_word(base, access);
             cpu.set_banked_register(PROGRAM_COUNTER, pc_load_value);
             cpu.set_banked_register(STACK_POINTER, base.wrapping_add(0x40));
 
-            cpu.pipeline_refill_thumb();
+            cpu.pipeline_refill_thumb(bus);
         } else {
             base_address = base.wrapping_sub(0x40);
             cpu.set_banked_register(STACK_POINTER, base_address);
-            cpu.write_word(base_address, cpu.registers.r15.0, access);
+            bus.write_word(base_address, cpu.registers.r15.0, access);
         }
 
         return;
@@ -509,11 +551,11 @@ pub fn push_pop_register<
     let mut access = access_code::NONSEQUENTIAL;
     for (address, register_id) in rlist_iter {
         if LOAD {
-            let pop_value = cpu.read_word(address, access);
+            let pop_value = bus.read_word(address, access);
             cpu.set_banked_register(register_id, pop_value);
         } else {
             let push_value = cpu.get_banked_register(register_id);
-            cpu.write_word(address, push_value, access);
+            bus.write_word(address, push_value, access);
         }
 
         access = access_code::SEQUENTIAL;
@@ -521,16 +563,20 @@ pub fn push_pop_register<
 
     if LOAD {
         // handle extra i cycle from load op
-        cpu.bus.i_cycle();
+        bus.i_cycle();
     }
 
     if PC_LR_BIT && LOAD {
         cpu.registers.r15.0 &= !1;
-        cpu.pipeline_refill_thumb();
+        cpu.pipeline_refill_thumb(bus);
     }
 }
 
-pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u16,
+) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 2;
 
@@ -544,11 +590,11 @@ pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
         let access = access_code::NONSEQUENTIAL;
 
         if LOAD {
-            let load_value = cpu.read_word(base, access);
+            let load_value = bus.read_word(base, access);
             cpu.set_banked_register(PROGRAM_COUNTER, load_value);
-            cpu.pipeline_refill_thumb();
+            cpu.pipeline_refill_thumb(bus);
         } else {
-            cpu.write_word(base, cpu.registers.r15.0, access);
+            bus.write_word(base, cpu.registers.r15.0, access);
         }
 
         cpu.set_banked_register(rb, base.wrapping_add(0x40));
@@ -570,12 +616,12 @@ pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
         let write_back = base.wrapping_add(transfer_byte_size);
 
         if LOAD {
-            let load_value = cpu.read_word(address, access);
+            let load_value = bus.read_word(address, access);
             cpu.set_banked_register(rb, write_back);
             cpu.set_banked_register(register_id, load_value);
         } else {
             let store_value = cpu.get_banked_register(register_id);
-            cpu.write_word(address, store_value, access);
+            bus.write_word(address, store_value, access);
             cpu.set_banked_register(rb, write_back);
         }
     }
@@ -584,21 +630,25 @@ pub fn multiple_load_store<const LOAD: bool>(cpu: &mut Arm7tdmi, opcode: u16) {
         let access = access_code::SEQUENTIAL;
 
         if LOAD {
-            let load_value = cpu.read_word(address, access);
+            let load_value = bus.read_word(address, access);
             cpu.set_banked_register(register_id, load_value);
         } else {
             let store_value = cpu.get_banked_register(register_id);
-            cpu.write_word(address, store_value, access);
+            bus.write_word(address, store_value, access);
         }
     }
 
     // todo handle i cycle from load op
     if LOAD {
-        cpu.bus.i_cycle();
+        bus.i_cycle();
     }
 }
 
-pub fn conditional_branch<const COND: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn conditional_branch<T: BusInterface, const COND: u8>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u16,
+) {
     use crate::arm::constants::arm_condition_code::*;
 
     let do_branch = match COND {
@@ -638,10 +688,10 @@ pub fn conditional_branch<const COND: u8>(cpu: &mut Arm7tdmi, opcode: u16) {
         cpu.registers.r15 -= branch_offset;
     };
 
-    cpu.pipeline_refill_thumb();
+    cpu.pipeline_refill_thumb(bus);
 }
 
-pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u16) {
+pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opcode: u16) {
     cpu.registers.r14_svc = cpu.registers.r15.0.wrapping_sub(2);
 
     cpu.registers.r15 = Wrapping(8);
@@ -651,10 +701,10 @@ pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u16) {
     cpu.status.cpsr.set_mode_bits(Mode::Supervisor);
     cpu.status.cpsr.set_t(ArmMode);
 
-    cpu.pipeline_refill_arm();
+    cpu.pipeline_refill_arm(bus);
 }
 
-pub fn unconditional_branch(cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn unconditional_branch<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode: u16) {
     let mut branch_offset: u32 = ((opcode & 0x7FF) << 1).into();
 
     // positive
@@ -666,13 +716,15 @@ pub fn unconditional_branch(cpu: &mut Arm7tdmi, opcode: u16) {
         cpu.registers.r15 -= branch_offset;
     }
 
-    cpu.pipeline_refill_thumb();
+    cpu.pipeline_refill_thumb(bus);
 }
 
 pub fn long_branch_with_link<
+    T: BusInterface,
     const H_BIT: bool, // 0: offset high, 1: offset low
 >(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u16,
 ) {
     if H_BIT {
@@ -685,7 +737,7 @@ pub fn long_branch_with_link<
         cpu.set_banked_register(LINK_REGISTER, cpu.registers.r15.0.wrapping_sub(2) | 1);
 
         cpu.registers.r15.0 = branch_address & !1;
-        cpu.pipeline_refill_thumb();
+        cpu.pipeline_refill_thumb(bus);
     } else {
         let mut offset_hi = (u32::from(opcode) & 0x7FF) << 12;
 
@@ -705,6 +757,6 @@ pub fn long_branch_with_link<
     }
 }
 
-pub fn undefined_thumb(_cpu: &mut Arm7tdmi, opcode: u16) {
+pub fn undefined_thumb<T: BusInterface>(_cpu: &mut Arm7tdmi, _bus: &mut T, opcode: u16) {
     todo!("handle undefined opcode: {opcode}");
 }

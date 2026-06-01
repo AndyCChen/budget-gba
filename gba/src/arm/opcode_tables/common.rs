@@ -139,7 +139,11 @@ pub mod arithmetic {
         result
     }
 
-    pub fn sub<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn sub<const SET_COND: bool>(
+        cpu: &mut Arm7tdmi,
+        op1: u32,
+        op2: u32,
+    ) -> u32 {
         let (result, carry) = op1.overflowing_sub(op2);
         let overflow = ((result ^ op1) & (result ^ !op2) & 0x8000_0000) != 0;
 
@@ -150,7 +154,11 @@ pub mod arithmetic {
         result
     }
 
-    pub fn add<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn add<const SET_COND: bool>(
+        cpu: &mut Arm7tdmi,
+        op1: u32,
+        op2: u32,
+    ) -> u32 {
         let (result, carry) = op1.overflowing_add(op2);
         let overflow = ((result ^ op1) & (result ^ op2) & 0x8000_0000) != 0;
 
@@ -161,7 +169,11 @@ pub mod arithmetic {
         result
     }
 
-    pub fn adc<const SET_COND: bool>(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+    pub fn adc<const SET_COND: bool>(
+        cpu: &mut Arm7tdmi,
+        op1: u32,
+        op2: u32,
+    ) -> u32 {
         let (result, carry) = {
             let (op2_with_carry, carry0) = op2.overflowing_add(u32::from(cpu.status.cpsr.c()));
             let (result, carry1) = op1.overflowing_add(op2_with_carry);
@@ -203,13 +215,22 @@ pub mod arithmetic {
         value_to_move
     }
 
-    fn update_flags_logical(cpu: &mut Arm7tdmi, result: u32, carry_from_shift: bool) {
+    fn update_flags_logical(
+        cpu: &mut Arm7tdmi,
+        result: u32,
+        carry_from_shift: bool,
+    ) {
         cpu.status.cpsr.set_c(carry_from_shift);
         cpu.status.cpsr.set_z(result == 0);
         cpu.status.cpsr.set_n((result as i32).is_negative());
     }
 
-    fn update_flags_arithmetic(cpu: &mut Arm7tdmi, result: u32, carry: bool, overflow: bool) {
+    fn update_flags_arithmetic(
+        cpu: &mut Arm7tdmi,
+        result: u32,
+        carry: bool,
+        overflow: bool,
+    ) {
         cpu.status.cpsr.set_c(carry);
         cpu.status.cpsr.set_v(overflow);
         cpu.status.cpsr.set_z(result == 0);

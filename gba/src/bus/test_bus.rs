@@ -1,4 +1,5 @@
-use crate::{arm::*, bus::Bus};
+use crate::arm::*;
+use crate::bus::{BusInterface, common};
 
 use num_traits::{Bounded, FromPrimitive, ToPrimitive, Unsigned};
 
@@ -49,7 +50,7 @@ impl TestBus {
     }
 }
 
-impl Bus for TestBus {
+impl BusInterface for TestBus {
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
         let address = address & !3; // align 4 byte boundary
         self.read(address, access, kind_code::INSTRUCTION_READ)
@@ -64,12 +65,34 @@ impl Bus for TestBus {
         self.read(address, access, kind_code::GENERAL_READ)
     }
 
-    fn read_halfword(&mut self, address: u32, access: u8) -> u16 {
-        self.read(address, access, kind_code::GENERAL_READ)
+    fn read_rotate_word(&mut self, address: u32, access: u8) -> u32 {
+        let word: u32 = self.read(address, access, kind_code::GENERAL_READ);
+        common::read_rotate_word(address, word)
     }
 
-    fn read_byte(&mut self, address: u32, access: u8) -> u8 {
-        self.read(address, access, kind_code::GENERAL_READ)
+    fn read_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let halfword: u16 = self.read(address, access, kind_code::GENERAL_READ);
+        u32::from(halfword)
+    }
+
+    fn read_rotate_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let halfword: u16 = self.read(address, access, kind_code::GENERAL_READ);
+        common::read_rotate_halfword(address, halfword)
+    }
+
+    fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let halfword: u16 = self.read(address, access, kind_code::GENERAL_READ);
+        common::read_signed_halfword(address, halfword)
+    }
+
+    fn read_byte(&mut self, address: u32, access: u8) -> u32 {
+       let byte: u8 = self.read(address, access, kind_code::GENERAL_READ);
+       u32::from(byte)
+    }
+
+    fn read_signed_byte(&mut self, address: u32, access: u8) -> u32 {
+        let byte: u8 = self.read(address, access, kind_code::GENERAL_READ);
+        common::read_signed_byte(byte)
     }
 
     fn write_word(&mut self, address: u32, value: u32, access: u8) {

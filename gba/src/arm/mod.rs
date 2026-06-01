@@ -2,7 +2,6 @@ mod arm_json_test_states;
 mod constants;
 mod core;
 pub mod decoder_tables;
-mod memory;
 mod opcode_tables;
 
 pub use arm_json_test_states::*;

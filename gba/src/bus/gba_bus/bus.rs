@@ -1,6 +1,8 @@
-use crate::bus::Bus;
+use crate::bus::BusInterface;
+use crate::bus::common;
 use crate::gamepak::core::{AccessType, GamePak, GamepakRegion};
 use crate::ppu::Ppu;
+
 use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
@@ -9,16 +11,16 @@ const WRAM_32: usize = 32 * 1024;
 
 const BIOS: &[u8; BIOS_SIZE] = include_bytes!("../../../resource/gba_bios.bin");
 
-pub struct GbaBus {
-    bios_ram: Box<[u8]>,
-    wram_256: Box<[u8]>,
-    wram_32: Box<[u8]>,
-    cycles: usize,
+pub struct BusComponents {
+    pub bios_ram: Box<[u8]>,
+    pub wram_256: Box<[u8]>,
+    pub wram_32: Box<[u8]>,
+    pub cycles: u64,
     pub gamepak: GamePak,
     pub ppu: Ppu,
 }
 
-impl GbaBus {
+impl BusComponents {
     pub fn new() -> Self {
         Self {
             bios_ram: BIOS.to_vec().into_boxed_slice(),
@@ -29,19 +31,30 @@ impl GbaBus {
             ppu: Ppu::new(),
         }
     }
+}
 
+pub struct Bus<'a> {
+    pub gamepak: &'a mut GamePak,
+    pub ppu: &'a mut Ppu,
+    pub bios_ram: &'a mut Box<[u8]>,
+    pub wram_256: &'a mut Box<[u8]>,
+    pub wram_32: &'a mut Box<[u8]>,
+    pub cycles: &'a mut u64,
+}
+
+impl<'a> Bus<'a> {
     pub fn reset(&mut self) {
+        *self.cycles = 0;
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
-        self.cycles = 0;
         self.gamepak.reset();
         self.ppu.reset();
     }
 
     // tick the system for N cycles
     fn tick(&mut self, n: u8) {
-        self.cycles += usize::from(n);
+        *self.cycles += u64::from(n);
     }
 
     fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: u8) -> T {
@@ -232,17 +245,17 @@ impl GbaBus {
     }
 }
 
-impl Bus for GbaBus {
+impl<'a> BusInterface for Bus<'a> {
     fn reset(&mut self) {
-        self.reset();
+        // self.reset();
     }
 
     fn i_cycle(&mut self) {
         self.tick(1);
     }
 
-    fn cycles(&self) -> usize {
-        self.cycles
+    fn cycles(&self) -> u64 {
+        *self.cycles
     }
 
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
@@ -257,12 +270,34 @@ impl Bus for GbaBus {
         self.read(address, access)
     }
 
-    fn read_halfword(&mut self, address: u32, access: u8) -> u16 {
-        self.read(address, access)
+    fn read_rotate_word(&mut self, address: u32, access: u8) -> u32 {
+        let word: u32 = self.read(address, access);
+        common::read_rotate_word(address, word)
     }
 
-    fn read_byte(&mut self, address: u32, access: u8) -> u8 {
-        self.read(address, access)
+    fn read_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let halfword: u16 = self.read(address, access);
+        u32::from(halfword)
+    }
+
+    fn read_rotate_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let halfword: u16 = self.read(address, access);
+        common::read_rotate_halfword(address, halfword)
+    }
+
+    fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32 {
+        let halfword: u16 = self.read(address, access);
+        common::read_signed_halfword(address, halfword)
+    }
+
+    fn read_byte(&mut self, address: u32, access: u8) -> u32 {
+        let byte: u8 = self.read(address, access);
+        u32::from(byte)
+    }
+
+    fn read_signed_byte(&mut self, address: u32, access: u8) -> u32 {
+        let byte: u8 = self.read(address, access);
+        common::read_signed_byte(byte)
     }
 
     fn write_word(&mut self, address: u32, value: u32, access: u8) {
@@ -287,8 +322,8 @@ enum GbaBusIntType {
 trait GbaBusInt {
     fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T;
     fn mem_write(&self, address: usize, data: &mut [u8]);
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T;
-    fn io_write(&self, bus: &mut GbaBus, address: usize);
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T;
+    fn io_write(&self, bus: &mut Bus, address: usize);
     fn align(address: u32) -> usize;
     fn int_type() -> GbaBusIntType;
 }
@@ -302,11 +337,11 @@ impl GbaBusInt for u8 {
         data[address] = *self;
     }
 
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T {
         T::from_u8(bus.read_io_byte(address)).unwrap()
     }
 
-    fn io_write(&self, bus: &mut GbaBus, address: usize) {
+    fn io_write(&self, bus: &mut Bus, address: usize) {
         bus.write_io_byte(*self, address);
     }
 
@@ -331,11 +366,11 @@ impl GbaBusInt for u16 {
         data[address..address + 2].copy_from_slice(&self.to_le_bytes());
     }
 
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T {
         T::from_u16(bus.read_io_halfword(address)).unwrap()
     }
 
-    fn io_write(&self, bus: &mut GbaBus, address: usize) {
+    fn io_write(&self, bus: &mut Bus, address: usize) {
         bus.write_io_halfword(*self, address);
     }
 
@@ -360,11 +395,11 @@ impl GbaBusInt for u32 {
         data[address..address + 4].copy_from_slice(&self.to_le_bytes());
     }
 
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &GbaBus, address: usize) -> T {
+    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T {
         T::from_u32(bus.read_io_word(address)).unwrap()
     }
 
-    fn io_write(&self, bus: &mut GbaBus, address: usize) {
+    fn io_write(&self, bus: &mut Bus, address: usize) {
         bus.write_io_word(*self, address);
     }
 
@@ -381,12 +416,29 @@ impl GbaBusInt for u32 {
 mod gba_bus_test {
     use crate::{
         arm::access_code,
-        bus::{Bus, GbaBus},
+        bus::{Bus, BusComponents, BusInterface},
     };
 
     #[test]
     fn bus_read_test() {
-        let mut bus = GbaBus::new();
+        let BusComponents {
+            mut bios_ram,
+            mut wram_256,
+            mut wram_32,
+            mut cycles,
+            mut gamepak,
+            mut ppu,
+        } = BusComponents::new();
+
+        let mut bus = Bus {
+            gamepak: &mut gamepak,
+            ppu: &mut ppu,
+            bios_ram: &mut bios_ram,
+            wram_256: &mut wram_256,
+            wram_32: &mut wram_32,
+            cycles: &mut cycles,
+        };
+
         bus.wram_256[0x3FF00] = 0xAA;
         bus.wram_256[0x3FF01] = 0xBB;
         bus.wram_256[0x3FF02] = 0xCC;
@@ -426,8 +478,25 @@ mod gba_bus_test {
 
     #[test]
     fn bus_write_test() {
+        let BusComponents {
+            mut bios_ram,
+            mut wram_256,
+            mut wram_32,
+            mut cycles,
+            mut gamepak,
+            mut ppu,
+        } = BusComponents::new();
+
+        let mut bus = Bus {
+            gamepak: &mut gamepak,
+            ppu: &mut ppu,
+            bios_ram: &mut bios_ram,
+            wram_256: &mut wram_256,
+            wram_32: &mut wram_32,
+            cycles: &mut cycles,
+        };
+
         let wram_256_start = 0x0200_0000;
-        let mut bus = GbaBus::new();
 
         // test writes to aligned addresses
 

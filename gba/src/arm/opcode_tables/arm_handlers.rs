@@ -2,9 +2,10 @@ use crate::arm::constants::access_code;
 use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::arm::opcode_tables::common::reg_constant::*;
 use crate::arm::opcode_tables::to_negative;
+use crate::bus::BusInterface;
 use std::num::Wrapping;
 
-pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn branch_and_exchange<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode: u32) {
     let branch_address = cpu.get_banked_register(opcode & 0xF);
     let mode = if (branch_address & 0x1) == 0 {
         ArmMode
@@ -16,15 +17,19 @@ pub fn branch_and_exchange(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.registers.r15 = Wrapping(branch_address); // pc is updated so we need to refill instruction pipeline
 
     match mode {
-        ArmMode => cpu.pipeline_refill_arm(),
+        ArmMode => cpu.pipeline_refill_arm(bus),
         ThumbMode => {
             cpu.registers.r15 &= !1;
-            cpu.pipeline_refill_thumb();
+            cpu.pipeline_refill_thumb(bus);
         }
     }
 }
 
-pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn branch_and_link<T: BusInterface, const LINK: bool>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u32,
+) {
     let mut offset = (opcode & 0xFFFFFF) << 2;
 
     // branch with link, save r15 (pc) to r14 (link register)
@@ -38,16 +43,18 @@ pub fn branch_and_link<const LINK: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     }
 
     cpu.registers.r15 += offset;
-    cpu.pipeline_refill_arm();
+    cpu.pipeline_refill_arm(bus);
 }
 
 pub fn data_processing<
+    T: BusInterface,
     const IMM: bool,
     const DATA_OP: u8,
     const SET_COND: bool,
     const SHIFT: u8,
 >(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u32,
 ) {
     use super::common::arithmetic::*;
@@ -84,7 +91,7 @@ pub fn data_processing<
             let rs_value = cpu.get_banked_register(shift_field >> 4) & 0xFF;
 
             // pc is ahead by 12 when a register specified shift is used
-            cpu.bus.i_cycle();
+            bus.i_cycle();
             cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
             cpu.registers.r15 += 4;
 
@@ -152,14 +159,18 @@ pub fn data_processing<
 
         if result.is_some() {
             match cpu.status.cpsr.t() {
-                ArmMode => cpu.pipeline_refill_arm(),
-                ThumbMode => cpu.pipeline_refill_thumb(),
+                ArmMode => cpu.pipeline_refill_arm(bus),
+                ThumbMode => cpu.pipeline_refill_thumb(bus),
             }
         }
     }
 }
 
-pub fn read_status_mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn read_status_mrs<T: BusInterface, const SPSR_DEST: bool>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u32,
+) {
     let rd = (opcode >> 12) & 0xF; // destination register
 
     if SPSR_DEST {
@@ -172,7 +183,11 @@ pub fn read_status_mrs<const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.registers.r15 += 4;
 }
 
-pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn write_status_msr<T: BusInterface, const IMM: bool, const SPSR_DEST: bool>(
+    cpu: &mut Arm7tdmi,
+    _bus: &mut T,
+    opcode: u32,
+) {
     let mut mask: u32 = 0;
 
     // control field: bits 7-0
@@ -233,7 +248,11 @@ pub fn write_status_msr<const IMM: bool, const SPSR_DEST: bool>(cpu: &mut Arm7td
     cpu.registers.r15 += 4;
 }
 
-pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn multiply<T: BusInterface, const ACCUMULATE: bool, const SET_COND: bool>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u32,
+) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
     cpu.registers.r15 += 4;
 
@@ -284,12 +303,18 @@ pub fn multiply<const ACCUMULATE: bool, const SET_COND: bool>(cpu: &mut Arm7tdmi
     cpu.set_banked_register(rd, result);
 
     if rd == 15 {
-        cpu.pipeline_refill_arm();
+        cpu.pipeline_refill_arm(bus);
     }
 }
 
-pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND: bool>(
+pub fn multiply_long<
+    T: BusInterface,
+    const SIGNED: bool,
+    const ACCUMULATE: bool,
+    const SET_COND: bool,
+>(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u32,
 ) {
     cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
@@ -352,19 +377,21 @@ pub fn multiply_long<const SIGNED: bool, const ACCUMULATE: bool, const SET_COND:
     cpu.set_banked_register(rd_hi, (result >> 32) as u32);
 
     if rd_lo == 15 || rd_hi == 15 {
-        cpu.pipeline_refill_arm();
+        cpu.pipeline_refill_arm(bus);
     }
 }
 
 pub fn single_data_transfer<
-    const IMM: bool,           // 0: offset is immediate value, 1: offset is a register
-    const PRE_INDEX: bool,     // 0: post indexing, 1: pre indexing
-    const INC: bool,           // 0: decrement, 1: increment
+    T: BusInterface,
+    const IMM: bool,       // 0: offset is immediate value, 1: offset is a register
+    const PRE_INDEX: bool, // 0: post indexing, 1: pre indexing
+    const INC: bool,       // 0: decrement, 1: increment
     const TRANSFER_BYTE: bool, // 0: transfer work size, 1: transfer byte size
-    const WRITE_BACK: bool,    // 0: no write back, 1: write address to base
-    const LOAD: bool,          // 0: store op, 1: load op
+    const WRITE_BACK: bool, // 0: no write back, 1: write address to base
+    const LOAD: bool,      // 0: store op, 1: load op
 >(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u32,
 ) {
     use super::common::arithmetic::*;
@@ -405,9 +432,9 @@ pub fn single_data_transfer<
 
     if LOAD {
         let load_value: u32 = if TRANSFER_BYTE {
-            cpu.read_byte(address, access_code::NONSEQUENTIAL)
+            bus.read_byte(address, access_code::NONSEQUENTIAL)
         } else {
-            cpu.read_rotate_word(address, access_code::NONSEQUENTIAL)
+            bus.read_rotate_word(address, access_code::NONSEQUENTIAL)
         };
 
         // post index transfer will always do a writeback
@@ -416,16 +443,16 @@ pub fn single_data_transfer<
         }
 
         // handle extra i cycle from load
-        cpu.bus.i_cycle();
+        bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
-            cpu.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+            bus.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
         } else {
-            cpu.write_word(address, store_value, access_code::NONSEQUENTIAL);
+            bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
         }
 
         // post index transfer will always do a writeback
@@ -435,11 +462,12 @@ pub fn single_data_transfer<
     }
 
     if (LOAD && rd == 15) || ((WRITE_BACK || !PRE_INDEX) && rn == 15) {
-        cpu.pipeline_refill_arm();
+        cpu.pipeline_refill_arm(bus);
     }
 }
 
 pub fn halfword_and_signed_data_transfer<
+    T: BusInterface,
     const IMM: bool,
     const PRE_INDEX: bool,
     const INC: bool,
@@ -449,6 +477,7 @@ pub fn halfword_and_signed_data_transfer<
     const H: bool,
 >(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u32,
 ) {
     let rn = (opcode >> 16) & 0xF; // base register
@@ -480,9 +509,9 @@ pub fn halfword_and_signed_data_transfer<
 
     if LOAD {
         let load_value = match (S, H) {
-            (true, true) => cpu.read_signed_halfword(address, access_code::NONSEQUENTIAL),
-            (true, false) => cpu.read_signed_byte(address, access_code::NONSEQUENTIAL),
-            (false, true) => cpu.read_rotate_halfword(address, access_code::NONSEQUENTIAL),
+            (true, true) => bus.read_signed_halfword(address, access_code::NONSEQUENTIAL),
+            (true, false) => bus.read_signed_byte(address, access_code::NONSEQUENTIAL),
+            (false, true) => bus.read_rotate_halfword(address, access_code::NONSEQUENTIAL),
             (false, false) => panic!("Reserved for SWP instruction!"),
         };
 
@@ -491,7 +520,7 @@ pub fn halfword_and_signed_data_transfer<
         }
 
         // handle extra i cycle from load op
-        cpu.bus.i_cycle();
+        bus.i_cycle();
 
         cpu.set_banked_register(rd, load_value);
     } else {
@@ -501,7 +530,7 @@ pub fn halfword_and_signed_data_transfer<
             (true, true) => panic!("Sign bit should not be set for store operation?"),
             (true, false) => panic!("Sign bit should not be set for store operation?"),
             (false, true) => {
-                cpu.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+                bus.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
             }
             (false, false) => panic!("Reserved for SWP instruction!"),
         };
@@ -512,7 +541,7 @@ pub fn halfword_and_signed_data_transfer<
     }
 
     if (LOAD && rd == 15) || ((WRITE_BACK || !PRE_INDEX) && rn == 15) {
-        cpu.pipeline_refill_arm();
+        cpu.pipeline_refill_arm(bus);
     }
 }
 
@@ -524,6 +553,7 @@ enum BlockTransferState {
 }
 
 pub fn block_data_transfer<
+    T: BusInterface,
     const PRE_INDEX: bool,
     const INC: bool,
     const S: bool, // load psr or force user mode
@@ -531,6 +561,7 @@ pub fn block_data_transfer<
     const LOAD: bool,
 >(
     cpu: &mut Arm7tdmi,
+    bus: &mut T,
     opcode: u32,
 ) {
     let rn = (opcode >> 16) & 0xF; // base address register
@@ -597,7 +628,7 @@ pub fn block_data_transfer<
         let access = access_code::NONSEQUENTIAL;
 
         if LOAD {
-            let load_value = cpu.read_word(address, access);
+            let load_value = bus.read_word(address, access);
 
             if WRITE_BACK {
                 cpu.set_banked_register(rn, writeback_value);
@@ -606,7 +637,7 @@ pub fn block_data_transfer<
             cpu.set_banked_register(register_id, load_value);
         } else {
             let store_value = cpu.get_banked_register(register_id);
-            cpu.write_word(address, store_value, access);
+            bus.write_word(address, store_value, access);
 
             if WRITE_BACK {
                 cpu.set_banked_register(rn, writeback_value);
@@ -618,11 +649,11 @@ pub fn block_data_transfer<
         let access = access_code::SEQUENTIAL;
 
         if LOAD {
-            let load_value = cpu.read_word(address, access);
+            let load_value = bus.read_word(address, access);
             cpu.set_banked_register(register_id, load_value);
         } else {
             let store_value = cpu.get_banked_register(register_id);
-            cpu.write_word(address, store_value, access);
+            bus.write_word(address, store_value, access);
         }
     }
 
@@ -634,13 +665,17 @@ pub fn block_data_transfer<
 
     if (LOAD && r15_in_transfer_list) || ((WRITE_BACK) && rn == 15) {
         match cpu.status.cpsr.t() {
-            ArmMode => cpu.pipeline_refill_arm(),
-            ThumbMode => cpu.pipeline_refill_thumb(),
+            ArmMode => cpu.pipeline_refill_arm(bus),
+            ThumbMode => cpu.pipeline_refill_thumb(bus),
         }
     }
 }
 
-pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
+pub fn data_swap<T: BusInterface, const SWAP_BYTE: bool>(
+    cpu: &mut Arm7tdmi,
+    bus: &mut T,
+    opcode: u32,
+) {
     let rm = opcode & 0xF; // source register
     let rd = (opcode >> 12) & 0xF; // destination register
     let rn = (opcode >> 16) & 0xF; // base register
@@ -651,21 +686,21 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     // read from swap address
     let swap_address = cpu.get_banked_register(rn);
     let memory_value: u32 = if SWAP_BYTE {
-        cpu.read_byte(swap_address, access_code::NONSEQUENTIAL)
+        bus.read_byte(swap_address, access_code::NONSEQUENTIAL)
     } else {
-        cpu.read_rotate_word(swap_address, access_code::NONSEQUENTIAL)
+        bus.read_rotate_word(swap_address, access_code::NONSEQUENTIAL)
     };
 
     // write rm register value into swap address
     let register_value = cpu.get_banked_register(rm);
     if SWAP_BYTE {
-        cpu.write_byte(
+        bus.write_byte(
             swap_address,
             register_value as u8,
             access_code::NONSEQUENTIAL | access_code::LOCK,
         );
     } else {
-        cpu.write_word(
+        bus.write_word(
             swap_address,
             register_value,
             access_code::NONSEQUENTIAL | access_code::LOCK,
@@ -675,11 +710,11 @@ pub fn data_swap<const SWAP_BYTE: bool>(cpu: &mut Arm7tdmi, opcode: u32) {
     cpu.set_banked_register(rd, memory_value);
 
     if rd == 15 {
-        cpu.pipeline_refill_arm();
+        cpu.pipeline_refill_arm(bus);
     }
 }
 
-pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u32) {
+pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opcode: u32) {
     cpu.registers.r14_svc = (cpu.registers.r15 - Wrapping(4)).0;
 
     cpu.registers.r15 = Wrapping(8);
@@ -688,10 +723,10 @@ pub fn software_interrupt(cpu: &mut Arm7tdmi, _opcode: u32) {
     cpu.status.cpsr.set_i(true);
     cpu.status.cpsr.set_mode_bits(Mode::Supervisor);
 
-    cpu.pipeline_refill_arm();
+    cpu.pipeline_refill_arm(bus);
 }
 
-pub fn undefined_arm(cpu: &mut Arm7tdmi, _opcode: u32) {
+pub fn undefined_arm<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opcode: u32) {
     cpu.registers.r14_und = (cpu.registers.r15 - Wrapping(4)).0;
 
     cpu.registers.r15 = Wrapping(4);
@@ -700,5 +735,5 @@ pub fn undefined_arm(cpu: &mut Arm7tdmi, _opcode: u32) {
     cpu.status.cpsr.set_i(true);
     cpu.status.cpsr.set_mode_bits(Mode::Undefined);
 
-    cpu.pipeline_refill_arm();
+    cpu.pipeline_refill_arm(bus);
 }
