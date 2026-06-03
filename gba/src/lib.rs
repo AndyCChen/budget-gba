@@ -1,5 +1,5 @@
+mod apu;
 mod arm;
-mod audio;
 mod bus;
 mod gamepak;
 mod io;
@@ -19,5 +19,14 @@ impl GbaCore {
         let cpu = Arm7tdmi::new(&mut bus);
 
         Self { cpu, bus }
+    }
+
+    pub fn reset(&mut self) {
+        self.cpu.reset();
+        self.bus.reset();
+    }
+
+    pub fn step(&mut self) {
+        self.cpu.step(&mut self.bus);
     }
 }

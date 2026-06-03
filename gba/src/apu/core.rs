@@ -1,4 +1,4 @@
-use crate::audio::Registers;
+use crate::apu::Registers;
 
 pub struct Apu {
     registers: Registers,

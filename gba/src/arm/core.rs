@@ -500,7 +500,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
 #[allow(dead_code)]
 mod test_utils {
     use crate::bus::TestBus;
-    use crate::arm::{decoder_tables::*, generate_arm_table, generate_thumb_table};
+    use crate::arm::decoder_tables::*;
 
     use super::*;
     use std::fs;
@@ -522,9 +522,6 @@ mod test_utils {
         let it = items.iter().enumerate().skip(skip);
 
         let mut instructions = Vec::with_capacity(items.len());
-
-        let arm_table = generate_arm_table::<TestBus>();
-        let thumb_table= generate_thumb_table::<TestBus>();
 
         for (count, item) in it {
             let mut cpu = Arm7tdmi::from_test_state(item);

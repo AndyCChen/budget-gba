@@ -1,7 +1,8 @@
 use crate::bus::BusInterface;
 use crate::bus::common;
-use crate::gamepak::core::{AccessType, GamePak, GamepakRegion};
+use crate::gamepak::{AccessType, GamePak, GamepakRegion};
 use crate::ppu::Ppu;
+use crate::apu::Apu;
 
 use num_traits::FromPrimitive;
 
@@ -14,6 +15,7 @@ const BIOS: &[u8; BIOS_SIZE] = include_bytes!("../../../resource/gba_bios.bin");
 pub struct Bus {
     pub gamepak: GamePak,
     pub ppu: Ppu,
+    pub apu: Apu,
     pub bios_ram: Box<[u8]>,
     pub wram_256: Box<[u8]>,
     pub wram_32: Box<[u8]>,
@@ -23,22 +25,24 @@ pub struct Bus {
 impl Bus {
     pub fn new() -> Self {
         Self {
+            gamepak: GamePak::new(),
+            ppu: Ppu::new(),
+            apu: Apu::new(),
             bios_ram: BIOS.to_vec().into_boxed_slice(),
             wram_256: vec![0; WRAM_256].into_boxed_slice(),
             wram_32: vec![0; WRAM_32].into_boxed_slice(),
             cycles: 0,
-            gamepak: GamePak::new(),
-            ppu: Ppu::new(),
         }
     }
 
     pub fn reset(&mut self) {
-        self.cycles = 0;
+        self.gamepak.reset();
+        self.ppu.reset();
+        self.apu.reset();
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
-        self.gamepak.reset();
-        self.ppu.reset();
+        self.cycles = 0;
     }
 
     // tick the system for N cycles
@@ -235,10 +239,6 @@ impl Bus {
 }
 
 impl BusInterface for Bus {
-    fn reset(&mut self) {
-        // self.reset();
-    }
-
     fn i_cycle(&mut self) {
         self.tick(1);
     }
