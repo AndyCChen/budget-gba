@@ -1,5 +1,5 @@
 pub mod arithmetic {
-    use crate::{arm::core::Arm7tdmi, bus::BusInterface};
+    use crate::arm::core::StatusRegister;
 
     // shift type constants for alu op
 
@@ -8,13 +8,9 @@ pub mod arithmetic {
     pub const ASR: u8 = 2;
     pub const ROR: u8 = 3;
 
-    pub fn lsl<T: BusInterface>(
-        cpu: &Arm7tdmi<T>,
-        value_to_shift: u32,
-        shift_amount: u32,
-    ) -> (u32, bool) {
+    pub fn lsl(cpsr: StatusRegister, value_to_shift: u32, shift_amount: u32) -> (u32, bool) {
         if shift_amount == 0 {
-            let carry_from_shift = cpu.status.cpsr.c();
+            let carry_from_shift = cpsr.c();
             (value_to_shift, carry_from_shift)
         } else if shift_amount <= 32 {
             let carry_from_shift = (value_to_shift & (1 << (32 - shift_amount))) != 0;
@@ -27,8 +23,8 @@ pub mod arithmetic {
         }
     }
 
-    pub fn lsr<T: BusInterface>(
-        cpu: &Arm7tdmi<T>,
+    pub fn lsr(
+        cpsr: StatusRegister,
         is_immediate: bool,
         value_to_shift: u32,
         mut shift_amount: u32,
@@ -38,7 +34,7 @@ pub mod arithmetic {
         }
 
         if shift_amount == 0 {
-            let carry_from_shift = cpu.status.cpsr.c();
+            let carry_from_shift = cpsr.c();
             (value_to_shift, carry_from_shift)
         } else if shift_amount <= 32 {
             let carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
@@ -51,8 +47,8 @@ pub mod arithmetic {
         }
     }
 
-    pub fn asr<T: BusInterface>(
-        cpu: &Arm7tdmi<T>,
+    pub fn asr(
+        cpsr: StatusRegister,
         is_immediate: bool,
         value_to_shift: u32,
         mut shift_amount: u32,
@@ -62,7 +58,7 @@ pub mod arithmetic {
         }
 
         if shift_amount == 0 {
-            let carry_from_shift = cpu.status.cpsr.c();
+            let carry_from_shift = cpsr.c();
             (value_to_shift, carry_from_shift)
         } else if shift_amount < 32 {
             let carry_from_shift = (value_to_shift & (1 << (shift_amount - 1))) != 0;
@@ -79,17 +75,17 @@ pub mod arithmetic {
         }
     }
 
-    pub fn ror<T: BusInterface>(
-        cpu: &Arm7tdmi<T>,
+    pub fn ror(
+        cpsr: StatusRegister,
         is_immediate: bool,
         value_to_shift: u32,
         shift_amount: u32,
     ) -> (u32, bool) {
         if shift_amount == 0 {
             if is_immediate {
-                rrx(cpu, value_to_shift)
+                rrx(cpsr, value_to_shift)
             } else {
-                let carry_from_shift = cpu.status.cpsr.c();
+                let carry_from_shift = cpsr.c();
                 (value_to_shift, carry_from_shift)
             }
         } else {
@@ -100,8 +96,8 @@ pub mod arithmetic {
         }
     }
 
-    fn rrx<T: BusInterface>(cpu: &Arm7tdmi<T>, value_to_shift: u32) -> (u32, bool) {
-        let carry_in = u32::from(cpu.status.cpsr.c()) << 31;
+    fn rrx(cpsr: StatusRegister, value_to_shift: u32) -> (u32, bool) {
+        let carry_in = u32::from(cpsr.c()) << 31;
         let carry_out = (value_to_shift & 1) != 0;
         let result = carry_in | (value_to_shift >> 1);
 
@@ -113,8 +109,8 @@ pub mod arithmetic {
     // op2: 2nd operand if any
     // carry_from_shift: carry bit from barrel shifter for logical bit ops
 
-    pub fn and<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
+    pub fn and<const SET_COND: bool>(
+        cpsr: &mut StatusRegister,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
@@ -122,14 +118,14 @@ pub mod arithmetic {
         let result = op1 & op2;
 
         if SET_COND {
-            update_flags_logical(cpu, result, carry_from_shift);
+            update_flags_logical(cpsr, result, carry_from_shift);
         }
 
         result
     }
 
-    pub fn eor<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
+    pub fn eor<const SET_COND: bool>(
+        cpsr: &mut StatusRegister,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
@@ -137,63 +133,51 @@ pub mod arithmetic {
         let result = op1 ^ op2;
 
         if SET_COND {
-            update_flags_logical(cpu, result, carry_from_shift);
+            update_flags_logical(cpsr, result, carry_from_shift);
         }
 
         result
     }
 
-    pub fn sub<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
-        op1: u32,
-        op2: u32,
-    ) -> u32 {
+    pub fn sub<const SET_COND: bool>(cpsr: &mut StatusRegister, op1: u32, op2: u32) -> u32 {
         let (result, carry) = op1.overflowing_sub(op2);
         let overflow = ((result ^ op1) & (result ^ !op2) & 0x8000_0000) != 0;
 
         if SET_COND {
-            update_flags_arithmetic(cpu, result, !carry, overflow);
+            update_flags_arithmetic(cpsr, result, !carry, overflow);
         }
 
         result
     }
 
-    pub fn add<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
-        op1: u32,
-        op2: u32,
-    ) -> u32 {
+    pub fn add<const SET_COND: bool>(cpsr: &mut StatusRegister, op1: u32, op2: u32) -> u32 {
         let (result, carry) = op1.overflowing_add(op2);
         let overflow = ((result ^ op1) & (result ^ op2) & 0x8000_0000) != 0;
 
         if SET_COND {
-            update_flags_arithmetic(cpu, result, carry, overflow);
+            update_flags_arithmetic(cpsr, result, carry, overflow);
         }
 
         result
     }
 
-    pub fn adc<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
-        op1: u32,
-        op2: u32,
-    ) -> u32 {
+    pub fn adc<const SET_COND: bool>(cpsr: &mut StatusRegister, op1: u32, op2: u32) -> u32 {
         let (result, carry) = {
-            let (op2_with_carry, carry0) = op2.overflowing_add(u32::from(cpu.status.cpsr.c()));
+            let (op2_with_carry, carry0) = op2.overflowing_add(u32::from(cpsr.c()));
             let (result, carry1) = op1.overflowing_add(op2_with_carry);
             (result, carry0 || carry1)
         };
         let overflow = ((result ^ op1) & (result ^ op2) & 0x8000_0000) != 0;
 
         if SET_COND {
-            update_flags_arithmetic(cpu, result, carry, overflow);
+            update_flags_arithmetic(cpsr, result, carry, overflow);
         }
 
         result
     }
 
-    pub fn orr<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
+    pub fn orr<const SET_COND: bool>(
+        cpsr: &mut StatusRegister,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
@@ -201,44 +185,40 @@ pub mod arithmetic {
         let result = op1 | op2;
 
         if SET_COND {
-            update_flags_logical(cpu, result, carry_from_shift);
+            update_flags_logical(cpsr, result, carry_from_shift);
         }
 
         result
     }
 
-    pub fn mov<T: BusInterface, const SET_COND: bool>(
-        cpu: &mut Arm7tdmi<T>,
+    pub fn mov<const SET_COND: bool>(
+        cpsr: &mut StatusRegister,
         value_to_move: u32,
         carry_from_shift: bool,
     ) -> u32 {
         if SET_COND {
-            update_flags_logical(cpu, value_to_move, carry_from_shift);
+            update_flags_logical(cpsr, value_to_move, carry_from_shift);
         }
 
         value_to_move
     }
 
-    fn update_flags_logical<T: BusInterface>(
-        cpu: &mut Arm7tdmi<T>,
-        result: u32,
-        carry_from_shift: bool,
-    ) {
-        cpu.status.cpsr.set_c(carry_from_shift);
-        cpu.status.cpsr.set_z(result == 0);
-        cpu.status.cpsr.set_n((result as i32).is_negative());
+    fn update_flags_logical(cpsr: &mut StatusRegister, result: u32, carry_from_shift: bool) {
+        cpsr.set_c(carry_from_shift);
+        cpsr.set_z(result == 0);
+        cpsr.set_n((result as i32).is_negative());
     }
 
-    fn update_flags_arithmetic<T: BusInterface>(
-        cpu: &mut Arm7tdmi<T>,
+    fn update_flags_arithmetic(
+        cpsr: &mut StatusRegister,
         result: u32,
         carry: bool,
         overflow: bool,
     ) {
-        cpu.status.cpsr.set_c(carry);
-        cpu.status.cpsr.set_v(overflow);
-        cpu.status.cpsr.set_z(result == 0);
-        cpu.status.cpsr.set_n((result as i32).is_negative());
+        cpsr.set_c(carry);
+        cpsr.set_v(overflow);
+        cpsr.set_z(result == 0);
+        cpsr.set_n((result as i32).is_negative());
     }
 }
 

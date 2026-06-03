@@ -24,14 +24,14 @@ pub fn move_shifted<T: BusInterface, const SHIFT_OP: u8>(
         let value = cpu.get_banked_register(rs);
 
         match SHIFT_OP {
-            LSL => lsl(cpu, value, shift_amount.into()),
-            LSR => lsr(cpu, true, value, shift_amount.into()),
-            ASR => asr(cpu, true, value, shift_amount.into()),
+            LSL => lsl(cpu.status.cpsr, value, shift_amount.into()),
+            LSR => lsr(cpu.status.cpsr, true, value, shift_amount.into()),
+            ASR => asr(cpu.status.cpsr, true, value, shift_amount.into()),
             _ => panic!("Invalid shift op!"),
         }
     };
 
-    let result = mov::<T, true>(cpu, result, carry_from_shift);
+    let result = mov::<true>(&mut cpu.status.cpsr, result, carry_from_shift);
     cpu.set_banked_register(rd, result);
 }
 
@@ -51,9 +51,9 @@ pub fn add_subtract<T: BusInterface, const IMM: bool, const IS_SUBTRACT: bool>(
     let op2: u32 = if IMM { rn } else { cpu.get_banked_register(rn) };
 
     let result = if IS_SUBTRACT {
-        sub::<T,true>(cpu, op1, op2)
+        sub::<true>(&mut cpu.status.cpsr, op1, op2)
     } else {
-        add::<T, true>(cpu, op1, op2)
+        add::<true>(&mut cpu.status.cpsr, op1, op2)
     };
 
     cpu.set_banked_register(rd, result);
@@ -78,13 +78,20 @@ pub fn mov_cmp_add_sub_immediate<T: BusInterface, const OP: u8>(
     let op1 = cpu.get_banked_register(rd);
 
     let result = match OP {
-        MOV => Some(mov::<T, true>(cpu, immediate_value, cpu.status.cpsr.c())),
+        MOV => {
+            let current_carry = cpu.status.cpsr.c();
+            Some(mov::<true>(
+                &mut cpu.status.cpsr,
+                immediate_value,
+                current_carry,
+            ))
+        }
         CMP => {
-            sub::<T, true>(cpu, op1, immediate_value);
+            sub::<true>(&mut cpu.status.cpsr, op1, immediate_value);
             None
         }
-        ADD => Some(add::<T, true>(cpu, op1, immediate_value)),
-        SUB => Some(sub::<T, true>(cpu, op1, immediate_value)),
+        ADD => Some(add::<true>(&mut cpu.status.cpsr, op1, immediate_value)),
+        SUB => Some(sub::<true>(&mut cpu.status.cpsr, op1, immediate_value)),
         _ => panic!("Invalid OP! {OP}"),
     };
 
@@ -161,44 +168,46 @@ pub fn alu_operations<T: BusInterface, const OP: u8>(
         bus.i_cycle();
     }
 
+    let current_carry = cpu.status.cpsr.c();
+
     let result = match OP {
-        alu_op::AND => Some(and::<T, true>(cpu, op1, op2, cpu.status.cpsr.c())),
-        alu_op::EOR => Some(eor::<T, true>(cpu, op1, op2, cpu.status.cpsr.c())),
+        alu_op::AND => Some(and::<true>(&mut cpu.status.cpsr, op1, op2, current_carry)),
+        alu_op::EOR => Some(eor::<true>(&mut cpu.status.cpsr, op1, op2, current_carry)),
         alu_op::LSL => {
-            let (result, carry_from_shift) = lsl(cpu, op1, op2 & 0xFF);
-            Some(mov::<T, true>(cpu, result, carry_from_shift))
+            let (result, carry_from_shift) = lsl(cpu.status.cpsr, op1, op2 & 0xFF);
+            Some(mov::<true>(&mut cpu.status.cpsr, result, carry_from_shift))
         }
         alu_op::LSR => {
-            let (result, carry_from_shift) = lsr(cpu, false, op1, op2 & 0xFF);
-            Some(mov::<T, true>(cpu, result, carry_from_shift))
+            let (result, carry_from_shift) = lsr(cpu.status.cpsr, false, op1, op2 & 0xFF);
+            Some(mov::<true>(&mut cpu.status.cpsr, result, carry_from_shift))
         }
         alu_op::ASR => {
-            let (result, carry_from_shift) = asr(cpu, false, op1, op2 & 0xFF);
-            Some(mov::<T, true>(cpu, result, carry_from_shift))
+            let (result, carry_from_shift) = asr(cpu.status.cpsr, false, op1, op2 & 0xFF);
+            Some(mov::<true>(&mut cpu.status.cpsr, result, carry_from_shift))
         }
-        alu_op::ADC => Some(adc::<T, true>(cpu, op1, op2)),
-        alu_op::SBC => Some(adc::<T, true>(cpu, op1, !op2)),
+        alu_op::ADC => Some(adc::<true>(&mut cpu.status.cpsr, op1, op2)),
+        alu_op::SBC => Some(adc::<true>(&mut cpu.status.cpsr, op1, !op2)),
         alu_op::ROR => {
-            let (result, carry_from_shift) = ror(cpu, false, op1, op2 & 0xFF);
-            Some(mov::<T, true>(cpu, result, carry_from_shift))
+            let (result, carry_from_shift) = ror(cpu.status.cpsr, false, op1, op2 & 0xFF);
+            Some(mov::<true>(&mut cpu.status.cpsr, result, carry_from_shift))
         }
         alu_op::TST => {
-            and::<T, true>(cpu, op1, op2, cpu.status.cpsr.c());
+            and::<true>(&mut cpu.status.cpsr, op1, op2, current_carry);
             None
         }
-        alu_op::NEG => Some(sub::<T, true>(cpu, 0, op2)),
+        alu_op::NEG => Some(sub::<true>(&mut cpu.status.cpsr, 0, op2)),
         alu_op::CMP => {
-            sub::<T, true>(cpu, op1, op2);
+            sub::<true>(&mut cpu.status.cpsr, op1, op2);
             None
         }
         alu_op::CMN => {
-            add::<T, true>(cpu, op1, op2);
+            add::<true>(&mut cpu.status.cpsr, op1, op2);
             None
         }
-        alu_op::ORR => Some(orr::<T, true>(cpu, op1, op2, cpu.status.cpsr.c())),
+        alu_op::ORR => Some(orr::<true>(&mut cpu.status.cpsr, op1, op2, current_carry)),
         alu_op::MUL => Some(mul(cpu, op1, op2)),
-        alu_op::BIC => Some(and::<T, true>(cpu, op1, !op2, cpu.status.cpsr.c())),
-        alu_op::MVN => Some(mov::<T, true>(cpu, !op2, cpu.status.cpsr.c())),
+        alu_op::BIC => Some(and::<true>(&mut cpu.status.cpsr, op1, !op2, current_carry)),
+        alu_op::MVN => Some(mov::<true>(&mut cpu.status.cpsr, !op2, current_carry)),
         _ => panic!("Invalid OP"),
     };
 
@@ -233,8 +242,11 @@ pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: b
     match OP {
         ADD | MOV => {
             let result = match OP {
-                ADD => add::<T, false>(cpu, op1, op2),
-                MOV => mov::<T, false>(cpu, op2, cpu.status.cpsr.c()),
+                ADD => add::<false>(&mut cpu.status.cpsr, op1, op2),
+                MOV => {
+                    let current_carry = cpu.status.cpsr.c();
+                    mov::<false>(&mut cpu.status.cpsr, op2, current_carry)
+                }
                 _ => panic!(),
             };
 
@@ -246,7 +258,7 @@ pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: b
             }
         }
         CMP => {
-            sub::<T, true>(cpu, op1, op2);
+            sub::<true>(&mut cpu.status.cpsr, op1, op2);
         }
         BX => {
             if op2 & 1 == 1 {

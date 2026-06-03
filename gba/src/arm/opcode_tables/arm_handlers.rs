@@ -101,10 +101,10 @@ pub fn data_processing<
         let rm_value = cpu.get_banked_register(rm);
         let shift_type = const { (SHIFT >> 1) & 0x3 };
         match shift_type {
-            LSL => lsl(cpu, rm_value, shift_amount),
-            LSR => lsr(cpu, is_immediate, rm_value, shift_amount),
-            ASR => asr(cpu, is_immediate, rm_value, shift_amount),
-            ROR => ror(cpu, is_immediate, rm_value, shift_amount),
+            LSL => lsl(cpu.status.cpsr, rm_value, shift_amount),
+            LSR => lsr(cpu.status.cpsr, is_immediate, rm_value, shift_amount),
+            ASR => asr(cpu.status.cpsr, is_immediate, rm_value, shift_amount),
+            ROR => ror(cpu.status.cpsr, is_immediate, rm_value, shift_amount),
             _ => panic!("Invalid shift type!"),
         }
     };
@@ -116,34 +116,58 @@ pub fn data_processing<
     }
 
     let result = match DATA_OP {
-        AND => Some(and::<T, SET_COND>(cpu, op1, op2, carry_from_shift)),
-        EOR => Some(eor::<T, SET_COND>(cpu, op1, op2, carry_from_shift)),
-        SUB => Some(sub::<T, SET_COND>(cpu, op1, op2)),
-        RSB => Some(sub::<T, SET_COND>(cpu, op2, op1)),
-        ADD => Some(add::<T, SET_COND>(cpu, op1, op2)),
-        ADC => Some(adc::<T, SET_COND>(cpu, op1, op2)),
-        SBC => Some(adc::<T, SET_COND>(cpu, op1, !op2)),
-        RSC => Some(adc::<T, SET_COND>(cpu, op2, !op1)),
+        AND => Some(and::<SET_COND>(
+            &mut cpu.status.cpsr,
+            op1,
+            op2,
+            carry_from_shift,
+        )),
+        EOR => Some(eor::<SET_COND>(
+            &mut cpu.status.cpsr,
+            op1,
+            op2,
+            carry_from_shift,
+        )),
+        SUB => Some(sub::<SET_COND>(&mut cpu.status.cpsr, op1, op2)),
+        RSB => Some(sub::<SET_COND>(&mut cpu.status.cpsr, op2, op1)),
+        ADD => Some(add::<SET_COND>(&mut cpu.status.cpsr, op1, op2)),
+        ADC => Some(adc::<SET_COND>(&mut cpu.status.cpsr, op1, op2)),
+        SBC => Some(adc::<SET_COND>(&mut cpu.status.cpsr, op1, !op2)),
+        RSC => Some(adc::<SET_COND>(&mut cpu.status.cpsr, op2, !op1)),
         TST => {
-            and::<T, true>(cpu, op1, op2, carry_from_shift);
+            and::<true>(&mut cpu.status.cpsr, op1, op2, carry_from_shift);
             None
         }
         TEQ => {
-            eor::<T, true>(cpu, op1, op2, carry_from_shift);
+            eor::<true>(&mut cpu.status.cpsr, op1, op2, carry_from_shift);
             None
         }
         CMP => {
-            sub::<T, true>(cpu, op1, op2);
+            sub::<true>(&mut cpu.status.cpsr, op1, op2);
             None
         }
         CMN => {
-            add::<T, true>(cpu, op1, op2);
+            add::<true>(&mut cpu.status.cpsr, op1, op2);
             None
         }
-        ORR => Some(orr::<T, SET_COND>(cpu, op1, op2, carry_from_shift)),
-        MOV => Some(mov::<T, SET_COND>(cpu, op2, carry_from_shift)),
-        BIC => Some(and::<T, SET_COND>(cpu, op1, !op2, carry_from_shift)),
-        MVN => Some(mov::<T, SET_COND>(cpu, !op2, carry_from_shift)),
+        ORR => Some(orr::<SET_COND>(
+            &mut cpu.status.cpsr,
+            op1,
+            op2,
+            carry_from_shift,
+        )),
+        MOV => Some(mov::<SET_COND>(&mut cpu.status.cpsr, op2, carry_from_shift)),
+        BIC => Some(and::<SET_COND>(
+            &mut cpu.status.cpsr,
+            op1,
+            !op2,
+            carry_from_shift,
+        )),
+        MVN => Some(mov::<SET_COND>(
+            &mut cpu.status.cpsr,
+            !op2,
+            carry_from_shift,
+        )),
         _ => panic!("Invalid data op! {DATA_OP}"),
     };
 
@@ -408,10 +432,10 @@ pub fn single_data_transfer<
         let is_immediate = true;
 
         match shift_type {
-            0b00 => lsl(cpu, value_to_shift, shift_amount),
-            0b01 => lsr(cpu, is_immediate, value_to_shift, shift_amount),
-            0b10 => asr(cpu, is_immediate, value_to_shift, shift_amount),
-            0b11 => ror(cpu, is_immediate, value_to_shift, shift_amount),
+            0b00 => lsl(cpu.status.cpsr, value_to_shift, shift_amount),
+            0b01 => lsr(cpu.status.cpsr, is_immediate, value_to_shift, shift_amount),
+            0b10 => asr(cpu.status.cpsr, is_immediate, value_to_shift, shift_amount),
+            0b11 => ror(cpu.status.cpsr, is_immediate, value_to_shift, shift_amount),
             _ => panic!("Invalid shift type! {shift_type}"),
         }
         .0
