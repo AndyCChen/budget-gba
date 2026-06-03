@@ -11,16 +11,16 @@ const WRAM_32: usize = 32 * 1024;
 
 const BIOS: &[u8; BIOS_SIZE] = include_bytes!("../../../resource/gba_bios.bin");
 
-pub struct BusComponents {
+pub struct Bus {
+    pub gamepak: GamePak,
+    pub ppu: Ppu,
     pub bios_ram: Box<[u8]>,
     pub wram_256: Box<[u8]>,
     pub wram_32: Box<[u8]>,
     pub cycles: u64,
-    pub gamepak: GamePak,
-    pub ppu: Ppu,
 }
 
-impl BusComponents {
+impl Bus {
     pub fn new() -> Self {
         Self {
             bios_ram: BIOS.to_vec().into_boxed_slice(),
@@ -31,20 +31,9 @@ impl BusComponents {
             ppu: Ppu::new(),
         }
     }
-}
 
-pub struct Bus<'a> {
-    pub gamepak: &'a mut GamePak,
-    pub ppu: &'a mut Ppu,
-    pub bios_ram: &'a mut Box<[u8]>,
-    pub wram_256: &'a mut Box<[u8]>,
-    pub wram_32: &'a mut Box<[u8]>,
-    pub cycles: &'a mut u64,
-}
-
-impl<'a> Bus<'a> {
     pub fn reset(&mut self) {
-        *self.cycles = 0;
+        self.cycles = 0;
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
@@ -54,7 +43,7 @@ impl<'a> Bus<'a> {
 
     // tick the system for N cycles
     fn tick(&mut self, n: u8) {
-        *self.cycles += u64::from(n);
+        self.cycles += u64::from(n);
     }
 
     fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: u8) -> T {
@@ -245,7 +234,7 @@ impl<'a> Bus<'a> {
     }
 }
 
-impl<'a> BusInterface for Bus<'a> {
+impl BusInterface for Bus {
     fn reset(&mut self) {
         // self.reset();
     }
@@ -255,7 +244,7 @@ impl<'a> BusInterface for Bus<'a> {
     }
 
     fn cycles(&self) -> u64 {
-        *self.cycles
+        self.cycles
     }
 
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
@@ -416,28 +405,12 @@ impl GbaBusInt for u32 {
 mod gba_bus_test {
     use crate::{
         arm::access_code,
-        bus::{Bus, BusComponents, BusInterface},
+        bus::{Bus, BusInterface},
     };
 
     #[test]
     fn bus_read_test() {
-        let BusComponents {
-            mut bios_ram,
-            mut wram_256,
-            mut wram_32,
-            mut cycles,
-            mut gamepak,
-            mut ppu,
-        } = BusComponents::new();
-
-        let mut bus = Bus {
-            gamepak: &mut gamepak,
-            ppu: &mut ppu,
-            bios_ram: &mut bios_ram,
-            wram_256: &mut wram_256,
-            wram_32: &mut wram_32,
-            cycles: &mut cycles,
-        };
+        let mut bus = Bus::new();
 
         bus.wram_256[0x3FF00] = 0xAA;
         bus.wram_256[0x3FF01] = 0xBB;
@@ -478,23 +451,7 @@ mod gba_bus_test {
 
     #[test]
     fn bus_write_test() {
-        let BusComponents {
-            mut bios_ram,
-            mut wram_256,
-            mut wram_32,
-            mut cycles,
-            mut gamepak,
-            mut ppu,
-        } = BusComponents::new();
-
-        let mut bus = Bus {
-            gamepak: &mut gamepak,
-            ppu: &mut ppu,
-            bios_ram: &mut bios_ram,
-            wram_256: &mut wram_256,
-            wram_32: &mut wram_32,
-            cycles: &mut cycles,
-        };
+        let mut bus = Bus::new();
 
         let wram_256_start = 0x0200_0000;
 

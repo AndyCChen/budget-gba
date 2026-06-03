@@ -1,5 +1,5 @@
 pub mod arithmetic {
-    use crate::arm::core::Arm7tdmi;
+    use crate::{arm::core::Arm7tdmi, bus::BusInterface};
 
     // shift type constants for alu op
 
@@ -8,7 +8,11 @@ pub mod arithmetic {
     pub const ASR: u8 = 2;
     pub const ROR: u8 = 3;
 
-    pub fn lsl(cpu: &Arm7tdmi, value_to_shift: u32, shift_amount: u32) -> (u32, bool) {
+    pub fn lsl<T: BusInterface>(
+        cpu: &Arm7tdmi<T>,
+        value_to_shift: u32,
+        shift_amount: u32,
+    ) -> (u32, bool) {
         if shift_amount == 0 {
             let carry_from_shift = cpu.status.cpsr.c();
             (value_to_shift, carry_from_shift)
@@ -23,8 +27,8 @@ pub mod arithmetic {
         }
     }
 
-    pub fn lsr(
-        cpu: &Arm7tdmi,
+    pub fn lsr<T: BusInterface>(
+        cpu: &Arm7tdmi<T>,
         is_immediate: bool,
         value_to_shift: u32,
         mut shift_amount: u32,
@@ -47,8 +51,8 @@ pub mod arithmetic {
         }
     }
 
-    pub fn asr(
-        cpu: &Arm7tdmi,
+    pub fn asr<T: BusInterface>(
+        cpu: &Arm7tdmi<T>,
         is_immediate: bool,
         value_to_shift: u32,
         mut shift_amount: u32,
@@ -75,8 +79,8 @@ pub mod arithmetic {
         }
     }
 
-    pub fn ror(
-        cpu: &Arm7tdmi,
+    pub fn ror<T: BusInterface>(
+        cpu: &Arm7tdmi<T>,
         is_immediate: bool,
         value_to_shift: u32,
         shift_amount: u32,
@@ -96,7 +100,7 @@ pub mod arithmetic {
         }
     }
 
-    fn rrx(cpu: &Arm7tdmi, value_to_shift: u32) -> (u32, bool) {
+    fn rrx<T: BusInterface>(cpu: &Arm7tdmi<T>, value_to_shift: u32) -> (u32, bool) {
         let carry_in = u32::from(cpu.status.cpsr.c()) << 31;
         let carry_out = (value_to_shift & 1) != 0;
         let result = carry_in | (value_to_shift >> 1);
@@ -109,8 +113,8 @@ pub mod arithmetic {
     // op2: 2nd operand if any
     // carry_from_shift: carry bit from barrel shifter for logical bit ops
 
-    pub fn and<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn and<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
@@ -124,8 +128,8 @@ pub mod arithmetic {
         result
     }
 
-    pub fn eor<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn eor<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
@@ -139,8 +143,8 @@ pub mod arithmetic {
         result
     }
 
-    pub fn sub<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn sub<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         op1: u32,
         op2: u32,
     ) -> u32 {
@@ -154,8 +158,8 @@ pub mod arithmetic {
         result
     }
 
-    pub fn add<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn add<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         op1: u32,
         op2: u32,
     ) -> u32 {
@@ -169,8 +173,8 @@ pub mod arithmetic {
         result
     }
 
-    pub fn adc<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn adc<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         op1: u32,
         op2: u32,
     ) -> u32 {
@@ -188,8 +192,8 @@ pub mod arithmetic {
         result
     }
 
-    pub fn orr<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn orr<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         op1: u32,
         op2: u32,
         carry_from_shift: bool,
@@ -203,8 +207,8 @@ pub mod arithmetic {
         result
     }
 
-    pub fn mov<const SET_COND: bool>(
-        cpu: &mut Arm7tdmi,
+    pub fn mov<T: BusInterface, const SET_COND: bool>(
+        cpu: &mut Arm7tdmi<T>,
         value_to_move: u32,
         carry_from_shift: bool,
     ) -> u32 {
@@ -215,8 +219,8 @@ pub mod arithmetic {
         value_to_move
     }
 
-    fn update_flags_logical(
-        cpu: &mut Arm7tdmi,
+    fn update_flags_logical<T: BusInterface>(
+        cpu: &mut Arm7tdmi<T>,
         result: u32,
         carry_from_shift: bool,
     ) {
@@ -225,8 +229,8 @@ pub mod arithmetic {
         cpu.status.cpsr.set_n((result as i32).is_negative());
     }
 
-    fn update_flags_arithmetic(
-        cpu: &mut Arm7tdmi,
+    fn update_flags_arithmetic<T: BusInterface>(
+        cpu: &mut Arm7tdmi<T>,
         result: u32,
         carry: bool,
         overflow: bool,

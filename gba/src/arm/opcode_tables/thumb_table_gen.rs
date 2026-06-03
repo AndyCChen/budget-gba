@@ -2,7 +2,7 @@ use crate::arm::core::Arm7tdmi;
 use crate::arm::opcode_tables::thumb_handlers::*;
 use crate::bus::BusInterface;
 
-pub type ThumbHandler<T: BusInterface> = fn(&mut Arm7tdmi, &mut T, u16);
+pub type ThumbHandler<T> = fn(&mut Arm7tdmi<T>, &mut T, u16);
 pub const THUMB_TABLE_SIZE: usize = 0x400;
 
 pub const fn generate_thumb_table<T: BusInterface>() -> [ThumbHandler<T>; THUMB_TABLE_SIZE] {
@@ -11,7 +11,6 @@ pub const fn generate_thumb_table<T: BusInterface>() -> [ThumbHandler<T>; THUMB_
     let mut thumb_table: [ThumbHandler<T>; THUMB_TABLE_SIZE] = [undefined_thumb; THUMB_TABLE_SIZE];
 
     let mut i = 0;
-
     while i < thumb_table.len() {
         thumb_table[i] = generate_thumb_instruction(i);
         i += 1;

@@ -27,5 +27,5 @@ pub trait BusInterface {
     }
 }
 
-pub use gba_bus::{Bus, BusComponents, GbaBus};
+pub use gba_bus::Bus;
 pub use test_bus::TestBus;

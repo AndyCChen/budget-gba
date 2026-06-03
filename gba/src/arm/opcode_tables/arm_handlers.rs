@@ -5,7 +5,7 @@ use crate::arm::opcode_tables::to_negative;
 use crate::bus::BusInterface;
 use std::num::Wrapping;
 
-pub fn branch_and_exchange<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode: u32) {
+pub fn branch_and_exchange<T: BusInterface>(cpu: &mut Arm7tdmi<T>, bus: &mut T, opcode: u32) {
     let branch_address = cpu.get_banked_register(opcode & 0xF);
     let mode = if (branch_address & 0x1) == 0 {
         ArmMode
@@ -26,7 +26,7 @@ pub fn branch_and_exchange<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opc
 }
 
 pub fn branch_and_link<T: BusInterface, const LINK: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -53,7 +53,7 @@ pub fn data_processing<
     const SET_COND: bool,
     const SHIFT: u8,
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -116,34 +116,34 @@ pub fn data_processing<
     }
 
     let result = match DATA_OP {
-        AND => Some(and::<SET_COND>(cpu, op1, op2, carry_from_shift)),
-        EOR => Some(eor::<SET_COND>(cpu, op1, op2, carry_from_shift)),
-        SUB => Some(sub::<SET_COND>(cpu, op1, op2)),
-        RSB => Some(sub::<SET_COND>(cpu, op2, op1)),
-        ADD => Some(add::<SET_COND>(cpu, op1, op2)),
-        ADC => Some(adc::<SET_COND>(cpu, op1, op2)),
-        SBC => Some(adc::<SET_COND>(cpu, op1, !op2)),
-        RSC => Some(adc::<SET_COND>(cpu, op2, !op1)),
+        AND => Some(and::<T, SET_COND>(cpu, op1, op2, carry_from_shift)),
+        EOR => Some(eor::<T, SET_COND>(cpu, op1, op2, carry_from_shift)),
+        SUB => Some(sub::<T, SET_COND>(cpu, op1, op2)),
+        RSB => Some(sub::<T, SET_COND>(cpu, op2, op1)),
+        ADD => Some(add::<T, SET_COND>(cpu, op1, op2)),
+        ADC => Some(adc::<T, SET_COND>(cpu, op1, op2)),
+        SBC => Some(adc::<T, SET_COND>(cpu, op1, !op2)),
+        RSC => Some(adc::<T, SET_COND>(cpu, op2, !op1)),
         TST => {
-            and::<true>(cpu, op1, op2, carry_from_shift);
+            and::<T, true>(cpu, op1, op2, carry_from_shift);
             None
         }
         TEQ => {
-            eor::<true>(cpu, op1, op2, carry_from_shift);
+            eor::<T, true>(cpu, op1, op2, carry_from_shift);
             None
         }
         CMP => {
-            sub::<true>(cpu, op1, op2);
+            sub::<T, true>(cpu, op1, op2);
             None
         }
         CMN => {
-            add::<true>(cpu, op1, op2);
+            add::<T, true>(cpu, op1, op2);
             None
         }
-        ORR => Some(orr::<SET_COND>(cpu, op1, op2, carry_from_shift)),
-        MOV => Some(mov::<SET_COND>(cpu, op2, carry_from_shift)),
-        BIC => Some(and::<SET_COND>(cpu, op1, !op2, carry_from_shift)),
-        MVN => Some(mov::<SET_COND>(cpu, !op2, carry_from_shift)),
+        ORR => Some(orr::<T, SET_COND>(cpu, op1, op2, carry_from_shift)),
+        MOV => Some(mov::<T, SET_COND>(cpu, op2, carry_from_shift)),
+        BIC => Some(and::<T, SET_COND>(cpu, op1, !op2, carry_from_shift)),
+        MVN => Some(mov::<T, SET_COND>(cpu, !op2, carry_from_shift)),
         _ => panic!("Invalid data op! {DATA_OP}"),
     };
 
@@ -167,7 +167,7 @@ pub fn data_processing<
 }
 
 pub fn read_status_mrs<T: BusInterface, const SPSR_DEST: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u32,
 ) {
@@ -184,7 +184,7 @@ pub fn read_status_mrs<T: BusInterface, const SPSR_DEST: bool>(
 }
 
 pub fn write_status_msr<T: BusInterface, const IMM: bool, const SPSR_DEST: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u32,
 ) {
@@ -249,7 +249,7 @@ pub fn write_status_msr<T: BusInterface, const IMM: bool, const SPSR_DEST: bool>
 }
 
 pub fn multiply<T: BusInterface, const ACCUMULATE: bool, const SET_COND: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -313,7 +313,7 @@ pub fn multiply_long<
     const ACCUMULATE: bool,
     const SET_COND: bool,
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -390,7 +390,7 @@ pub fn single_data_transfer<
     const WRITE_BACK: bool, // 0: no write back, 1: write address to base
     const LOAD: bool,      // 0: store op, 1: load op
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -476,7 +476,7 @@ pub fn halfword_and_signed_data_transfer<
     const S: bool,
     const H: bool,
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -560,7 +560,7 @@ pub fn block_data_transfer<
     const WRITE_BACK: bool,
     const LOAD: bool,
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -672,7 +672,7 @@ pub fn block_data_transfer<
 }
 
 pub fn data_swap<T: BusInterface, const SWAP_BYTE: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u32,
 ) {
@@ -714,7 +714,7 @@ pub fn data_swap<T: BusInterface, const SWAP_BYTE: bool>(
     }
 }
 
-pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opcode: u32) {
+pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi<T>, bus: &mut T, _opcode: u32) {
     cpu.registers.r14_svc = (cpu.registers.r15 - Wrapping(4)).0;
 
     cpu.registers.r15 = Wrapping(8);
@@ -726,7 +726,10 @@ pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opc
     cpu.pipeline_refill_arm(bus);
 }
 
-pub fn undefined_arm<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opcode: u32) {
+pub fn undefined_arm<T>(cpu: &mut Arm7tdmi<T>, bus: &mut T, _opcode: u32)
+where
+    T: BusInterface,
+{
     cpu.registers.r14_und = (cpu.registers.r15 - Wrapping(4)).0;
 
     cpu.registers.r15 = Wrapping(4);

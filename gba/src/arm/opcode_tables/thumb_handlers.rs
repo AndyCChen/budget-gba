@@ -9,7 +9,7 @@ use crate::arm::{
 use crate::bus::BusInterface;
 
 pub fn move_shifted<T: BusInterface, const SHIFT_OP: u8>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u16,
 ) {
@@ -31,12 +31,12 @@ pub fn move_shifted<T: BusInterface, const SHIFT_OP: u8>(
         }
     };
 
-    let result = mov::<true>(cpu, result, carry_from_shift);
+    let result = mov::<T, true>(cpu, result, carry_from_shift);
     cpu.set_banked_register(rd, result);
 }
 
 pub fn add_subtract<T: BusInterface, const IMM: bool, const IS_SUBTRACT: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u16,
 ) {
@@ -51,16 +51,16 @@ pub fn add_subtract<T: BusInterface, const IMM: bool, const IS_SUBTRACT: bool>(
     let op2: u32 = if IMM { rn } else { cpu.get_banked_register(rn) };
 
     let result = if IS_SUBTRACT {
-        sub::<true>(cpu, op1, op2)
+        sub::<T,true>(cpu, op1, op2)
     } else {
-        add::<true>(cpu, op1, op2)
+        add::<T, true>(cpu, op1, op2)
     };
 
     cpu.set_banked_register(rd, result);
 }
 
 pub fn mov_cmp_add_sub_immediate<T: BusInterface, const OP: u8>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u16,
 ) {
@@ -78,13 +78,13 @@ pub fn mov_cmp_add_sub_immediate<T: BusInterface, const OP: u8>(
     let op1 = cpu.get_banked_register(rd);
 
     let result = match OP {
-        MOV => Some(mov::<true>(cpu, immediate_value, cpu.status.cpsr.c())),
+        MOV => Some(mov::<T, true>(cpu, immediate_value, cpu.status.cpsr.c())),
         CMP => {
-            sub::<true>(cpu, op1, immediate_value);
+            sub::<T, true>(cpu, op1, immediate_value);
             None
         }
-        ADD => Some(add::<true>(cpu, op1, immediate_value)),
-        SUB => Some(sub::<true>(cpu, op1, immediate_value)),
+        ADD => Some(add::<T, true>(cpu, op1, immediate_value)),
+        SUB => Some(sub::<T, true>(cpu, op1, immediate_value)),
         _ => panic!("Invalid OP! {OP}"),
     };
 
@@ -112,7 +112,7 @@ mod alu_op {
     pub const MVN: u8 = 15;
 }
 
-fn mul(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
+fn mul<T: BusInterface>(cpu: &mut Arm7tdmi<T>, op1: u32, op2: u32) -> u32 {
     // todo handle extra i cycles
     let _i_cycles = 'block: {
         match op2 & 0xFFFF_FF00 {
@@ -142,7 +142,7 @@ fn mul(cpu: &mut Arm7tdmi, op1: u32, op2: u32) -> u32 {
 }
 
 pub fn alu_operations<T: BusInterface, const OP: u8>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -162,43 +162,43 @@ pub fn alu_operations<T: BusInterface, const OP: u8>(
     }
 
     let result = match OP {
-        alu_op::AND => Some(and::<true>(cpu, op1, op2, cpu.status.cpsr.c())),
-        alu_op::EOR => Some(eor::<true>(cpu, op1, op2, cpu.status.cpsr.c())),
+        alu_op::AND => Some(and::<T, true>(cpu, op1, op2, cpu.status.cpsr.c())),
+        alu_op::EOR => Some(eor::<T, true>(cpu, op1, op2, cpu.status.cpsr.c())),
         alu_op::LSL => {
             let (result, carry_from_shift) = lsl(cpu, op1, op2 & 0xFF);
-            Some(mov::<true>(cpu, result, carry_from_shift))
+            Some(mov::<T, true>(cpu, result, carry_from_shift))
         }
         alu_op::LSR => {
             let (result, carry_from_shift) = lsr(cpu, false, op1, op2 & 0xFF);
-            Some(mov::<true>(cpu, result, carry_from_shift))
+            Some(mov::<T, true>(cpu, result, carry_from_shift))
         }
         alu_op::ASR => {
             let (result, carry_from_shift) = asr(cpu, false, op1, op2 & 0xFF);
-            Some(mov::<true>(cpu, result, carry_from_shift))
+            Some(mov::<T, true>(cpu, result, carry_from_shift))
         }
-        alu_op::ADC => Some(adc::<true>(cpu, op1, op2)),
-        alu_op::SBC => Some(adc::<true>(cpu, op1, !op2)),
+        alu_op::ADC => Some(adc::<T, true>(cpu, op1, op2)),
+        alu_op::SBC => Some(adc::<T, true>(cpu, op1, !op2)),
         alu_op::ROR => {
             let (result, carry_from_shift) = ror(cpu, false, op1, op2 & 0xFF);
-            Some(mov::<true>(cpu, result, carry_from_shift))
+            Some(mov::<T, true>(cpu, result, carry_from_shift))
         }
         alu_op::TST => {
-            and::<true>(cpu, op1, op2, cpu.status.cpsr.c());
+            and::<T, true>(cpu, op1, op2, cpu.status.cpsr.c());
             None
         }
-        alu_op::NEG => Some(sub::<true>(cpu, 0, op2)),
+        alu_op::NEG => Some(sub::<T, true>(cpu, 0, op2)),
         alu_op::CMP => {
-            sub::<true>(cpu, op1, op2);
+            sub::<T, true>(cpu, op1, op2);
             None
         }
         alu_op::CMN => {
-            add::<true>(cpu, op1, op2);
+            add::<T, true>(cpu, op1, op2);
             None
         }
-        alu_op::ORR => Some(orr::<true>(cpu, op1, op2, cpu.status.cpsr.c())),
+        alu_op::ORR => Some(orr::<T, true>(cpu, op1, op2, cpu.status.cpsr.c())),
         alu_op::MUL => Some(mul(cpu, op1, op2)),
-        alu_op::BIC => Some(and::<true>(cpu, op1, !op2, cpu.status.cpsr.c())),
-        alu_op::MVN => Some(mov::<true>(cpu, !op2, cpu.status.cpsr.c())),
+        alu_op::BIC => Some(and::<T, true>(cpu, op1, !op2, cpu.status.cpsr.c())),
+        alu_op::MVN => Some(mov::<T, true>(cpu, !op2, cpu.status.cpsr.c())),
         _ => panic!("Invalid OP"),
     };
 
@@ -208,7 +208,7 @@ pub fn alu_operations<T: BusInterface, const OP: u8>(
 }
 
 pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -233,8 +233,8 @@ pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: b
     match OP {
         ADD | MOV => {
             let result = match OP {
-                ADD => add::<false>(cpu, op1, op2),
-                MOV => mov::<false>(cpu, op2, cpu.status.cpsr.c()),
+                ADD => add::<T, false>(cpu, op1, op2),
+                MOV => mov::<T, false>(cpu, op2, cpu.status.cpsr.c()),
                 _ => panic!(),
             };
 
@@ -246,7 +246,7 @@ pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: b
             }
         }
         CMP => {
-            sub::<true>(cpu, op1, op2);
+            sub::<T, true>(cpu, op1, op2);
         }
         BX => {
             if op2 & 1 == 1 {
@@ -264,7 +264,7 @@ pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: b
     };
 }
 
-pub fn pc_relative_load<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode: u16) {
+pub fn pc_relative_load<T: BusInterface>(cpu: &mut Arm7tdmi<T>, bus: &mut T, opcode: u16) {
     let rd: u32 = ((opcode >> 8) & 0x7).into();
     let offset: u32 = ((opcode & 0xFF) * 4).into();
 
@@ -280,7 +280,7 @@ pub fn pc_relative_load<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode
 }
 
 pub fn load_store_register_offset<T: BusInterface, const LOAD: bool, const TRANSFER_BYTE: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -318,7 +318,7 @@ pub fn load_store_register_offset<T: BusInterface, const LOAD: bool, const TRANS
 }
 
 pub fn load_store_sign_extended<T: BusInterface, const OP: u8>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -359,7 +359,7 @@ pub fn load_store_sign_extended<T: BusInterface, const OP: u8>(
 }
 
 pub fn load_store_immediate_offset<T: BusInterface, const TRANSFER_BYTE: bool, const LOAD: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -395,7 +395,7 @@ pub fn load_store_immediate_offset<T: BusInterface, const TRANSFER_BYTE: bool, c
 }
 
 pub fn load_store_halfword_immediate_offset<T: BusInterface, const LOAD: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -422,7 +422,7 @@ pub fn load_store_halfword_immediate_offset<T: BusInterface, const LOAD: bool>(
 }
 
 pub fn sp_load_store_relative_offset<T: BusInterface, const LOAD: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -448,7 +448,7 @@ pub fn sp_load_store_relative_offset<T: BusInterface, const LOAD: bool>(
 }
 
 pub fn pc_sp_load_address<T: BusInterface, const SP: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u16,
 ) {
@@ -469,7 +469,7 @@ pub fn pc_sp_load_address<T: BusInterface, const SP: bool>(
 }
 
 pub fn add_sub_sp<T: BusInterface, const NEGATIVE_OFFSET: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     _bus: &mut T,
     opcode: u16,
 ) {
@@ -492,7 +492,7 @@ pub fn push_pop_register<
     const LOAD: bool,
     const PC_LR_BIT: bool, // 0: Leave LR/PC alone, 1: store LR or load PC
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -573,7 +573,7 @@ pub fn push_pop_register<
 }
 
 pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -645,7 +645,7 @@ pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
 }
 
 pub fn conditional_branch<T: BusInterface, const COND: u8>(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -691,7 +691,7 @@ pub fn conditional_branch<T: BusInterface, const COND: u8>(
     cpu.pipeline_refill_thumb(bus);
 }
 
-pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opcode: u16) {
+pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi<T>, bus: &mut T, _opcode: u16) {
     cpu.registers.r14_svc = cpu.registers.r15.0.wrapping_sub(2);
 
     cpu.registers.r15 = Wrapping(8);
@@ -704,7 +704,7 @@ pub fn software_interrupt<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, _opc
     cpu.pipeline_refill_arm(bus);
 }
 
-pub fn unconditional_branch<T: BusInterface>(cpu: &mut Arm7tdmi, bus: &mut T, opcode: u16) {
+pub fn unconditional_branch<T: BusInterface>(cpu: &mut Arm7tdmi<T>, bus: &mut T, opcode: u16) {
     let mut branch_offset: u32 = ((opcode & 0x7FF) << 1).into();
 
     // positive
@@ -723,7 +723,7 @@ pub fn long_branch_with_link<
     T: BusInterface,
     const H_BIT: bool, // 0: offset high, 1: offset low
 >(
-    cpu: &mut Arm7tdmi,
+    cpu: &mut Arm7tdmi<T>,
     bus: &mut T,
     opcode: u16,
 ) {
@@ -757,6 +757,6 @@ pub fn long_branch_with_link<
     }
 }
 
-pub fn undefined_thumb<T: BusInterface>(_cpu: &mut Arm7tdmi, _bus: &mut T, opcode: u16) {
+pub fn undefined_thumb<T: BusInterface>(_cpu: &mut Arm7tdmi<T>, _bus: &mut T, opcode: u16) {
     todo!("handle undefined opcode: {opcode}");
 }

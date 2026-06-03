@@ -1,8 +1,8 @@
 use std::num::Wrapping;
 
-use crate::arm::arm_json_test_states::*;
+use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::arm::constants::access_code;
-use crate::arm::opcode_tables::{ARM_TABLE, THUMB_TABLE};
+use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
 use crate::bus::BusInterface;
 
 use bitfield_struct::bitfield;
@@ -145,12 +145,14 @@ impl CpuMode {
     }
 }
 
-pub struct Arm7tdmi {
+pub struct Arm7tdmi<T: BusInterface> {
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
     pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
     pub pipeline_state: u8,
-    // phantom_data: PhantomData<T>,
+
+    arm_table: [ArmHandler<T>; ARM_TABLE_SIZE],
+    thumb_table: [ThumbHandler<T>; THUMB_TABLE_SIZE],
 }
 
 #[derive(Clone, Copy)]
@@ -162,14 +164,16 @@ pub enum CpuInstruction {
 use CpuInstruction::*;
 use CpuMode::*;
 
-impl Arm7tdmi {
-    pub fn new<T: BusInterface>(bus: &mut T) -> Self {
+impl<T: BusInterface> Arm7tdmi<T> {
+    pub fn new(bus: &mut T) -> Self {
         let mut cpu = Arm7tdmi {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [Arm(0), Arm(0)],
             pipeline_state: access_code::NONSEQUENTIAL,
-            // phantom_data: PhantomData,
+
+            arm_table: generate_arm_table(),
+            thumb_table: generate_thumb_table(),
         };
 
         cpu.pipeline_refill_arm(bus);
@@ -240,6 +244,9 @@ impl Arm7tdmi {
             },
             pipeline,
             pipeline_state: input_state.initial.access,
+
+            arm_table: generate_arm_table(),
+            thumb_table: generate_thumb_table(),
             // phantom_data: PhantomData,
         }
     }
@@ -251,7 +258,7 @@ impl Arm7tdmi {
         self.pipeline_state = access_code::NONSEQUENTIAL;
     }
 
-    pub fn step<T: BusInterface>(&mut self, bus: &mut T) -> (CpuInstruction, u32) {
+    pub fn step(&mut self, bus: &mut T) -> (CpuInstruction, u32) {
         let instruction = self.pipeline[0];
         let pc = self.registers.r15.0;
 
@@ -262,7 +269,7 @@ impl Arm7tdmi {
                 if self.condition_check((arm_instr >> 28) as u8) {
                     let arm_table_hash =
                         ((arm_instr & 0x0FF00000) >> 16) | ((arm_instr & 0xF0) >> 4);
-                    ARM_TABLE[arm_table_hash as usize](self, bus, arm_instr);
+                    self.arm_table[arm_table_hash as usize](self, bus, arm_instr);
                 } else {
                     self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
                     self.registers.r15 += 4;
@@ -272,7 +279,7 @@ impl Arm7tdmi {
                 self.pipeline_prefetch(bus, ThumbMode);
 
                 let thumb_table_hash = (thumb_instr >> 6) & 0x3FF;
-                THUMB_TABLE[thumb_table_hash as usize](self, bus, thumb_instr as u16);
+                self.thumb_table[thumb_table_hash as usize](self, bus, thumb_instr as u16);
             }
         }
 
@@ -405,7 +412,7 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for arm mode
-    pub fn pipeline_refill_arm<T: BusInterface>(&mut self, bus: &mut T) {
+    pub fn pipeline_refill_arm(&mut self, bus: &mut T) {
         self.pipeline[0] = Arm(bus.pipeline_read_word(
             self.registers.r15.0,
             access_code::CODE | access_code::NONSEQUENTIAL,
@@ -420,7 +427,7 @@ impl Arm7tdmi {
     }
 
     /// Flush and refills the pipeline for thumb mode
-    pub fn pipeline_refill_thumb<T: BusInterface>(&mut self, bus: &mut T) {
+    pub fn pipeline_refill_thumb(&mut self, bus: &mut T) {
         self.pipeline[0] = Thumb(
             bus.pipeline_read_halfword(
                 self.registers.r15.0,
@@ -441,7 +448,7 @@ impl Arm7tdmi {
     }
 
     /// fetch opcode and push into pipeline
-    fn pipeline_prefetch<T: BusInterface>(&mut self, bus: &mut T, mode: CpuMode) {
+    fn pipeline_prefetch(&mut self, bus: &mut T, mode: CpuMode) {
         self.pipeline.copy_within(1.., 0);
         match mode {
             ArmMode => {
@@ -493,7 +500,7 @@ impl Arm7tdmi {
 #[allow(dead_code)]
 mod test_utils {
     use crate::bus::TestBus;
-    use crate::arm::decoder_tables::*;
+    use crate::arm::{decoder_tables::*, generate_arm_table, generate_thumb_table};
 
     use super::*;
     use std::fs;
@@ -502,7 +509,7 @@ mod test_utils {
 
     pub fn load_test<P: AsRef<Path>>(
         path: P,
-        check_state: fn(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize),
+        check_state: fn(cpu: &Arm7tdmi<TestBus>, input_state: &InputStates, test_num: usize),
         skip: usize,
     ) {
         let file_name = path.as_ref().file_stem().unwrap().to_str().unwrap().to_string();
@@ -515,6 +522,9 @@ mod test_utils {
         let it = items.iter().enumerate().skip(skip);
 
         let mut instructions = Vec::with_capacity(items.len());
+
+        let arm_table = generate_arm_table::<TestBus>();
+        let thumb_table= generate_thumb_table::<TestBus>();
 
         for (count, item) in it {
             let mut cpu = Arm7tdmi::from_test_state(item);
@@ -539,24 +549,24 @@ mod test_utils {
     }
 
     // ignore checking carry flag, useful for checking muliply instruction as the carry flag result is not emulated
-    pub fn verify_state_no_carry(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    pub fn verify_state_no_carry(cpu: &Arm7tdmi<TestBus>, input_state: &InputStates, test_num: usize) {
         let mask = 0xDFFF_FFFF;
         assert_eq!(cpu.status.cpsr.into_bits() & mask, input_state.r#final.CPSR & mask, "{input_state:#?} cspr, test: {test_num}");
         verify_state_core(cpu, input_state, test_num);
     }
 
-    pub fn verify_state_no_carry_overflow(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    pub fn verify_state_no_carry_overflow(cpu: &Arm7tdmi<TestBus>, input_state: &InputStates, test_num: usize) {
         let mask = 0xCFFF_FFFF;
         assert_eq!(cpu.status.cpsr.into_bits() & mask, input_state.r#final.CPSR & mask, "{input_state:#?} cspr, test: {test_num}");
         verify_state_core(cpu, input_state, test_num);
     }
 
-    pub fn verify_state(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    pub fn verify_state(cpu: &Arm7tdmi<TestBus>, input_state: &InputStates, test_num: usize) {
         assert_eq!(cpu.status.cpsr.into_bits(), input_state.r#final.CPSR, "{input_state:#?} cspr, test: {test_num}");
         verify_state_core(cpu, input_state, test_num);
     }
     
-    fn verify_state_core(cpu: &Arm7tdmi, input_state: &InputStates, test_num: usize) {
+    fn verify_state_core(cpu: &Arm7tdmi<TestBus>, input_state: &InputStates, test_num: usize) {
         let final_state = &input_state.r#final;
 
         assert_eq!(cpu.status.spsr_fiq.into_bits(), final_state.SPSR[0], "{input_state:#?} spsr_fiq, test: {test_num}");

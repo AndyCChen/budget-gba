@@ -2,17 +2,16 @@ use super::common::arm_data_op;
 use crate::arm::core::Arm7tdmi;
 use crate::bus::BusInterface;
 
-pub type ArmHandler<T: BusInterface> = fn(&mut Arm7tdmi, &mut T, u32);
+pub type ArmHandler<T> = fn(&mut Arm7tdmi<T>, &mut T, u32);
 pub const ARM_TABLE_SIZE: usize = 0x1000;
 
 pub const fn generate_arm_table<T: BusInterface>() -> [ArmHandler<T>; ARM_TABLE_SIZE] {
-    use crate::arm::opcode_tables::arm_handlers::*;
+    use crate::arm::opcode_tables::arm_handlers::undefined_arm;
 
     let mut arm_table: [ArmHandler<T>; ARM_TABLE_SIZE] = [undefined_arm; ARM_TABLE_SIZE];
 
     let mut i = 0;
-
-    while i < ARM_TABLE_SIZE {
+    while i < arm_table.len() {
         arm_table[i] = generate_arm_instruction(i);
         i += 1;
     }
@@ -72,7 +71,7 @@ macro_rules! _data_processing_inner {
 }
 
 #[rustfmt::skip]
-const fn generate_arm_instruction<T: BusInterface>(instruction: usize) -> ArmHandler<T> {
+const fn generate_arm_instruction<T: BusInterface>(instruction: usize) -> ArmHandler<T>{
     use crate::arm::opcode_tables::arm_handlers::*;
 
     if instruction == 0b0001_0010_0001 {
