@@ -1,8 +1,8 @@
 use std::num::Wrapping;
 
-use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::arm::constants::access_code;
 use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
+use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::bus::BusInterface;
 
 use bitfield_struct::bitfield;
@@ -690,6 +690,11 @@ mod arm_32_tests {
     #[test]
     fn test_arm_ldrh_strh() {
         load_test("ARM7TDMI/v1/arm_ldrh_strh.json", verify_state, 0);
+    }
+
+    #[test]
+    fn test_arm_ldrsb_ldrsh() {
+        load_test("ARM7TDMI/v1/arm_ldrsb_ldrsh.json", verify_state, 0);
     }
 
     #[test]
