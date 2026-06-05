@@ -4,6 +4,8 @@ use crate::arm::constants::access_code;
 use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
 use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::bus::BusInterface;
+use ringbuf::traits::{Consumer, Producer, RingBuffer};
+use ringbuf::{LocalRb, storage::Heap};
 
 use bitfield_struct::bitfield;
 
@@ -153,6 +155,8 @@ pub struct Arm7tdmi<T: BusInterface> {
 
     arm_table: [ArmHandler<T>; ARM_TABLE_SIZE],
     thumb_table: [ThumbHandler<T>; THUMB_TABLE_SIZE],
+    instruction_buffer: LocalRb<Heap<(u32, CpuInstruction)>>,
+    instruction_log_enable: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -169,18 +173,34 @@ impl<T: BusInterface> Arm7tdmi<T> {
         let mut cpu = Arm7tdmi {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
-            pipeline: [Arm(0), Arm(0)],
+            pipeline: [Arm(0); 2],
             pipeline_state: access_code::NONSEQUENTIAL,
 
             arm_table: generate_arm_table(),
             thumb_table: generate_thumb_table(),
+            instruction_buffer: LocalRb::new(32),
+            instruction_log_enable: false,
         };
 
         cpu.pipeline_refill_arm(bus);
         cpu
     }
 
-    pub fn from_test_state(input_state: &InputStates) -> Self {
+    pub fn test_init() -> Self {
+        Self {
+            registers: GeneralRegisters::default(),
+            status: StatusRegisters::default(),
+            pipeline: [Arm(0); 2],
+            pipeline_state: access_code::NONSEQUENTIAL,
+
+            arm_table: generate_arm_table(),
+            thumb_table: generate_thumb_table(),
+            instruction_buffer: LocalRb::new(50_000),
+            instruction_log_enable: false,
+        }
+    }
+
+    pub fn update_test_state(&mut self, input_state: &InputStates) {
         let pipeline = match StatusRegister::from_bits(input_state.initial.CPSR).t() {
             ArmMode => [
                 Arm(input_state.initial.pipeline[0]),
@@ -192,63 +212,59 @@ impl<T: BusInterface> Arm7tdmi<T> {
             ],
         };
 
-        Self {
-            registers: GeneralRegisters {
-                r0: input_state.initial.R[0],
-                r1: input_state.initial.R[1],
-                r2: input_state.initial.R[2],
-                r3: input_state.initial.R[3],
-                r4: input_state.initial.R[4],
-                r5: input_state.initial.R[5],
-                r6: input_state.initial.R[6],
-                r7: input_state.initial.R[7],
+        self.pipeline = pipeline;
+        self.pipeline_state = input_state.initial.access;
 
-                r8: input_state.initial.R[8],
-                r8_fiq: input_state.initial.R_fiq[0],
+        self.registers = GeneralRegisters {
+            r0: input_state.initial.R[0],
+            r1: input_state.initial.R[1],
+            r2: input_state.initial.R[2],
+            r3: input_state.initial.R[3],
+            r4: input_state.initial.R[4],
+            r5: input_state.initial.R[5],
+            r6: input_state.initial.R[6],
+            r7: input_state.initial.R[7],
 
-                r9: input_state.initial.R[9],
-                r9_fiq: input_state.initial.R_fiq[1],
+            r8: input_state.initial.R[8],
+            r8_fiq: input_state.initial.R_fiq[0],
 
-                r10: input_state.initial.R[10],
-                r10_fiq: input_state.initial.R_fiq[2],
+            r9: input_state.initial.R[9],
+            r9_fiq: input_state.initial.R_fiq[1],
 
-                r11: input_state.initial.R[11],
-                r11_fiq: input_state.initial.R_fiq[3],
+            r10: input_state.initial.R[10],
+            r10_fiq: input_state.initial.R_fiq[2],
 
-                r12: input_state.initial.R[12],
-                r12_fiq: input_state.initial.R_fiq[4],
+            r11: input_state.initial.R[11],
+            r11_fiq: input_state.initial.R_fiq[3],
 
-                r13: input_state.initial.R[13],
-                r13_fiq: input_state.initial.R_fiq[5],
-                r13_svc: input_state.initial.R_svc[0],
-                r13_abt: input_state.initial.R_abt[0],
-                r13_irq: input_state.initial.R_irq[0],
-                r13_und: input_state.initial.R_und[0],
+            r12: input_state.initial.R[12],
+            r12_fiq: input_state.initial.R_fiq[4],
 
-                r14: input_state.initial.R[14],
-                r14_fiq: input_state.initial.R_fiq[6],
-                r14_svc: input_state.initial.R_svc[1],
-                r14_abt: input_state.initial.R_abt[1],
-                r14_irq: input_state.initial.R_irq[1],
-                r14_und: input_state.initial.R_und[1],
+            r13: input_state.initial.R[13],
+            r13_fiq: input_state.initial.R_fiq[5],
+            r13_svc: input_state.initial.R_svc[0],
+            r13_abt: input_state.initial.R_abt[0],
+            r13_irq: input_state.initial.R_irq[0],
+            r13_und: input_state.initial.R_und[0],
 
-                r15: Wrapping(input_state.initial.R[15]),
-            },
-            status: StatusRegisters {
-                cpsr: StatusRegister::from_bits(input_state.initial.CPSR),
-                spsr_fiq: StatusRegister::from_bits(input_state.initial.SPSR[0]),
-                spsr_svc: StatusRegister::from_bits(input_state.initial.SPSR[1]),
-                spsr_abt: StatusRegister::from_bits(input_state.initial.SPSR[2]),
-                spsr_irq: StatusRegister::from_bits(input_state.initial.SPSR[3]),
-                spsr_und: StatusRegister::from_bits(input_state.initial.SPSR[4]),
-            },
-            pipeline,
-            pipeline_state: input_state.initial.access,
+            r14: input_state.initial.R[14],
+            r14_fiq: input_state.initial.R_fiq[6],
+            r14_svc: input_state.initial.R_svc[1],
+            r14_abt: input_state.initial.R_abt[1],
+            r14_irq: input_state.initial.R_irq[1],
+            r14_und: input_state.initial.R_und[1],
 
-            arm_table: generate_arm_table(),
-            thumb_table: generate_thumb_table(),
-            // phantom_data: PhantomData,
-        }
+            r15: Wrapping(input_state.initial.R[15]),
+        };
+
+        self.status = StatusRegisters {
+            cpsr: StatusRegister::from_bits(input_state.initial.CPSR),
+            spsr_fiq: StatusRegister::from_bits(input_state.initial.SPSR[0]),
+            spsr_svc: StatusRegister::from_bits(input_state.initial.SPSR[1]),
+            spsr_abt: StatusRegister::from_bits(input_state.initial.SPSR[2]),
+            spsr_irq: StatusRegister::from_bits(input_state.initial.SPSR[3]),
+            spsr_und: StatusRegister::from_bits(input_state.initial.SPSR[4]),
+        };
     }
 
     pub fn reset(&mut self) {
@@ -258,9 +274,13 @@ impl<T: BusInterface> Arm7tdmi<T> {
         self.pipeline_state = access_code::NONSEQUENTIAL;
     }
 
-    pub fn step(&mut self, bus: &mut T) -> (CpuInstruction, u32) {
+    pub fn step(&mut self, bus: &mut T) {
         let instruction = self.pipeline[0];
         let pc = self.registers.r15.0;
+
+        if self.instruction_log_enable {
+            self.instruction_buffer.push_overwrite((pc, instruction));
+        }
 
         match instruction {
             Arm(arm_instr) => {
@@ -281,9 +301,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
                 let thumb_table_hash = (thumb_instr >> 6) & 0x3FF;
                 self.thumb_table[thumb_table_hash as usize](self, bus, thumb_instr as u16);
             }
-        }
-
-        (instruction, pc)
+        };
     }
 
     /// Retrieve register in arm mode
@@ -523,29 +541,26 @@ mod test_utils {
         let items: Vec<InputStates> = serde_json::from_str(&data).unwrap();
         let it = items.iter().enumerate().skip(skip);
 
-        let mut instructions = Vec::with_capacity(items.len());
-
+        let mut cpu = Arm7tdmi::test_init();
+        cpu.instruction_log_enable =  true;
         for (count, item) in it {
-            let mut cpu = Arm7tdmi::from_test_state(item);
-            let mut bus = TestBus::new(&item.transactions);
-
-            let (instr, pc) = cpu.step(&mut bus);
-            instructions.push((instr, pc));
+            cpu.update_test_state(item);
+            cpu.step(&mut TestBus::new(&item.transactions));
             check_state(&cpu, item, count);
+            cpu.reset();
         }
-
         
         let output_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/decoder_output");
         fs::create_dir_all(output_dir).expect("failed to create directory!");
         let mut file = fs::File::create(format!("{output_dir}/{file_name}.txt")).expect("failed to create file");
 
-        for (instruction, pc) in instructions {
+        while let Some((pc, instruction)) = cpu.instruction_buffer.try_pop()  {
             let asm_string = match instruction {
                 Arm(opcode32) => decode_arm(opcode32).to_asm_string(pc),
                 Thumb(opcode16) => decode_thumb(opcode16 as u16).to_asm_string(pc),
             };
 
-            writeln!(file, "{asm_string}").expect("write failed!");
+            writeln!(file, "{asm_string}").expect("write failed!");           
         }
     }
 
@@ -718,6 +733,8 @@ mod arm_32_tests {
 #[rustfmt::skip]
 mod thumb_16_tests {
     use super::test_utils::{load_test, verify_state, verify_state_no_carry};
+    
+    
 
     #[test]
     fn test_thumb_lsl_lsr_asr() {
@@ -739,6 +756,8 @@ mod thumb_16_tests {
         use super::*;
         use crate::bus::TestBus;
         use std::fs;
+        use std::io::Write;
+        use crate::arm::decoder_tables::*;
 
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let Ok(data) = fs::read_to_string(format!("{manifest_dir}/ARM7TDMI/v1/thumb_data_proc.json")) else {
@@ -748,15 +767,18 @@ mod thumb_16_tests {
         let items: Vec<InputStates> = serde_json::from_str(&data).unwrap();
         let is_multiply = |opcode: u32| (opcode >> 6) & 0xF == 0b1101;
 
+        let mut cpu = Arm7tdmi::test_init();
+        cpu.instruction_log_enable = true;
+
         items
             .iter()
             .filter(|item| !is_multiply(item.opcode))
             .enumerate()
             .for_each(|(count, item)| {
-                let mut cpu = Arm7tdmi::from_test_state(item);
-                let mut bus = TestBus::new(&item.transactions);
-                cpu.step(&mut bus);
+                cpu.update_test_state(item);
+                cpu.step(&mut TestBus::new(&item.transactions));
                 verify_state(&cpu, item, count);
+                cpu.reset();
             });
 
         items
@@ -764,11 +786,24 @@ mod thumb_16_tests {
             .filter(|item| is_multiply(item.opcode))
             .enumerate()
             .for_each(|(count, item)| {
-                let mut cpu = Arm7tdmi::from_test_state(item);
-                let mut bus = TestBus::new(&item.transactions);
-                cpu.step(&mut bus);
+                cpu.update_test_state(item);
+                cpu.step(&mut TestBus::new(&item.transactions));
                 verify_state_no_carry(&cpu, item, count);
+                cpu.reset();
             });
+
+        let output_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/decoder_output");
+        fs::create_dir_all(output_dir).expect("failed to create directory!");
+        let mut file = fs::File::create(format!("{output_dir}/thumb_data_proc.txt")).expect("failed to create file");
+
+        while let Some((pc, instruction)) = cpu.instruction_buffer.try_pop() {
+            let asm_string = match instruction {
+                Arm(opcode32) => decode_arm(opcode32).to_asm_string(pc),
+                Thumb(opcode16) => decode_thumb(opcode16 as u16).to_asm_string(pc),
+            };
+
+            writeln!(file, "{asm_string}").expect("write failed!");           
+        }
     }
 
     #[test]
