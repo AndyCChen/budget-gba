@@ -505,16 +505,18 @@ mod test_utils {
     use super::*;
     use std::fs;
     use std::io::Write;
-    use std::path::Path;
+    use std::path::PathBuf;
 
-    pub fn load_test<P: AsRef<Path>>(
-        path: P,
+    pub fn load_test(
+        test_file: &str,
         check_state: fn(cpu: &Arm7tdmi<TestBus>, input_state: &InputStates, test_num: usize),
         skip: usize,
     ) {
-        let file_name = path.as_ref().file_stem().unwrap().to_str().unwrap().to_string();
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let test_file_path = PathBuf::from(manifest_dir).join("ARM7TDMI/v1").join(test_file);
+        let file_name = test_file_path.file_stem().unwrap().to_str().unwrap().to_string();
         
-        let Ok(data) = fs::read_to_string(path) else {
+        let Ok(data) = fs::read_to_string(test_file_path) else {
             panic!("Failed to load test file!");
         };
 
@@ -532,8 +534,10 @@ mod test_utils {
             check_state(&cpu, item, count);
         }
 
-        fs::create_dir_all("decoder_output").expect("failed to create directory!");
-        let mut file = fs::File::create(format!("decoder_output/{file_name}.txt")).expect("failed to create file");
+        
+        let output_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/decoder_output");
+        fs::create_dir_all(output_dir).expect("failed to create directory!");
+        let mut file = fs::File::create(format!("{output_dir}/{file_name}.txt")).expect("failed to create file");
 
         for (instruction, pc) in instructions {
             let asm_string = match instruction {
@@ -626,87 +630,87 @@ mod arm_32_tests {
 
     #[test]
     fn test_arm_branch_and_exchange() {
-        load_test("ARM7TDMI/v1/arm_bx.json", verify_state, 0);
+        load_test("arm_bx.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_branch_and_link() {
-        load_test("ARM7TDMI/v1/arm_b_bl.json", verify_state, 0);
+        load_test("arm_b_bl.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_data_proc_immediate() {
-        load_test("ARM7TDMI/v1/arm_data_proc_immediate.json", verify_state, 0);
+        load_test("arm_data_proc_immediate.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_data_proc_immediate_shift() {
-        load_test("ARM7TDMI/v1/arm_data_proc_immediate_shift.json", verify_state, 0);
+        load_test("arm_data_proc_immediate_shift.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_data_proc_register_shift() {
-        load_test("ARM7TDMI/v1/arm_data_proc_register_shift.json", verify_state, 0);
+        load_test("arm_data_proc_register_shift.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_mrs() {
-        load_test("ARM7TDMI/v1/arm_mrs.json", verify_state, 0);
+        load_test("arm_mrs.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_msr_imm() {
-        load_test("ARM7TDMI/v1/arm_msr_imm.json", verify_state, 0);
+        load_test("arm_msr_imm.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_msr_reg() {
-        load_test("ARM7TDMI/v1/arm_msr_reg.json", verify_state, 0);
+        load_test("arm_msr_reg.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_mul_mla() {
-        load_test("ARM7TDMI/v1/arm_mul_mla.json", verify_state_no_carry, 0);
+        load_test("arm_mul_mla.json", verify_state_no_carry, 0);
     }
 
     #[test]
     fn test_arm_mull_mlal() {
-        load_test("ARM7TDMI/v1/arm_mull_mlal.json", verify_state_no_carry_overflow, 0);
+        load_test("arm_mull_mlal.json", verify_state_no_carry_overflow, 0);
     }
 
     #[test]
     fn test_arm_ldr_str_immediate_offset() {
-        load_test("ARM7TDMI/v1/arm_ldr_str_immediate_offset.json", verify_state, 0);
+        load_test("arm_ldr_str_immediate_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_ldr_str_register_offset() {
-        load_test("ARM7TDMI/v1/arm_ldr_str_register_offset.json", verify_state, 0);
+        load_test("arm_ldr_str_register_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_ldrh_strh() {
-        load_test("ARM7TDMI/v1/arm_ldrh_strh.json", verify_state, 0);
+        load_test("arm_ldrh_strh.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_ldrsb_ldrsh() {
-        load_test("ARM7TDMI/v1/arm_ldrsb_ldrsh.json", verify_state, 0);
+        load_test("arm_ldrsb_ldrsh.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_ldm_stm() {
-        load_test("ARM7TDMI/v1/arm_ldm_stm.json", verify_state, 0);
+        load_test("arm_ldm_stm.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_swp() {
-        load_test("ARM7TDMI/v1/arm_swp.json", verify_state, 0);
+        load_test("arm_swp.json", verify_state, 0);
     }
 
     #[test]
     fn test_arm_swi() {
-        load_test("ARM7TDMI/v1/arm_swi.json", verify_state, 0);
+        load_test("arm_swi.json", verify_state, 0);
     }
 }
 
@@ -717,17 +721,17 @@ mod thumb_16_tests {
 
     #[test]
     fn test_thumb_lsl_lsr_asr() {
-        load_test("ARM7TDMI/v1/thumb_lsl_lsr_asr.json", verify_state, 0);
+        load_test("thumb_lsl_lsr_asr.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_add_sub() {
-        load_test("ARM7TDMI/v1/thumb_add_sub.json", verify_state, 0);
+        load_test("thumb_add_sub.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_mov_cmp_add_sub() {
-        load_test("ARM7TDMI/v1/thumb_mov_cmp_add_sub.json", verify_state, 0);
+        load_test("thumb_mov_cmp_add_sub.json", verify_state, 0);
     }
 
     #[test]
@@ -736,7 +740,8 @@ mod thumb_16_tests {
         use crate::bus::TestBus;
         use std::fs;
 
-        let Ok(data) = fs::read_to_string("ARM7TDMI/v1/thumb_data_proc.json") else {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let Ok(data) = fs::read_to_string(format!("{manifest_dir}/ARM7TDMI/v1/thumb_data_proc.json")) else {
             panic!("Failed to load test file!");
         };
 
@@ -768,101 +773,101 @@ mod thumb_16_tests {
 
     #[test]
     fn test_thumb_bx() {
-        load_test("ARM7TDMI/v1/thumb_bx.json", verify_state, 0);
+        load_test("thumb_bx.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_add_cmp_mov_hi() {
-        load_test("ARM7TDMI/v1/thumb_add_cmp_mov_hi.json", verify_state, 0);
+        load_test("thumb_add_cmp_mov_hi.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldr_pc_rel() {
-        load_test("ARM7TDMI/v1/thumb_ldr_pc_rel.json", verify_state, 0);
+        load_test("thumb_ldr_pc_rel.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldr_str_reg_offset() {
-        load_test("ARM7TDMI/v1/thumb_ldr_str_reg_offset.json", verify_state, 0);
+        load_test("thumb_ldr_str_reg_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldrsb_strb_reg_offset() {
-       load_test("ARM7TDMI/v1/thumb_ldrsb_strb_reg_offset.json", verify_state, 0);
+       load_test("thumb_ldrsb_strb_reg_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldrsh_ldrsb_reg_offset() {
-        load_test("ARM7TDMI/v1/thumb_ldrsh_ldrsb_reg_offset.json", verify_state, 0);
+        load_test("thumb_ldrsh_ldrsb_reg_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldrh_strh_reg_offset() {
-        load_test("ARM7TDMI/v1/thumb_ldrh_strh_reg_offset.json", verify_state, 0);
+        load_test("thumb_ldrh_strh_reg_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldr_str_imm_offset() {
-        load_test("ARM7TDMI/v1/thumb_ldr_str_imm_offset.json", verify_state, 0);
+        load_test("thumb_ldr_str_imm_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldrb_strb_imm_offset() {
-        load_test("ARM7TDMI/v1/thumb_ldrb_strb_imm_offset.json", verify_state, 0);
+        load_test("thumb_ldrb_strb_imm_offset.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldrh_strh_imm_offset() {
-        load_test("ARM7TDMI/v1/thumb_ldrh_strh_imm_offset.json", verify_state, 0);
+        load_test("thumb_ldrh_strh_imm_offset.json", verify_state, 0);
     }
     
     #[test]
     fn test_thumb_ldr_str_sp_rel() {
-        load_test("ARM7TDMI/v1/thumb_ldr_str_sp_rel.json", verify_state, 0);
+        load_test("thumb_ldr_str_sp_rel.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_add_sp_or_pc() {
-        load_test("ARM7TDMI/v1/thumb_add_sp_or_pc.json", verify_state, 0);
+        load_test("thumb_add_sp_or_pc.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_add_sub_sp() {
-        load_test("ARM7TDMI/v1/thumb_add_sub_sp.json", verify_state, 0);
+        load_test("thumb_add_sub_sp.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_push_pop() {
-        load_test("ARM7TDMI/v1/thumb_push_pop.json", verify_state, 0);
+        load_test("thumb_push_pop.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_ldm_stm() {
-        load_test("ARM7TDMI/v1/thumb_ldm_stm.json", verify_state, 0);
+        load_test("thumb_ldm_stm.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_bcc() {
-        load_test("ARM7TDMI/v1/thumb_bcc.json", verify_state, 0);
+        load_test("thumb_bcc.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_swi() {
-        load_test("ARM7TDMI/v1/thumb_swi.json", verify_state, 0);
+        load_test("thumb_swi.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_b() {
-        load_test("ARM7TDMI/v1/thumb_b.json", verify_state, 0);
+        load_test("thumb_b.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_bl_blx_prefix() {
-        load_test("ARM7TDMI/v1/thumb_bl_blx_prefix.json", verify_state, 0);
+        load_test("thumb_bl_blx_prefix.json", verify_state, 0);
     }
 
     #[test]
     fn test_thumb_bl_suffix() {
-        load_test("ARM7TDMI/v1/thumb_bl_suffix.json", verify_state, 0);
+        load_test("thumb_bl_suffix.json", verify_state, 0);
     }
 }

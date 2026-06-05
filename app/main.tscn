@@ -1,6 +1,0 @@
-[gd_scene format=3 uid="uid://cfssx5o62dob0"]
-
-[ext_resource type="Script" uid="uid://cyt0l754655ij" path="res://budget_gba.gd" id="1_ig7tw"]
-
-[node name="BudgetGba" type="Node" unique_id=1349420881]
-script = ExtResource("1_ig7tw")

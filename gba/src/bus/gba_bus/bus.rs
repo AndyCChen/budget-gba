@@ -1,8 +1,8 @@
+use crate::apu::Apu;
 use crate::bus::BusInterface;
 use crate::bus::common;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
 use crate::ppu::Ppu;
-use crate::apu::Apu;
 
 use num_traits::FromPrimitive;
 
@@ -10,15 +10,13 @@ const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
 const WRAM_32: usize = 32 * 1024;
 
-const BIOS: &[u8; BIOS_SIZE] = include_bytes!("../../../resource/gba_bios.bin");
-
 pub struct Bus {
     pub gamepak: GamePak,
     pub ppu: Ppu,
     pub apu: Apu,
-    pub bios_ram: Box<[u8]>,
-    pub wram_256: Box<[u8]>,
-    pub wram_32: Box<[u8]>,
+    pub bios_ram: [u8; BIOS_SIZE],
+    pub wram_256: [u8; WRAM_256],
+    pub wram_32: [u8; WRAM_32],
     pub cycles: u64,
 }
 
@@ -28,9 +26,9 @@ impl Bus {
             gamepak: GamePak::new(),
             ppu: Ppu::new(),
             apu: Apu::new(),
-            bios_ram: BIOS.to_vec().into_boxed_slice(),
-            wram_256: vec![0; WRAM_256].into_boxed_slice(),
-            wram_32: vec![0; WRAM_32].into_boxed_slice(),
+            bios_ram: [0; BIOS_SIZE],
+            wram_256: [0; WRAM_256],
+            wram_32: [0; WRAM_32],
             cycles: 0,
         }
     }
