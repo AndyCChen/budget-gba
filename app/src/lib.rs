@@ -2,15 +2,14 @@ pub mod config;
 
 use bevy::prelude::*;
 pub use config::Config;
-use gba::GbaCore;
+use gba::{GbaCore, GbaError::*};
 
 pub fn start(config: Config) {
-    let budget_gba = BudgetGba::new(&config);
-
     App::new()
         .add_plugins(DefaultPlugins)
         .insert_resource(config)
-        .insert_non_send_resource(budget_gba)
+        .insert_non_send_resource(BudgetGba::new())
+        .add_systems(Startup, app_init)
         .add_systems(Update, app_loop)
         .run();
 }
@@ -20,18 +19,36 @@ struct BudgetGba {
 }
 
 impl BudgetGba {
-    fn new(config: &Config) -> Self {
-        let mut gba_core = Box::new(GbaCore::new());
-        gba_core.load_bios(&config.bios_path);
-
-        if let Some(gamepak_path) = &config.gamepak_path {
-            gba_core.load_gamepak(gamepak_path);
+    fn new() -> Self {
+        Self {
+            gba_core: Box::new(GbaCore::new()),
         }
-
-        Self { gba_core }
     }
 }
 
-fn app_loop(budget_gba: NonSendMut<BudgetGba>, config: Res<Config>) {
-    println!("{:?}", config.bios_path);
+fn app_init(
+    mut budget_gba: NonSendMut<BudgetGba>,
+    config: Res<Config>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    match budget_gba.gba_core.load_config(&config.gba_config) {
+        Ok(_) => (),
+        Err(e) => match e {
+            GamepakLoadFail(e) => warn!("{}", e.to_string()),
+            BiosLoadFail(e) => {
+                error!("{}", e.to_string());
+                exit.write(AppExit::Success);
+            }
+        },
+    }
+}
+
+fn app_loop(
+    _budget_gba: NonSendMut<BudgetGba>,
+    config: Res<Config>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    if input.just_released(KeyCode::KeyP) {
+        println!("{:?}", config.gba_config.bios_path);
+    }
 }

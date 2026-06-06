@@ -4,7 +4,7 @@ use crate::arm::constants::access_code;
 use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
 use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::bus::BusInterface;
-use ringbuf::traits::{Consumer, Producer, RingBuffer};
+use ringbuf::traits::{Consumer, RingBuffer};
 use ringbuf::{LocalRb, storage::Heap};
 
 use bitfield_struct::bitfield;

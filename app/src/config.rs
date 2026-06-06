@@ -1,9 +1,7 @@
-use std::path::PathBuf;
-
 use bevy::ecs::resource::Resource;
+use gba::GbaCoreConfig;
 
 #[derive(Resource)]
 pub struct Config {
-    pub bios_path: PathBuf,
-    pub gamepak_path: Option<PathBuf>,
+    pub gba_config: GbaCoreConfig,
 }
