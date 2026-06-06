@@ -34,6 +34,7 @@ impl GbaCore {
         self.bus.reset();
     }
 
+    #[inline]
     pub fn step(&mut self) {
         self.cpu.step(&mut self.bus);
     }
@@ -56,28 +57,28 @@ impl GbaCore {
             ))
         })?;
 
-        match bios_file.read_exact(&mut self.bus.bios_ram) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(BiosLoadFail(format!(
+        bios_file.read_exact(&mut self.bus.bios_ram).map_err(|e| {
+            BiosLoadFail(format!(
                 "Failed to load bios at: {:?}, {}",
                 bios_path.as_ref(),
                 e.to_string()
-            ))),
-        }
+            ))
+        })?;
+
+        Ok(())
     }
 
     fn load_gamepak<P: AsRef<Path>>(&mut self, gamepak_path: P) -> Result<(), GbaError> {
-        match fs::read(&gamepak_path) {
-            Ok(buffer) => {
-                self.bus.gamepak.rom = buffer.into_boxed_slice();
-                Ok(())
-            }
-            Err(e) => Err(GamepakLoadFail(format!(
+        let buffer = fs::read(&gamepak_path).map_err(|e| {
+            GamepakLoadFail(format!(
                 "Failed to load gamepak at: {:?}, {}",
                 gamepak_path.as_ref(),
                 e.to_string()
-            ))),
-        }
+            ))
+        })?;
+
+        self.bus.gamepak.rom = buffer.into_boxed_slice();
+        Ok(())
     }
 }
 

@@ -1,4 +1,4 @@
-use app;
+use app::*;
 use gba::GbaCoreConfig;
 use std::path::PathBuf;
 
@@ -11,6 +11,6 @@ fn main() {
         gamepak_path: None,
     };
 
-    let config = app::Config { gba_config };
-    app::start(config);
+    let config = Config { gba_config };
+    BudgetGba::start(config);
 }
