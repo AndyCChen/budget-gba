@@ -1,7 +1,7 @@
 use register_macros::gba_register;
 
 pub struct Registers {
-    sound_bias: SoundBias,
+    pub sound_bias: SoundBias,
 }
 
 impl Registers {

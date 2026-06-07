@@ -72,8 +72,44 @@ io_register_u16!(BG0CNT, 0x400_0008);
 // io_register_u16!(BLDY, 0x400_0054);
 
 // Sound Registers
+// io_register_u16!(SOUND1CNT_L, 0x400_0060);
+// io_register_u16!(SOUND1CNT_H, 0x400_0062);
+// io_register_u16!(SOUND1CNT_X, 0x400_0064);
+// io_register_u16!(SOUND2CNT_L, 0x400_0068);
+// io_register_u16!(SOUND2CNT_H, 0x400_006C);
+// io_register_u16!(SOUND3CNT_L, 0x400_0070);
+// io_register_u16!(SOUND3CNT_H, 0x400_0072);
+// io_register_u16!(SOUND3CNT_X, 0x400_0074);
+// io_register_u16!(SOUND4CNT_L, 0x400_0078);
+// io_register_u16!(SOUND4CNT_H, 0x400_007C);
+// io_register_u16!(SOUNDCNT_L, 0x400_0080);
+// io_register_u16!(SOUNDCNT_H, 0x400_0082);
+// io_register_u16!(SOUNDCNT_X, 0x400_0084);
+io_register_u32!(SOUNDBIAS, 0x400_0088);
+// io_register_u16!(WAVE_RAM, 0x400_0090);
+// io_register_u32!(FIFO_A, 0x400_00A0);
+// io_register_u32!(FIFO_B, 0x400_00A4);
 
 // DMA Transfer Channels
+// io_register_u32!(DMA0SAD, 0x400_00B0);
+// io_register_u32!(DMA0DAD, 0x400_00B4);
+// io_register_u16!(DMA0CNT_L, 0x400_00B8);
+// io_register_u16!(DMA0CNT_H, 0x400_00BA);
+
+// io_register_u32!(DMA1SAD, 0x400_00BC);
+// io_register_u32!(DMA1DAD, 0x400_00C0);
+// io_register_u16!(DMA1CNT_L, 0x400_00C4);
+// io_register_u16!(DMA1CNT_H, 0x400_00C6);
+
+// io_register_u32!(DMA2SAD, 0x400_00C8);
+// io_register_u32!(DMA2DAD, 0x400_00CC);
+// io_register_u16!(DMA2CNT_L, 0x400_00D0);
+// io_register_u16!(DMA2CNT_H, 0x400_00D2);
+
+// io_register_u32!(DMA3SAD, 0x400_00D4);
+// io_register_u32!(DMA3DAD, 0x400_00D8);
+// io_register_u16!(DMA3CNT_L, 0x400_00DC);
+// io_register_u16!(DMA3CNT_H, 0x400_00DE);
 
 // Timer Registers
 // io_register_u16!(TM0CNT_L, 0x400_0100);

@@ -1,7 +1,7 @@
 use crate::apu::Registers;
 
 pub struct Apu {
-    registers: Registers,
+    pub registers: Registers,
 }
 
 impl Apu {

@@ -20,6 +20,13 @@ impl Bus {
             BG0CNT_0 => self.ppu.registers.bg_control_0.read(HalfwordIo::B0),
             BG0CNT_1 => self.ppu.registers.bg_control_0.read(HalfwordIo::B1),
 
+            // APU
+
+            SOUNDBIAS_0 => self.apu.registers.sound_bias.read(WordIo::B0),
+            SOUNDBIAS_1 => self.apu.registers.sound_bias.read(WordIo::B1),
+            SOUNDBIAS_2 => self.apu.registers.sound_bias.read(WordIo::B2),
+            SOUNDBIAS_3 => self.apu.registers.sound_bias.read(WordIo::B3),
+
             // keypad
              
             KEYINPUT_0 => self.keypad.keypad_state.read(HalfwordIo::B0),
@@ -50,6 +57,13 @@ impl Bus {
 
             BG0CNT_0 => self.ppu.registers.bg_control_0.write(value, HalfwordIo::B0),
             BG0CNT_1 => self.ppu.registers.bg_control_0.write(value, HalfwordIo::B1),
+
+            // APU
+
+            SOUNDBIAS_0 => self.apu.registers.sound_bias.write(value, WordIo::B0),
+            SOUNDBIAS_1 => self.apu.registers.sound_bias.write(value, WordIo::B1),
+            SOUNDBIAS_2 => self.apu.registers.sound_bias.write(value, WordIo::B2),
+            SOUNDBIAS_3 => self.apu.registers.sound_bias.write(value, WordIo::B3),
 
             // keypad
              
