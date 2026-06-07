@@ -150,7 +150,7 @@ fn gba_register_inner(args: TokenStream, input: TokenStream) -> syn::Result<Toke
         }
     };
 
-    Ok(generated.into())
+    Ok(generated)
 }
 
 #[derive(Debug)]

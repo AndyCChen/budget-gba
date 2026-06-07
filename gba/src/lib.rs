@@ -7,6 +7,7 @@ mod io;
 mod keypad;
 mod ppu;
 
+use std::fmt::Display;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::Path;
@@ -21,6 +22,12 @@ pub use config::GbaCoreConfig;
 pub struct GbaCore {
     cpu: Arm7tdmi<Bus>,
     bus: Bus,
+}
+
+impl Default for GbaCore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GbaCore {
@@ -70,17 +77,15 @@ impl GbaCore {
     fn load_bios<P: AsRef<Path>>(&mut self, bios_path: P) -> Result<(), GbaError> {
         let mut bios_file = File::open(&bios_path).map_err(|e| {
             BiosLoadFail(format!(
-                "Failed to load bios at: {:?}, {}",
+                "Failed to load bios at: {:?}, {e}",
                 bios_path.as_ref(),
-                e.to_string()
             ))
         })?;
 
         bios_file.read_exact(&mut self.bus.bios_ram).map_err(|e| {
             BiosLoadFail(format!(
-                "Failed to load bios at: {:?}, {}",
-                bios_path.as_ref(),
-                e.to_string()
+                "Failed to load bios at: {:?}, {e}",
+                bios_path.as_ref()
             ))
         })?;
 
@@ -90,9 +95,8 @@ impl GbaCore {
     fn load_gamepak<P: AsRef<Path>>(&mut self, gamepak_path: P) -> Result<(), GbaError> {
         let buffer = fs::read(&gamepak_path).map_err(|e| {
             GamepakLoadFail(format!(
-                "Failed to load gamepak at: {:?}, {}",
+                "Failed to load gamepak at: {:?}, {e}",
                 gamepak_path.as_ref(),
-                e.to_string()
             ))
         })?;
 
@@ -106,11 +110,11 @@ pub enum GbaError {
     BiosLoadFail(String),
 }
 
-impl ToString for GbaError {
-    fn to_string(&self) -> String {
+impl Display for GbaError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GamepakLoadFail(msg) => msg.clone(),
-            BiosLoadFail(msg) => msg.clone(),
+            GamepakLoadFail(msg) => write!(f, "{msg}"),
+            BiosLoadFail(msg) => write!(f, "{msg}"),
         }
     }
 }
