@@ -4,6 +4,7 @@ mod bus;
 mod config;
 mod gamepak;
 mod io;
+mod keypad;
 mod ppu;
 
 use std::fs::{self, File};
@@ -13,6 +14,7 @@ use std::path::Path;
 use crate::arm::Arm7tdmi;
 use crate::bus::Bus;
 use GbaError::*;
+use keypad::{KeyCode, KeypadInputType};
 
 pub use config::GbaCoreConfig;
 
@@ -37,6 +39,23 @@ impl GbaCore {
     #[inline]
     pub fn step(&mut self) {
         self.cpu.step(&mut self.bus);
+    }
+
+    pub fn keypad_set_input(&mut self, input_type: KeypadInputType, keycode: KeyCode) {
+        let input_type = bool::from(input_type);
+
+        match keycode {
+            KeyCode::KeyA => self.bus.keypad.keypad_state.set_key_a(input_type),
+            KeyCode::KeyB => self.bus.keypad.keypad_state.set_key_a(input_type),
+            KeyCode::Select => self.bus.keypad.keypad_state.set_select(input_type),
+            KeyCode::Start => self.bus.keypad.keypad_state.set_start(input_type),
+            KeyCode::Right => self.bus.keypad.keypad_state.set_right(input_type),
+            KeyCode::Left => self.bus.keypad.keypad_state.set_left(input_type),
+            KeyCode::Up => self.bus.keypad.keypad_state.set_up(input_type),
+            KeyCode::Down => self.bus.keypad.keypad_state.set_down(input_type),
+            KeyCode::KeyR => self.bus.keypad.keypad_state.set_key_r(input_type),
+            KeyCode::KeyL => self.bus.keypad.keypad_state.set_key_l(input_type),
+        };
     }
 
     pub fn load_config(&mut self, config: &GbaCoreConfig) -> Result<(), GbaError> {

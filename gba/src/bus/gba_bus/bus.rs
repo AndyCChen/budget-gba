@@ -2,6 +2,7 @@ use crate::apu::Apu;
 use crate::bus::BusInterface;
 use crate::bus::common;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
+use crate::keypad::Keypad;
 use crate::ppu::Ppu;
 
 use num_traits::FromPrimitive;
@@ -14,6 +15,7 @@ pub struct Bus {
     pub gamepak: GamePak,
     pub ppu: Ppu,
     pub apu: Apu,
+    pub keypad: Keypad,
     pub bios_ram: [u8; BIOS_SIZE],
     pub wram_256: [u8; WRAM_256],
     pub wram_32: [u8; WRAM_32],
@@ -26,6 +28,7 @@ impl Bus {
             gamepak: GamePak::new(),
             ppu: Ppu::new(),
             apu: Apu::new(),
+            keypad: Keypad::new(),
             bios_ram: [0; BIOS_SIZE],
             wram_256: [0; WRAM_256],
             wram_32: [0; WRAM_32],

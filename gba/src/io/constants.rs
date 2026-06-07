@@ -88,8 +88,8 @@ io_register_u16!(BG0CNT, 0x400_0008);
 // Serial Communication (1)
 
 // Keypad Input
-// io_register_u16!(KEYINPUT, 0x400_0130);
-// io_register_u16!(KEYCNT, 0x400_0132);
+io_register_u16!(KEYINPUT, 0x400_0130);
+io_register_u16!(KEYCNT, 0x400_0132);
 
 // Serial Communication (2)
 

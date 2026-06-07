@@ -7,7 +7,7 @@ use crate::bus::BusInterface;
 use ringbuf::traits::{Consumer, RingBuffer};
 use ringbuf::{LocalRb, storage::Heap};
 
-use bitfield_struct::bitfield;
+use bitfield_struct::*;
 
 #[derive(Default)]
 pub struct StatusRegisters {
@@ -69,7 +69,7 @@ pub struct StatusRegister {
     #[bits(5, default = Mode::System, from = Mode::from_bits)]
     pub mode_bits: Mode,
 
-    #[bits(1, default = CpuMode::ArmMode, from = CpuMode::from_bits)]
+    #[bits(1, default = CpuMode::ArmMode)]
     pub t: CpuMode,
 
     // 0: enable fiq, 1: disable fiq
@@ -126,25 +126,13 @@ impl Mode {
     }
 }
 
+#[bitenum]
 #[derive(Clone, Debug)]
 #[repr(u8)]
 pub enum CpuMode {
+    #[fallback]
     ArmMode = 0,
     ThumbMode = 1,
-}
-
-impl CpuMode {
-    const fn into_bits(self) -> u8 {
-        self as u8
-    }
-
-    const fn from_bits(value: u8) -> Self {
-        match value {
-            0 => ArmMode,
-            1 => ThumbMode,
-            _ => panic!("Invalid cpu mode!"),
-        }
-    }
 }
 
 pub struct Arm7tdmi<T: BusInterface> {
