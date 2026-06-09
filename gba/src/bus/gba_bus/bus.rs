@@ -4,7 +4,7 @@ use crate::bus::common;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
 use crate::keypad::Keypad;
 use crate::ppu::Ppu;
-
+use crate::scheduler::{GbaEvent::*, Scheduler};
 use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
@@ -19,12 +19,13 @@ pub struct Bus {
     pub bios_ram: [u8; BIOS_SIZE],
     pub wram_256: [u8; WRAM_256],
     pub wram_32: [u8; WRAM_32],
-    pub cycles: u64,
+    pub scheduler: Scheduler,
 }
 
 impl Bus {
     pub fn new() -> Self {
         Self {
+            scheduler: Scheduler::new(32),
             gamepak: GamePak::new(),
             ppu: Ppu::new(),
             apu: Apu::new(),
@@ -32,23 +33,18 @@ impl Bus {
             bios_ram: [0; BIOS_SIZE],
             wram_256: [0; WRAM_256],
             wram_32: [0; WRAM_32],
-            cycles: 0,
         }
     }
 
     pub fn reset(&mut self) {
+        self.scheduler.clear();
         self.gamepak.reset();
         self.ppu.reset();
         self.apu.reset();
+        self.keypad.reset();
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
-        self.cycles = 0;
-    }
-
-    // tick the system for N cycles
-    fn tick(&mut self, n: u8) {
-        self.cycles += u64::from(n);
     }
 
     fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: u8) -> T {
@@ -58,40 +54,40 @@ impl Bus {
         match page {
             // bios
             0 => {
-                self.tick(1);
+                self.step(1);
                 T::mem_read(T::align(address & 0x3FFF), &self.bios_ram)
             }
 
             // 256kb wram, always has 2 wait states
             2 => {
                 let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
-                self.tick(if is_u32 { 6 } else { 3 });
+                self.step(if is_u32 { 6 } else { 3 });
                 T::mem_read(T::align(address & 0x3FFFF), &self.wram_256)
             }
 
             // 32kb wram
             3 => {
-                self.tick(1);
+                self.step(1);
                 T::mem_read(T::align(address & 0x7FFF), &self.wram_32)
             }
 
             // I/O registers
             4 => {
-                self.tick(1);
+                self.step(1);
                 T::io_read(self, T::align(address))
             }
 
             // palette ram
             5 => {
                 let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
-                self.tick(if is_u32 { 2 } else { 1 });
+                self.step(if is_u32 { 2 } else { 1 });
                 T::mem_read(T::align(address & 0x3FF), &self.ppu.palette_ram)
             }
 
             // vram
             6 => {
                 let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
-                self.tick(if is_u32 { 2 } else { 1 });
+                self.step(if is_u32 { 2 } else { 1 });
 
                 // 96kb vram is mirrored in 128kb blocks
                 // 96kb vram can be pictured as 64kb + 32kb, with the 32kb block being mirrored
@@ -106,7 +102,7 @@ impl Bus {
 
             // oam ram
             7 => {
-                self.tick(1);
+                self.step(1);
                 T::mem_read(T::align(address & 0x3FF), &self.ppu.oam)
             }
 
@@ -116,7 +112,7 @@ impl Bus {
                     AccessType::try_from(access).unwrap(),
                     GamepakRegion::Region8_9,
                 );
-                self.tick(1 + wait_states); // timing is 1 plus number of waitstates
+                self.step(1 + wait_states); // timing is 1 plus number of waitstates
                 let rom_size = self.gamepak.rom.len() as u32;
                 T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
             }
@@ -127,7 +123,7 @@ impl Bus {
                     AccessType::try_from(access).unwrap(),
                     GamepakRegion::Region10_11,
                 );
-                self.tick(1 + wait_states); // timing is 1 plus number of waitstates
+                self.step(1 + wait_states); // timing is 1 plus number of waitstates
                 let rom_size = self.gamepak.rom.len() as u32;
                 T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
             }
@@ -138,7 +134,7 @@ impl Bus {
                     AccessType::try_from(access).unwrap(),
                     GamepakRegion::Region12_13,
                 );
-                self.tick(1 + wait_states); // timing is 1 plus number of waitstates
+                self.step(1 + wait_states); // timing is 1 plus number of waitstates
                 let rom_size = self.gamepak.rom.len() as u32;
                 T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
             }
@@ -155,19 +151,19 @@ impl Bus {
             // 256 kb wram
             2 => {
                 let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
-                self.tick(if is_u32 { 6 } else { 3 });
+                self.step(if is_u32 { 6 } else { 3 });
                 value.mem_write(T::align(address & 0x3FFFF), &mut self.wram_256)
             }
 
             // 32kb wram
             3 => {
-                self.tick(1);
+                self.step(1);
                 value.mem_write(T::align(address & 0x7FFF), &mut self.wram_32)
             }
 
             // I/O registers
             4 => {
-                self.tick(1);
+                self.step(1);
                 value.io_write(self, T::align(address));
             }
 
@@ -175,11 +171,11 @@ impl Bus {
             5 => match T::int_type() {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
                     let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
-                    self.tick(if is_u32 { 2 } else { 1 });
+                    self.step(if is_u32 { 2 } else { 1 });
                     value.mem_write(T::align(address & 0x3FF), &mut self.ppu.palette_ram);
                 }
                 GbaBusIntType::Byte => {
-                    self.tick(1);
+                    self.step(1);
                     let address = u16::align(address & 0x3FF);
                     // byte sized writes will duplicate the byte in the upper and lower 16 bit halfword in memory
                     value.mem_write(address, &mut self.ppu.palette_ram);
@@ -191,7 +187,7 @@ impl Bus {
             6 => match T::int_type() {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
                     let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
-                    self.tick(if is_u32 { 2 } else { 1 });
+                    self.step(if is_u32 { 2 } else { 1 });
 
                     let address = address & 0x1_FFFF;
                     if address < 0x1_8000 {
@@ -202,7 +198,7 @@ impl Bus {
                     }
                 }
                 GbaBusIntType::Byte => {
-                    self.tick(1);
+                    self.step(1);
 
                     // 96kb vram is mirrored in 128kb blocks
                     // 96kb vram can be pictured as 64kb + 32kb, with the 32kb block being mirrored
@@ -222,11 +218,11 @@ impl Bus {
             // oam ram
             7 => match T::int_type() {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
-                    self.tick(1);
+                    self.step(1);
                     value.mem_write(T::align(address & 0x3FF), &mut self.ppu.oam);
                 }
                 GbaBusIntType::Byte => {
-                    self.tick(1);
+                    self.step(1);
                     let address = u16::align(address & 0x3FF);
                     // byte sized writes will duplicate the byte in the upper and lower 16 bit halfword in memory
                     value.mem_write(address, &mut self.ppu.oam);
@@ -237,15 +233,29 @@ impl Bus {
             _ => todo!("set open bus value"),
         }
     }
+
+    fn step(&mut self, cycles: u8) {
+        self.scheduler.step(cycles);
+
+        while let Some(gba_event) = self.scheduler.poll_event() {
+            match gba_event {
+                HDraw => self.ppu.hdraw(&mut self.scheduler),
+                HBlank => self.ppu.hblank(&mut self.scheduler),
+                VBlankHDraw => self.ppu.vblank_hdraw(&mut self.scheduler),
+                VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler),
+                UpdateVCount => self.ppu.update_vcount(),
+            }
+        }
+    }
 }
 
 impl BusInterface for Bus {
     fn i_cycle(&mut self) {
-        self.tick(1);
+        self.scheduler.step(1);
     }
 
-    fn cycles(&self) -> u64 {
-        self.cycles
+    fn get_timestamp(&self) -> u64 {
+        self.scheduler.get_timestamp()
     }
 
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {

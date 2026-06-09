@@ -19,7 +19,9 @@ impl GamePak {
     }
 
     pub fn reset(&mut self) {
-        self.rom.fill(0);
+        // self.rom.fill(0);
+        // self.sram.fill(0);
+        self.registers = Registers::new();
     }
 
     pub fn get_wait_states(&self, access: AccessType, region: GamepakRegion) -> u8 {

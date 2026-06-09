@@ -8,8 +8,10 @@ pub trait BusInterface {
 
     fn read_word(&mut self, address: u32, access: u8) -> u32;
     fn read_rotate_word(&mut self, address: u32, access: u8) -> u32;
+
     #[allow(dead_code)]
     fn read_halfword(&mut self, address: u32, access: u8) -> u32;
+
     fn read_rotate_halfword(&mut self, address: u32, access: u8) -> u32;
     fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32;
     fn read_byte(&mut self, address: u32, access: u8) -> u32;
@@ -21,7 +23,8 @@ pub trait BusInterface {
 
     fn i_cycle(&mut self) {}
 
-    fn cycles(&self) -> u64 {
+    #[allow(dead_code)]
+    fn get_timestamp(&self) -> u64 {
         0
     }
 }

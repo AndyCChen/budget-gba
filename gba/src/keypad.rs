@@ -40,6 +40,11 @@ impl Keypad {
             interrupt_control: KeypadInterruptControl::default(),
         }
     }
+
+    pub fn reset(&mut self) {
+        self.keypad_state = KeypadStatus::default();
+        self.interrupt_control = KeypadInterruptControl::default();
+    }
 }
 
 #[gba_register(u16)]

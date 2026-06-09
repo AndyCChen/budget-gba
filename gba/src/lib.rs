@@ -6,6 +6,7 @@ mod gamepak;
 mod io;
 mod keypad;
 mod ppu;
+mod scheduler;
 
 use std::fmt::Display;
 use std::fs::{self, File};

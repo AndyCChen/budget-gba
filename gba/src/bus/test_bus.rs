@@ -1,6 +1,5 @@
 use crate::arm::*;
 use crate::bus::{BusInterface, common};
-
 use num_traits::{Bounded, FromPrimitive, ToPrimitive, Unsigned};
 
 pub struct TestBus {
@@ -86,8 +85,8 @@ impl BusInterface for TestBus {
     }
 
     fn read_byte(&mut self, address: u32, access: u8) -> u32 {
-       let byte: u8 = self.read(address, access, kind_code::GENERAL_READ);
-       u32::from(byte)
+        let byte: u8 = self.read(address, access, kind_code::GENERAL_READ);
+        u32::from(byte)
     }
 
     fn read_signed_byte(&mut self, address: u32, access: u8) -> u32 {
