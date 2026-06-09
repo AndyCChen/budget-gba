@@ -1,6 +1,10 @@
 mod common;
-mod gba_bus;
+mod core;
+mod io;
 mod test_bus;
+
+pub use core::Bus;
+pub use test_bus::TestBus;
 
 pub trait BusInterface {
     fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32;
@@ -28,6 +32,3 @@ pub trait BusInterface {
         0
     }
 }
-
-pub use gba_bus::Bus;
-pub use test_bus::TestBus;
