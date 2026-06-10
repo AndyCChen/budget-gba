@@ -1,6 +1,6 @@
 pub struct RingBuffer<T> {
     head: usize,
-    length: usize,
+    count: usize,
     data: Vec<T>,
 }
 
@@ -12,14 +12,14 @@ where
         assert_ne!(capacity, 0);
         Self {
             head: 0,
-            length: 0,
+            count: 0,
             data: vec![T::default(); capacity],
         }
     }
 
     pub fn clear(&mut self) {
         self.head = 0;
-        self.length = 0;
+        self.count = 0;
         self.data.fill(T::default());
     }
 
@@ -27,7 +27,7 @@ where
         self.data[self.head] = value;
         self.head += 1;
         self.head %= self.data.len();
-        self.length = (self.length + 1).min(self.data.len());
+        self.count = (self.count + 1).min(self.data.len());
     }
 
     /// Returns an iterator starting from the most recently pushed element
@@ -52,18 +52,18 @@ where
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.head >= self.ring_buffer.length {
+        if self.head >= self.ring_buffer.count {
             return None;
         }
 
         let rb_prev_head = match self.ring_buffer.head.checked_sub(1) {
             Some(i) => i,
-            None => self.ring_buffer.length - 1,
+            None => self.ring_buffer.count - 1,
         };
 
         let read_index = match rb_prev_head.checked_sub(self.head) {
             Some(i) => i,
-            None => self.ring_buffer.length - self.head,
+            None => self.ring_buffer.count - self.head,
         };
 
         self.head += 1;
@@ -93,7 +93,7 @@ mod test {
         ring_buffer.clear();
         assert_eq!(ring_buffer.iter().next(), None);
         assert_eq!(ring_buffer.head, 0);
-        assert_eq!(ring_buffer.length, 0);
+        assert_eq!(ring_buffer.count, 0);
 
         // pushing more elements than ringbuffer capacity
         // should overwrite oldest element.
