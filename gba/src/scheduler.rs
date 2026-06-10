@@ -8,6 +8,7 @@ pub enum GbaEvent {
     VBlankHDraw,
     VBlankHBlank,
     UpdateVCount,
+    ToggleVBlankFlag(bool),
 }
 
 pub struct Scheduler {

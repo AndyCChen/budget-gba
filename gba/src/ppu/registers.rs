@@ -20,7 +20,7 @@ impl Registers {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
-enum BgMode {
+pub enum BgMode {
     Mode0,
     Mode1,
     Mode2,

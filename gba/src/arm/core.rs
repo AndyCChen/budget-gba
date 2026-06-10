@@ -1,6 +1,7 @@
 use std::num::Wrapping;
 
 use crate::arm::constants::access_code;
+use crate::arm::decoder_tables::{decode_arm, decode_thumb};
 use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
 use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::bus::BusInterface;
@@ -140,14 +141,13 @@ pub struct Arm7tdmi<T: BusInterface> {
     pub status: StatusRegisters,
     pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
     pub pipeline_state: u8,
-
+    pub instruction_log_enable: bool,
     arm_table: [ArmHandler<T>; ARM_TABLE_SIZE],
     thumb_table: [ThumbHandler<T>; THUMB_TABLE_SIZE],
     instruction_buffer: LocalRb<Heap<(u32, CpuInstruction)>>,
-    instruction_log_enable: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum CpuInstruction {
     Arm(u32),
     Thumb(u32),
@@ -157,20 +157,18 @@ use CpuInstruction::*;
 use CpuMode::*;
 
 impl<T: BusInterface> Arm7tdmi<T> {
-    pub fn new(bus: &mut T) -> Self {
+    pub fn new() -> Self {
         let mut cpu = Arm7tdmi {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [Arm(0); 2],
             pipeline_state: access_code::NONSEQUENTIAL,
-
+            instruction_log_enable: false,
             arm_table: generate_arm_table(),
             thumb_table: generate_thumb_table(),
             instruction_buffer: LocalRb::new(32),
-            instruction_log_enable: false,
         };
-
-        cpu.pipeline_refill_arm(bus);
+        cpu.registers.r15 = Wrapping(0x8000000);
         cpu
     }
 
@@ -290,6 +288,22 @@ impl<T: BusInterface> Arm7tdmi<T> {
                 self.thumb_table[thumb_table_hash as usize](self, bus, thumb_instr as u16);
             }
         };
+    }
+
+    pub fn print_log_single(&mut self) {
+        while let Some((pc, instruction)) = self.instruction_buffer.try_pop()  {
+            let asm_string = match instruction {
+                Arm(opcode) => decode_arm(opcode).to_asm_string(pc),
+                Thumb(opcode) => decode_thumb(opcode as u16).to_asm_string(pc),
+            };
+
+            let pc = match instruction {
+                Arm(_) => pc.wrapping_sub(8),
+                Thumb(_) => pc.wrapping_sub(4),
+            };
+
+            println!("{pc:08X}    {asm_string}");
+        }
     }
 
     /// Retrieve register in arm mode

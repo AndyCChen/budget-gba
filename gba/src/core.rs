@@ -1,5 +1,6 @@
 use crate::arm::Arm7tdmi;
 use crate::bus::Bus;
+use crate::common::DisplayBuffer;
 use crate::config::GbaCoreConfig;
 use crate::keypad::{KeyCode, KeypadInputType};
 use GbaError::*;
@@ -21,10 +22,10 @@ impl Default for GbaCore {
 
 impl GbaCore {
     pub fn new() -> Self {
-        let mut bus = Bus::new();
-        let cpu = Arm7tdmi::new(&mut bus);
-
-        Self { cpu, bus }
+        Self {
+            cpu: Arm7tdmi::new(),
+            bus: Bus::new(),
+        }
     }
 
     pub fn reset(&mut self) {
@@ -35,6 +36,10 @@ impl GbaCore {
     #[inline]
     pub fn step(&mut self) {
         self.cpu.step(&mut self.bus);
+    }
+
+    pub fn cpu_pipeline_fill(&mut self) {
+        self.cpu.pipeline_refill_arm(&mut self.bus);
     }
 
     pub fn keypad_set_input(&mut self, input_type: KeypadInputType, keycode: KeyCode) {
@@ -63,6 +68,14 @@ impl GbaCore {
         Ok(())
     }
 
+    pub fn toggle_cpu_log(&mut self, toggle: bool ) {
+        self.cpu.instruction_log_enable = toggle;
+    }
+
+    pub fn print_cpu_log(&mut self) {
+        self.cpu.print_log_single();
+    }
+
     fn load_bios<P: AsRef<Path>>(&mut self, bios_path: P) -> Result<(), GbaError> {
         let mut bios_file = File::open(&bios_path).map_err(|e| {
             BiosLoadFail(format!(
@@ -77,7 +90,6 @@ impl GbaCore {
                 bios_path.as_ref()
             ))
         })?;
-
         Ok(())
     }
 
@@ -92,6 +104,12 @@ impl GbaCore {
         self.bus.gamepak.rom = buffer.into_boxed_slice();
         Ok(())
     }
+
+    fn _get_display_buffer(&self) -> &DisplayBuffer {
+        &self.bus.ppu.display_buffer
+    }
+
+    
 }
 
 pub enum GbaError {

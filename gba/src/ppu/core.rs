@@ -1,4 +1,7 @@
+use crate::common::*;
 use crate::ppu::Registers;
+use crate::ppu::backgrounds::*;
+use crate::ppu::registers::BgMode;
 use crate::scheduler::*;
 
 const PALETTE_SIZE: usize = 1024;
@@ -9,8 +12,8 @@ pub struct Ppu {
     pub palette_ram: [u8; PALETTE_SIZE],
     pub vram: [u8; VRAM_SIZE],
     pub oam: [u8; OAM_SIZE],
-
     pub registers: Registers,
+    pub display_buffer: Box<DisplayBuffer>,
 }
 
 impl Ppu {
@@ -19,8 +22,8 @@ impl Ppu {
             palette_ram: [0; PALETTE_SIZE],
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
-
             registers: Registers::new(),
+            display_buffer: Box::new([[Rgb555::white(); DISPLAY_WIDTH]; DISPLAY_HEIGHT]),
         }
     }
 
@@ -29,6 +32,10 @@ impl Ppu {
         self.vram.fill(0);
         self.oam.fill(0);
         self.registers = Registers::new();
+        self.display_buffer
+            .iter_mut()
+            .flatten()
+            .for_each(|rbg_555| *rbg_555 = Rgb555::default());
     }
 
     pub fn update_vcount(&mut self) {
@@ -39,31 +46,55 @@ impl Ppu {
     }
 
     pub fn hdraw(&mut self, scheduler: &mut Scheduler) {
+        self.registers.lcd_status.set_hblank_flag(false);
         scheduler.add(1007, GbaEvent::HBlank);
+
+        match self.registers.lcd_control.bg_mode() {
+            BgMode::Mode0 => todo!(),
+            BgMode::Mode1 => todo!(),
+            BgMode::Mode2 => todo!(),
+            BgMode::Mode3 => draw_mode3(self),
+            BgMode::Mode4 => todo!(),
+            BgMode::Mode5 => todo!(),
+        }
     }
 
     pub fn hblank(&mut self, scheduler: &mut Scheduler) {
-        scheduler.add(226, GbaEvent::UpdateVCount);
+        scheduler.add(225, GbaEvent::UpdateVCount);
 
         if self.registers.v_counter.scanline_count() == 159 {
-            scheduler.add(226, GbaEvent::VBlankHDraw);
+            scheduler.add(225, GbaEvent::VBlankHDraw);
+            scheduler.add(225, GbaEvent::ToggleVBlankFlag(true));
         } else {
-            scheduler.add(226, GbaEvent::HDraw);
+            scheduler.add(225, GbaEvent::HDraw);
         }
+
+        self.registers.lcd_status.set_hblank_flag(true);
     }
 
     pub fn vblank_hdraw(&mut self, scheduler: &mut Scheduler) {
-        scheduler.add(1007, GbaEvent::VBlankHBlank)
+        scheduler.add(1007, GbaEvent::VBlankHBlank);
+        self.registers.lcd_status.set_hblank_flag(false);
     }
 
     pub fn vblank_hblank(&mut self, scheduler: &mut Scheduler) {
-        scheduler.add(226, GbaEvent::UpdateVCount);
+        scheduler.add(225, GbaEvent::UpdateVCount);
 
         if self.registers.v_counter.scanline_count() == 227 {
-            scheduler.add(226, GbaEvent::HDraw);
+            scheduler.add(225, GbaEvent::HDraw);
             self.registers.v_counter.set_scanline_count(0);
         } else {
-            scheduler.add(226, GbaEvent::VBlankHDraw);
+            scheduler.add(225, GbaEvent::VBlankHDraw);
         }
+
+        if self.registers.v_counter.scanline_count() == 226 {
+            scheduler.add(225, GbaEvent::ToggleVBlankFlag(false));
+        }
+
+        self.registers.lcd_status.set_hblank_flag(true);
+    }
+
+    pub fn toggle_vblank_flag(&mut self, flag: bool) {
+        self.registers.lcd_status.set_vblank_flag(flag);
     }
 }

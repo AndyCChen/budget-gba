@@ -338,6 +338,6 @@ fn get_condition_str(condition_code: u8) -> &'static str {
         GT => "gt",
         LE => "le",
         AL => "",
-        _ => panic!("Invalid condition code! {condition_code}"),
+        _ => {println!("Invalid condition code! {condition_code}"); ""},
     }
 }

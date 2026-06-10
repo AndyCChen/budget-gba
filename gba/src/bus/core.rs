@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::apu::Apu;
 use crate::bus::BusInterface;
 use crate::bus::common;
@@ -108,6 +110,7 @@ impl Bus {
 
             // gamepak region 8/9
             8 => {
+                let address = address & 0xFFFFFF;
                 let wait_states = self.gamepak.get_wait_states(
                     AccessType::try_from(access).unwrap(),
                     GamepakRegion::Region8_9,
@@ -119,6 +122,7 @@ impl Bus {
 
             // gamepak region 10/11
             10 => {
+                let address = address & 0xFFFFFF;
                 let wait_states = self.gamepak.get_wait_states(
                     AccessType::try_from(access).unwrap(),
                     GamepakRegion::Region10_11,
@@ -130,6 +134,7 @@ impl Bus {
 
             // gamepak region 12/13
             12 => {
+                let address = address & 0xFFFFFF;
                 let wait_states = self.gamepak.get_wait_states(
                     AccessType::try_from(access).unwrap(),
                     GamepakRegion::Region12_13,
@@ -139,11 +144,11 @@ impl Bus {
                 T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
             }
 
-            _ => todo!("open bus value"),
+            _ => todo!("read open bus value"),
         }
     }
 
-    fn write<T: GbaBusInt>(&mut self, address: u32, value: T, _access: u8) {
+    fn write<T: GbaBusInt + Display>(&mut self, address: u32, value: T, _access: u8) {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
@@ -186,6 +191,7 @@ impl Bus {
             // vram
             6 => match T::int_type() {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
+                    println!("write vram");
                     let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
                     self.step(if is_u32 { 2 } else { 1 });
 
@@ -199,7 +205,6 @@ impl Bus {
                 }
                 GbaBusIntType::Byte => {
                     self.step(1);
-
                     // 96kb vram is mirrored in 128kb blocks
                     // 96kb vram can be pictured as 64kb + 32kb, with the 32kb block being mirrored
                     let address = address & 0x1_FFFF;
@@ -230,7 +235,7 @@ impl Bus {
                 }
             },
 
-            _ => todo!("set open bus value"),
+            _ => todo!("write set open bus value, address: {address:08X}, value: {value}"),
         }
     }
 
@@ -244,6 +249,7 @@ impl Bus {
                 VBlankHDraw => self.ppu.vblank_hdraw(&mut self.scheduler),
                 VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler),
                 UpdateVCount => self.ppu.update_vcount(),
+                ToggleVBlankFlag(flag) => self.ppu.toggle_vblank_flag(flag),
             }
         }
     }
