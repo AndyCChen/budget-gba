@@ -259,7 +259,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
         self.status = StatusRegisters::default();
         self.pipeline.fill(Arm(0));
         self.pipeline_state = access_code::NONSEQUENTIAL;
-        self.instruction_buffer.clear();
+        // self.instruction_buffer.clear();
     }
 
     pub fn step(&mut self, bus: &mut T) {
