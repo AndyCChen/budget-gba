@@ -55,7 +55,6 @@ fn app_init(
             AppState::WaitingForGamepak
         } else {
             gba.gba_core.cpu_pipeline_fill();
-            // gba.gba_core.toggle_cpu_log(true);
             AppState::Running
         }),
         Err(e) => match e {
@@ -77,16 +76,15 @@ fn gba_running(mut gba: NonSendMut<BudgetGba>) {
     for _ in 0..10_000 {
         gba.gba_core.step();
     }
-
-    // gba.gba_core.print_cpu_log();
 }
 
 fn gba_paused(mut gba: NonSendMut<BudgetGba>, input: Res<ButtonInput<KeyCode>>) {
     info_once!("GBA PAUSE");
 
     if input.just_released(KeyCode::Space) {
-        // gba.gba_core.step();
-        // gba.gba_core.print_cpu_log();
+        gba.gba_core.toggle_cpu_log(true);
+        gba.gba_core.step();
+        gba.gba_core.print_cpu_log();
     }
 }
 

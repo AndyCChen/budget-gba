@@ -1,14 +1,10 @@
-use std::num::Wrapping;
-
 use crate::arm::constants::access_code;
-use crate::arm::decoder_tables::{decode_arm, decode_thumb};
+use crate::arm::decoder_tables::*;
 use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
 use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
 use crate::bus::BusInterface;
-use ringbuf::traits::{Consumer, RingBuffer};
-use ringbuf::{LocalRb, storage::Heap};
-
 use bitfield_struct::*;
+use std::num::Wrapping;
 
 #[derive(Default)]
 pub struct StatusRegisters {
@@ -144,13 +140,19 @@ pub struct Arm7tdmi<T: BusInterface> {
     pub instruction_log_enable: bool,
     arm_table: [ArmHandler<T>; ARM_TABLE_SIZE],
     thumb_table: [ThumbHandler<T>; THUMB_TABLE_SIZE],
-    instruction_buffer: LocalRb<Heap<(u32, CpuInstruction)>>,
+    instruction_buffer: RingBuffer<(u32, CpuInstruction)>,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum CpuInstruction {
     Arm(u32),
     Thumb(u32),
+}
+
+impl Default for CpuInstruction {
+    fn default() -> Self {
+        Arm(0)
+    }
 }
 
 use CpuInstruction::*;
@@ -164,9 +166,9 @@ impl<T: BusInterface> Arm7tdmi<T> {
             pipeline: [Arm(0); 2],
             pipeline_state: access_code::NONSEQUENTIAL,
             instruction_log_enable: false,
+            instruction_buffer: RingBuffer::new(32),
             arm_table: generate_arm_table(),
             thumb_table: generate_thumb_table(),
-            instruction_buffer: LocalRb::new(32),
         };
         cpu.registers.r15 = Wrapping(0x8000000);
         cpu
@@ -178,11 +180,10 @@ impl<T: BusInterface> Arm7tdmi<T> {
             status: StatusRegisters::default(),
             pipeline: [Arm(0); 2],
             pipeline_state: access_code::NONSEQUENTIAL,
-
+            instruction_buffer: RingBuffer::new(50_000),
+            instruction_log_enable: false,
             arm_table: generate_arm_table(),
             thumb_table: generate_thumb_table(),
-            instruction_buffer: LocalRb::new(50_000),
-            instruction_log_enable: false,
         }
     }
 
@@ -258,6 +259,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
         self.status = StatusRegisters::default();
         self.pipeline.fill(Arm(0));
         self.pipeline_state = access_code::NONSEQUENTIAL;
+        self.instruction_buffer.clear();
     }
 
     pub fn step(&mut self, bus: &mut T) {
@@ -265,7 +267,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
         let pc = self.registers.r15.0;
 
         if self.instruction_log_enable {
-            self.instruction_buffer.push_overwrite((pc, instruction));
+            self.instruction_buffer.push_back((pc, instruction));
         }
 
         match instruction {
@@ -290,11 +292,11 @@ impl<T: BusInterface> Arm7tdmi<T> {
         };
     }
 
-    pub fn print_log_single(&mut self) {
-        while let Some((pc, instruction)) = self.instruction_buffer.try_pop()  {
+    pub fn print_log(&mut self) {
+        if let Some((pc, instruction)) = self.instruction_buffer.iter().next() {
             let asm_string = match instruction {
-                Arm(opcode) => decode_arm(opcode).to_asm_string(pc),
-                Thumb(opcode) => decode_thumb(opcode as u16).to_asm_string(pc),
+                Arm(opcode) => decode_arm(*opcode).to_asm_string(*pc),
+                Thumb(opcode) => decode_thumb(*opcode as u16).to_asm_string(*pc),
             };
 
             let pc = match instruction {
@@ -556,10 +558,10 @@ mod test_utils {
         fs::create_dir_all(output_dir).expect("failed to create directory!");
         let mut file = fs::File::create(format!("{output_dir}/{file_name}.txt")).expect("failed to create file");
 
-        while let Some((pc, instruction)) = cpu.instruction_buffer.try_pop()  {
+        for (pc, instruction) in cpu.instruction_buffer.iter()  {
             let asm_string = match instruction {
-                Arm(opcode32) => decode_arm(opcode32).to_asm_string(pc),
-                Thumb(opcode16) => decode_thumb(opcode16 as u16).to_asm_string(pc),
+                Arm(opcode32) => decode_arm(*opcode32).to_asm_string(*pc),
+                Thumb(opcode16) => decode_thumb(*opcode16 as u16).to_asm_string(*pc),
             };
 
             writeln!(file, "{asm_string}").expect("write failed!");           
@@ -735,9 +737,7 @@ mod arm_32_tests {
 #[rustfmt::skip]
 mod thumb_16_tests {
     use super::test_utils::{load_test, verify_state, verify_state_no_carry};
-    
-    
-
+   
     #[test]
     fn test_thumb_lsl_lsr_asr() {
         load_test("thumb_lsl_lsr_asr.json", verify_state, 0);
@@ -759,8 +759,7 @@ mod thumb_16_tests {
         use crate::bus::TestBus;
         use std::fs;
         use std::io::Write;
-        use crate::arm::decoder_tables::*;
-
+        
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let Ok(data) = fs::read_to_string(format!("{manifest_dir}/ARM7TDMI/v1/thumb_data_proc.json")) else {
             panic!("Failed to load test file!");
@@ -798,10 +797,10 @@ mod thumb_16_tests {
         fs::create_dir_all(output_dir).expect("failed to create directory!");
         let mut file = fs::File::create(format!("{output_dir}/thumb_data_proc.txt")).expect("failed to create file");
 
-        while let Some((pc, instruction)) = cpu.instruction_buffer.try_pop() {
+        for (pc, instruction) in cpu.instruction_buffer.iter() {
             let asm_string = match instruction {
-                Arm(opcode32) => decode_arm(opcode32).to_asm_string(pc),
-                Thumb(opcode16) => decode_thumb(opcode16 as u16).to_asm_string(pc),
+                Arm(opcode32) => decode_arm(*opcode32).to_asm_string(*pc),
+                Thumb(opcode16) => decode_thumb(*opcode16 as u16).to_asm_string(*pc),
             };
 
             writeln!(file, "{asm_string}").expect("write failed!");           

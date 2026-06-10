@@ -73,7 +73,7 @@ impl GbaCore {
     }
 
     pub fn print_cpu_log(&mut self) {
-        self.cpu.print_log_single();
+        self.cpu.print_log();
     }
 
     fn load_bios<P: AsRef<Path>>(&mut self, bios_path: P) -> Result<(), GbaError> {
