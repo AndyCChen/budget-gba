@@ -68,12 +68,16 @@ impl GbaCore {
         Ok(())
     }
 
-    pub fn toggle_cpu_log(&mut self, toggle: bool ) {
+    pub fn toggle_cpu_log(&mut self, toggle: bool) {
         self.cpu.instruction_log_enable = toggle;
     }
 
     pub fn print_cpu_log(&mut self) {
         self.cpu.print_log();
+    }
+
+    pub fn get_display_buffer(&self) -> &DisplayBuffer {
+        &self.bus.ppu.display_buffer
     }
 
     fn load_bios<P: AsRef<Path>>(&mut self, bios_path: P) -> Result<(), GbaError> {
@@ -104,12 +108,6 @@ impl GbaCore {
         self.bus.gamepak.rom = buffer.into_boxed_slice();
         Ok(())
     }
-
-    fn _get_display_buffer(&self) -> &DisplayBuffer {
-        &self.bus.ppu.display_buffer
-    }
-
-    
 }
 
 pub enum GbaError {

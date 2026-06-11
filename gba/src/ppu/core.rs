@@ -17,13 +17,14 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new() -> Self {
+    pub fn new(scheduler: &mut Scheduler) -> Self {
+        scheduler.add(0, GbaEvent::HDraw);
         Self {
             palette_ram: [0; PALETTE_SIZE],
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
             registers: Registers::new(),
-            display_buffer: Box::new([[Rgb5::white(); DISPLAY_WIDTH]; DISPLAY_HEIGHT]),
+            display_buffer: Box::new([[Rgb5::black(); DISPLAY_WIDTH]; DISPLAY_HEIGHT]),
         }
     }
 
@@ -35,14 +36,14 @@ impl Ppu {
         self.display_buffer
             .iter_mut()
             .flatten()
-            .for_each(|rbg_555| *rbg_555 = Rgb5::default());
+            .for_each(|rbg_5| *rbg_5 = Rgb5::black());
     }
 
     pub fn update_vcount(&mut self) {
         let current_count = self.registers.v_counter.scanline_count();
         self.registers
             .v_counter
-            .with_scanline_count(current_count + 1);
+            .set_scanline_count(current_count + 1);
     }
 
     pub fn hdraw(&mut self, scheduler: &mut Scheduler) {
@@ -50,12 +51,12 @@ impl Ppu {
         scheduler.add(1007, GbaEvent::HBlank);
 
         match self.registers.lcd_control.bg_mode() {
-            BgMode::Mode0 => todo!(),
-            BgMode::Mode1 => todo!(),
-            BgMode::Mode2 => todo!(),
+            BgMode::Mode0 => (),
+            BgMode::Mode1 => (),
+            BgMode::Mode2 => (),
             BgMode::Mode3 => draw_mode3(self),
-            BgMode::Mode4 => todo!(),
-            BgMode::Mode5 => todo!(),
+            BgMode::Mode4 => (),
+            BgMode::Mode5 => (),
         }
     }
 
@@ -78,12 +79,11 @@ impl Ppu {
     }
 
     pub fn vblank_hblank(&mut self, scheduler: &mut Scheduler) {
-        scheduler.add(225, GbaEvent::UpdateVCount);
-
         if self.registers.v_counter.scanline_count() == 227 {
-            scheduler.add(225, GbaEvent::HDraw);
             self.registers.v_counter.set_scanline_count(0);
+            scheduler.add(225, GbaEvent::HDraw);
         } else {
+            scheduler.add(225, GbaEvent::UpdateVCount);
             scheduler.add(225, GbaEvent::VBlankHDraw);
         }
 

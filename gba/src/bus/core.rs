@@ -26,10 +26,13 @@ pub struct Bus {
 
 impl Bus {
     pub fn new() -> Self {
+        let mut scheduler = Scheduler::new(32);
+        let ppu = Ppu::new(&mut scheduler);
+
         Self {
-            scheduler: Scheduler::new(32),
+            scheduler,
             gamepak: GamePak::new(),
-            ppu: Ppu::new(),
+            ppu,
             apu: Apu::new(),
             keypad: Keypad::new(),
             bios_ram: [0; BIOS_SIZE],
