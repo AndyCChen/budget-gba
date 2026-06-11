@@ -23,7 +23,7 @@ impl Ppu {
             vram: [0; VRAM_SIZE],
             oam: [0; OAM_SIZE],
             registers: Registers::new(),
-            display_buffer: Box::new([[Rgb555::white(); DISPLAY_WIDTH]; DISPLAY_HEIGHT]),
+            display_buffer: Box::new([[Rgb5::white(); DISPLAY_WIDTH]; DISPLAY_HEIGHT]),
         }
     }
 
@@ -35,7 +35,7 @@ impl Ppu {
         self.display_buffer
             .iter_mut()
             .flatten()
-            .for_each(|rbg_555| *rbg_555 = Rgb555::default());
+            .for_each(|rbg_555| *rbg_555 = Rgb5::default());
     }
 
     pub fn update_vcount(&mut self) {

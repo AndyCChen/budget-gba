@@ -1,8 +1,13 @@
 pub mod config;
 
-use bevy::prelude::*;
+use bevy::{
+    asset::RenderAssetUsages,
+    image::ImageSampler,
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+};
 pub use config::Config;
-use gba::{ARM7TDMI_CLOCK_RATE, GbaCore, GbaError::*};
+use gba::{GbaCore, GbaError::*, Rgb5};
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Hash, Debug)]
 enum AppState {
@@ -12,9 +17,13 @@ enum AppState {
     Paused,
 }
 
+#[derive(Resource)]
 pub struct BudgetGba {
     gba_core: Box<GbaCore>,
 }
+
+#[derive(Resource)]
+pub struct DisplayTexture(Handle<Image>);
 
 impl BudgetGba {
     fn new() -> Self {
@@ -28,10 +37,16 @@ impl BudgetGba {
             .add_plugins(DefaultPlugins)
             .insert_resource(config)
             .insert_resource(Time::<Fixed>::from_hz(60.0))
-            .insert_non_send_resource(BudgetGba::new())
+            .insert_resource(BudgetGba::new())
             .init_state::<AppState>()
-            .add_systems(Startup, app_init)
-            .add_systems(FixedUpdate, gba_running.run_if(in_state(AppState::Running)))
+            .add_systems(Startup, (app_init, setup_display))
+            .add_systems(
+                FixedUpdate,
+                (
+                    update_display,
+                    gba_running.run_if(in_state(AppState::Running)),
+                ),
+            )
             .add_systems(
                 Update,
                 (
@@ -45,11 +60,13 @@ impl BudgetGba {
 }
 
 fn app_init(
-    mut gba: NonSendMut<BudgetGba>,
+    mut gba: ResMut<BudgetGba>,
     config: Res<Config>,
     mut exit: MessageWriter<AppExit>,
     mut app_state: ResMut<NextState<AppState>>,
 ) {
+    info!("App Initialization");
+
     match gba.gba_core.load_config(&config.gba_config) {
         Ok(_) => app_state.set(if config.gba_config.gamepak_path.is_none() {
             AppState::WaitingForGamepak
@@ -70,7 +87,49 @@ fn app_init(
     }
 }
 
-fn gba_running(mut gba: NonSendMut<BudgetGba>) {
+fn setup_display(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    info!("Display Initialization");
+    commands.spawn(Camera2d);
+
+    let color = Rgb5::white().to_rgba8_array();
+    let mut image = Image::new_fill(
+        Extent3d {
+            width: gba::DISPLAY_WIDTH as u32,
+            height: gba::DISPLAY_HEIGHT as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &color,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = ImageSampler::nearest();
+
+    let handle = images.add(image);
+    commands.insert_resource(DisplayTexture(handle.clone()));
+
+    let mut sprite = Sprite::from_image(handle);
+    sprite.custom_size = Some(Vec2 {
+        x: 3.0 * gba::DISPLAY_WIDTH as f32,
+        y: 3.0 * gba::DISPLAY_HEIGHT as f32,
+    });
+    commands.spawn(sprite);
+}
+
+fn update_display(display_handle: Res<DisplayTexture>, mut images: ResMut<Assets<Image>>) {
+    let color = Rgb5::new().with_red(31).to_rgba8_array();
+    let color = Srgba::rgba_u8(color[0], color[1], color[2], color[3]);
+
+    let display_texture = images
+        .get_mut(&display_handle.0)
+        .expect("Failed to retrieve display texture!");
+
+    display_texture
+        .set_color_at(100, 100, Color::Srgba(color))
+        .unwrap();
+}
+
+fn gba_running(mut gba: ResMut<BudgetGba>) {
     info_once!("GBA RUN");
 
     for _ in 0..10_000 {
@@ -78,7 +137,7 @@ fn gba_running(mut gba: NonSendMut<BudgetGba>) {
     }
 }
 
-fn gba_paused(mut gba: NonSendMut<BudgetGba>, input: Res<ButtonInput<KeyCode>>) {
+fn gba_paused(mut gba: ResMut<BudgetGba>, input: Res<ButtonInput<KeyCode>>) {
     info_once!("GBA PAUSE");
 
     if input.just_released(KeyCode::Space) {
