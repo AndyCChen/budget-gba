@@ -2,6 +2,10 @@ use crate::ppu::Ppu;
 use crate::{DISPLAY_WIDTH, Rgb5};
 
 pub fn draw_mode3(ppu: &mut Ppu) {
+    if !ppu.registers.lcd_control.bg2_enable() {
+        return;
+    }
+
     const PIXEL_ROW_BYTE_SIZE: usize = DISPLAY_WIDTH * size_of::<u16>();
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 

@@ -194,7 +194,6 @@ impl Bus {
             // vram
             6 => match T::int_type() {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
-                    println!("write vram");
                     let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
                     self.step(if is_u32 { 2 } else { 1 });
 

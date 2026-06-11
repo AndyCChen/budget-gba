@@ -7,7 +7,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 pub use config::Config;
-use gba::{DISPLAY_HEIGHT, DISPLAY_WIDTH, GbaCore, GbaError::*, Rgb5};
+use gba::{GbaCore, GbaError::*, Rgb5};
 
 #[derive(States, Clone, Copy, Default, Eq, PartialEq, Hash, Debug)]
 enum AppState {
