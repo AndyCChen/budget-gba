@@ -86,7 +86,7 @@ impl Bus {
             5 => {
                 let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
                 self.step(if is_u32 { 2 } else { 1 });
-                T::mem_read(T::align(address & 0x3FF), &self.ppu.palette_ram)
+                T::mem_read(T::align(address & 0x3FF), &self.ppu.mem.palette_ram)
             }
 
             // vram
@@ -98,17 +98,17 @@ impl Bus {
                 // 96kb vram can be pictured as 64kb + 32kb, with the 32kb block being mirrored
                 let address = address & 0x1_FFFF;
                 if address < 0x1_8000 {
-                    T::mem_read(T::align(address), &self.ppu.vram)
+                    T::mem_read(T::align(address), &self.ppu.mem.vram)
                 } else {
                     let address = 0x1_0000 | (address & 0x7FFF);
-                    T::mem_read(T::align(address), &self.ppu.vram)
+                    T::mem_read(T::align(address), &self.ppu.mem.vram)
                 }
             }
 
             // oam ram
             7 => {
                 self.step(1);
-                T::mem_read(T::align(address & 0x3FF), &self.ppu.oam)
+                T::mem_read(T::align(address & 0x3FF), &self.ppu.mem.oam)
             }
 
             // gamepak region 8/9
@@ -180,14 +180,14 @@ impl Bus {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
                     let is_u32 = matches!(T::int_type(), GbaBusIntType::Word);
                     self.step(if is_u32 { 2 } else { 1 });
-                    value.mem_write(T::align(address & 0x3FF), &mut self.ppu.palette_ram);
+                    value.mem_write(T::align(address & 0x3FF), &mut self.ppu.mem.palette_ram);
                 }
                 GbaBusIntType::Byte => {
                     self.step(1);
                     let address = u16::align(address & 0x3FF);
                     // byte sized writes will duplicate the byte in the upper and lower 16 bit halfword in memory
-                    value.mem_write(address, &mut self.ppu.palette_ram);
-                    value.mem_write(address + 1, &mut self.ppu.palette_ram);
+                    value.mem_write(address, &mut self.ppu.mem.palette_ram);
+                    value.mem_write(address + 1, &mut self.ppu.mem.palette_ram);
                 }
             },
 
@@ -199,10 +199,10 @@ impl Bus {
 
                     let address = address & 0x1_FFFF;
                     if address < 0x1_8000 {
-                        value.mem_write(T::align(address), &mut self.ppu.vram);
+                        value.mem_write(T::align(address), &mut self.ppu.mem.vram);
                     } else {
                         let address = 0x1_0000 | (address & 0x7FFF);
-                        value.mem_write(T::align(address), &mut self.ppu.vram);
+                        value.mem_write(T::align(address), &mut self.ppu.mem.vram);
                     }
                 }
                 GbaBusIntType::Byte => {
@@ -212,12 +212,12 @@ impl Bus {
                     let address = address & 0x1_FFFF;
                     if address < 0x1_8000 {
                         let address = u16::align(address);
-                        value.mem_write(address, &mut self.ppu.vram);
-                        value.mem_write(address + 1, &mut self.ppu.vram);
+                        value.mem_write(address, &mut self.ppu.mem.vram);
+                        value.mem_write(address + 1, &mut self.ppu.mem.vram);
                     } else {
                         let address = T::align(0x1_0000 | (address & 0x7FFF));
-                        value.mem_write(address, &mut self.ppu.vram);
-                        value.mem_write(address + 1, &mut self.ppu.vram);
+                        value.mem_write(address, &mut self.ppu.mem.vram);
+                        value.mem_write(address + 1, &mut self.ppu.mem.vram);
                     }
                 }
             },
@@ -226,14 +226,14 @@ impl Bus {
             7 => match T::int_type() {
                 GbaBusIntType::Word | GbaBusIntType::Halfword => {
                     self.step(1);
-                    value.mem_write(T::align(address & 0x3FF), &mut self.ppu.oam);
+                    value.mem_write(T::align(address & 0x3FF), &mut self.ppu.mem.oam);
                 }
                 GbaBusIntType::Byte => {
                     self.step(1);
                     let address = u16::align(address & 0x3FF);
                     // byte sized writes will duplicate the byte in the upper and lower 16 bit halfword in memory
-                    value.mem_write(address, &mut self.ppu.oam);
-                    value.mem_write(address + 1, &mut self.ppu.oam);
+                    value.mem_write(address, &mut self.ppu.mem.oam);
+                    value.mem_write(address + 1, &mut self.ppu.mem.oam);
                 }
             },
 

@@ -80,6 +80,11 @@ impl GbaCore {
         &self.bus.ppu.display_buffer
     }
 
+    #[inline]
+    pub fn is_frame_complete(&mut self) -> bool {
+        self.bus.ppu.is_frame_complete()
+    }
+
     fn load_bios<P: AsRef<Path>>(&mut self, bios_path: P) -> Result<(), GbaError> {
         let mut bios_file = File::open(&bios_path).map_err(|e| {
             BiosLoadFail(format!(

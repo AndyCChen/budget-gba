@@ -9,30 +9,45 @@ const VRAM_SIZE: usize = 1024 * 96;
 const OAM_SIZE: usize = 1024;
 
 pub struct Ppu {
+    pub mem: Box<Memory>,
+    pub registers: Registers,
+    pub display_buffer: Box<DisplayBuffer>,
+    is_frame_complete: bool,
+}
+
+pub struct Memory {
     pub palette_ram: [u8; PALETTE_SIZE],
     pub vram: [u8; VRAM_SIZE],
     pub oam: [u8; OAM_SIZE],
-    pub registers: Registers,
-    pub display_buffer: Box<DisplayBuffer>,
+}
+
+impl Memory {
+    fn new() -> Self {
+        Self {
+            palette_ram: [0; PALETTE_SIZE],
+            vram: [0; VRAM_SIZE],
+            oam: [0; OAM_SIZE],
+        }
+    }
 }
 
 impl Ppu {
     pub fn new(scheduler: &mut Scheduler) -> Self {
         scheduler.add(0, GbaEvent::HDraw);
         Self {
-            palette_ram: [0; PALETTE_SIZE],
-            vram: [0; VRAM_SIZE],
-            oam: [0; OAM_SIZE],
+            mem: Box::new(Memory::new()),
             registers: Registers::new(),
             display_buffer: Box::new([[Rgb5::black(); DISPLAY_WIDTH]; DISPLAY_HEIGHT]),
+            is_frame_complete: false,
         }
     }
 
     pub fn reset(&mut self) {
-        self.palette_ram.fill(0);
-        self.vram.fill(0);
-        self.oam.fill(0);
+        self.mem.palette_ram.fill(0);
+        self.mem.vram.fill(0);
+        self.mem.oam.fill(0);
         self.registers = Registers::new();
+        self.is_frame_complete = false;
         self.display_buffer
             .iter_mut()
             .flatten()
@@ -96,5 +111,12 @@ impl Ppu {
 
     pub fn toggle_vblank_flag(&mut self, flag: bool) {
         self.registers.lcd_status.set_vblank_flag(flag);
+        self.is_frame_complete = flag;
+    }
+
+    pub fn is_frame_complete(&mut self) -> bool {
+        let flag = self.is_frame_complete;
+        self.is_frame_complete = false;
+        flag
     }
 }

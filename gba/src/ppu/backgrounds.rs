@@ -10,6 +10,7 @@ pub fn draw_mode3(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     let vram_row = ppu
+        .mem
         .vram
         .chunks(PIXEL_ROW_BYTE_SIZE)
         .nth(scanline_y)

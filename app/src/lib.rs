@@ -139,7 +139,8 @@ fn update_display(
 fn gba_running(mut gba: ResMut<BudgetGba>) {
     info_once!("GBA RUN");
 
-    for _ in 0..10_000 {
+    // sync to vblank for now
+    while !gba.0.is_frame_complete() {
         gba.0.step();
     }
 }
