@@ -66,7 +66,6 @@ pub struct LcdControl {
     pub obj_window_enable: bool,
 }
 
-
 #[gba_register(u16)]
 pub struct LcdStatus {
     #[readonly]
@@ -117,4 +116,17 @@ pub struct BgControl0 {
 
     #[bits(2)]
     pub screen_size: u8,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::io::HalfwordIo;
+
+    #[test]
+    fn test_reg() {
+        let mut reg = LcdStatus::new();
+        reg.write(0xFF, HalfwordIo::B0);
+        assert_eq!(reg.read(HalfwordIo::B0), 0xF8);
+    }
 }
