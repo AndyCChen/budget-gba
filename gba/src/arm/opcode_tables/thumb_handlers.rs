@@ -1,6 +1,7 @@
 use std::num::Wrapping;
 
 use crate::arm::common::{arithmetic::*, reg_constant::*};
+use crate::arm::opcode_tables::CONDITION_TABLE;
 use crate::arm::{
     constants::AccessCode,
     core::{Arm7tdmi, CpuMode::*, Mode},
@@ -660,27 +661,15 @@ pub fn conditional_branch<T: BusInterface, const COND: u8>(
     bus: &mut T,
     opcode: u16,
 ) {
-    use crate::arm::constants::ArmConditionCode::{self, *};
-
-    let do_branch = match ArmConditionCode::try_from(COND) {
-        Ok(EQ) => cpu.status.cpsr.z(),
-        Ok(NE) => !cpu.status.cpsr.z(),
-        Ok(CS) => cpu.status.cpsr.c(),
-        Ok(CC) => !cpu.status.cpsr.c(),
-        Ok(MI) => cpu.status.cpsr.n(),
-        Ok(PL) => !cpu.status.cpsr.n(),
-        Ok(VS) => cpu.status.cpsr.v(),
-        Ok(VC) => !cpu.status.cpsr.v(),
-        Ok(HI) => cpu.status.cpsr.c() && !cpu.status.cpsr.z(),
-        Ok(LS) => !cpu.status.cpsr.c() || cpu.status.cpsr.z(),
-        Ok(GE) => cpu.status.cpsr.n() == cpu.status.cpsr.v(),
-        Ok(LT) => cpu.status.cpsr.n() != cpu.status.cpsr.v(),
-        Ok(GT) => !cpu.status.cpsr.z() && (cpu.status.cpsr.n() == cpu.status.cpsr.v()),
-        Ok(LE) => cpu.status.cpsr.z() || (cpu.status.cpsr.n() != cpu.status.cpsr.v()),
-        Ok(AL) => panic!("Condition 14 is undefined!"),
-        Err(15) => panic!("Condition 15 defines SWI instruction"),
-        Err(_) => panic!("Invalid cond: {COND}"),
+    match COND {
+        0..=13 => (),
+        14 => panic!("Condition 14 in condition branch defines undefined instructions!"),
+        15 => panic!("Condition 15 defines SWI instruction"),
+        _ => panic!("Invalid condition code: {COND}"),
     };
+
+    let flags = (cpu.status.cpsr.into_bits() >> 28) as u8;
+    let do_branch = CONDITION_TABLE[usize::from((COND << 4) | flags)];
 
     if !do_branch {
         cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;

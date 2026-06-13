@@ -1,4 +1,4 @@
-use crate::arm::constants::ArmConditionCode::{self, *};
+use crate::arm::decoder_tables::ArmConditionCode;
 use crate::arm::decoder_tables::arm_decoder::{
     ArmDataOp2, ArmInstruction::*, ArmInstructionInfo, Shift, ShiftOperand,
 };
@@ -322,6 +322,8 @@ fn format_block_transfer(
 }
 
 fn get_condition_str(condition_code: ArmConditionCode) -> &'static str {
+    use ArmConditionCode::*;
+
     match condition_code {
         EQ => "eq",
         NE => "ne",

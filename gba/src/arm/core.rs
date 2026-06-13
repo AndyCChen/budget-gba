@@ -1,9 +1,9 @@
 use crate::arm::arm_json_test_states::*;
-use crate::arm::constants::{AccessCode, ArmConditionCode};
+use crate::arm::constants::AccessCode;
 use crate::arm::decoder_tables::*;
 use crate::arm::opcode_tables::{
-    ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler, generate_arm_table,
-    generate_thumb_table,
+    ARM_TABLE_SIZE, ArmHandler, CONDITION_TABLE, THUMB_TABLE_SIZE, ThumbHandler,
+    generate_arm_table, generate_thumb_table,
 };
 use crate::bus::BusInterface;
 use bitfield_struct::*;
@@ -64,34 +64,34 @@ pub struct GeneralRegisters {
 
 #[bitfield(u32)]
 pub struct StatusRegister {
-    // unsure if default mode starts in User or System mode.
-    // mgba seems to start in System mode and I think user and system mode are the same on the gba.
+    /// unsure if default mode starts in User or System mode.
+    /// mgba seems to start in System mode and I think user and system mode are the same on the gba.
     #[bits(5, default = Mode::System, from = Mode::from_bits)]
     pub mode_bits: Mode,
 
     #[bits(1, default = CpuMode::ArmMode)]
     pub t: CpuMode,
 
-    // 0: enable fiq, 1: disable fiq
+    /// 0: enable fiq, 1: disable fiq
     pub f: bool,
 
-    // 0: enable irq, 1: disable irq
+    /// 0: enable irq, 1: disable irq
     pub i: bool,
 
     #[bits(20)]
-    // reserved
+    /// reserved
     __: u32,
 
-    // overflow
+    /// overflow
     pub v: bool,
 
-    // carry flag
+    /// carry flag
     pub c: bool,
 
-    // zero flag
+    /// zero flag
     pub z: bool,
 
-    // negative flag
+    /// negative flag
     pub n: bool,
 }
 
@@ -277,7 +277,9 @@ impl<T: BusInterface> Arm7tdmi<T> {
             Arm(arm_instr) => {
                 self.pipeline_prefetch(bus, ArmMode);
 
-                if self.condition_check((arm_instr >> 28) as u8) {
+                let condition = (arm_instr & 0xF000_0000) >> 24;
+                let flags = self.status.cpsr.into_bits() >> 28;
+                if CONDITION_TABLE[(condition | flags) as usize] {
                     let arm_table_hash =
                         ((arm_instr & 0x0FF00000) >> 16) | ((arm_instr & 0xF0) >> 4);
                     self.arm_table[arm_table_hash as usize](self, bus, arm_instr);
@@ -488,31 +490,6 @@ impl<T: BusInterface> Arm7tdmi<T> {
                         .into(),
                 );
             }
-        }
-    }
-
-    /// Checks 4-bit condition code that determines if instruction should be executed or skipped.
-    /// ### Returns
-    /// True if opcode can be executed, else False
-    fn condition_check(&self, cond: u8) -> bool {
-        use crate::arm::constants::ArmConditionCode::*;
-
-        match ArmConditionCode::try_from(cond).unwrap() {
-            EQ => self.status.cpsr.z(),
-            NE => !self.status.cpsr.z(),
-            CS => self.status.cpsr.c(),
-            CC => !self.status.cpsr.c(),
-            MI => self.status.cpsr.n(),
-            PL => !self.status.cpsr.n(),
-            VS => self.status.cpsr.v(),
-            VC => !self.status.cpsr.v(),
-            HI => self.status.cpsr.c() && !self.status.cpsr.z(),
-            LS => !self.status.cpsr.c() || self.status.cpsr.z(),
-            GE => self.status.cpsr.n() == self.status.cpsr.v(),
-            LT => self.status.cpsr.n() != self.status.cpsr.v(),
-            GT => !self.status.cpsr.z() && (self.status.cpsr.n() == self.status.cpsr.v()),
-            LE => self.status.cpsr.z() || (self.status.cpsr.n() != self.status.cpsr.v()),
-            AL => true,
         }
     }
 }
