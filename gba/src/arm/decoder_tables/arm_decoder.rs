@@ -1,5 +1,5 @@
-use crate::arm::opcode_tables::reg_constant::{PROGRAM_COUNTER, STACK_POINTER};
-use crate::arm::opcode_tables::to_negative;
+use crate::arm::common::reg_constant::{PROGRAM_COUNTER, STACK_POINTER};
+use crate::arm::common::to_negative;
 
 pub struct ArmInstructionInfo {
     pub instruction: ArmInstruction,
@@ -119,8 +119,8 @@ pub enum ShiftOperand {
 }
 
 pub fn data_processing(opcode: u32) -> ArmInstructionInfo {
-    use crate::arm::arm_data_op::*;
-    use crate::arm::opcode_tables::{ASR, LSL, LSR, ROR};
+    use crate::arm::common::arithmetic::{ASR, LSL, LSR, ROR};
+    use crate::arm::common::arm_data_op::*;
 
     let is_op2_immediate = (opcode >> 25) & 0x1 == 1;
     let data_op = ((opcode >> 21) & 0xF) as u8;
@@ -302,7 +302,7 @@ pub enum LdrStrAddressShift {
 }
 
 pub fn single_data_transfer(opcode: u32) -> ArmInstructionInfo {
-    use crate::arm::opcode_tables::{ASR, LSL, LSR, ROR};
+    use crate::arm::common::arithmetic::{ASR, LSL, LSR, ROR};
 
     let is_immediate = (opcode >> 25) & 1 == 0;
     let is_pre_index = (opcode >> 24) & 1 == 1;

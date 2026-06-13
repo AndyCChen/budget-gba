@@ -1,7 +1,7 @@
 use crate::arm::constants::AccessCode;
 use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
-use crate::arm::opcode_tables::common::reg_constant::*;
-use crate::arm::opcode_tables::to_negative;
+use crate::arm::common::reg_constant::*;
+use crate::arm::common::to_negative;
 use crate::bus::BusInterface;
 use std::num::Wrapping;
 
@@ -57,8 +57,8 @@ pub fn data_processing<
     bus: &mut T,
     opcode: u32,
 ) {
-    use super::common::arithmetic::*;
-    use super::common::arm_data_op::*;
+    use crate::arm::common::arithmetic::*;
+    use crate::arm::common::arm_data_op::*;
 
     let rn = (opcode >> 16) & 0xF; // 1st operand register
     let rd = (opcode >> 12) & 0xF; // destination register of result
@@ -418,7 +418,7 @@ pub fn single_data_transfer<
     bus: &mut T,
     opcode: u32,
 ) {
-    use super::common::arithmetic::*;
+    use crate::arm::common::arithmetic::*;
 
     let rd = (opcode >> 12) & 0xF; // destination/source register
     let rn = (opcode >> 16) & 0xF; // base register

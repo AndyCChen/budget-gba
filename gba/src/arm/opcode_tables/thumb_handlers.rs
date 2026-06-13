@@ -1,10 +1,9 @@
 use std::num::Wrapping;
 
-use super::common::arithmetic::*;
+use crate::arm::common::{arithmetic::*, reg_constant::*};
 use crate::arm::{
     constants::AccessCode,
     core::{Arm7tdmi, CpuMode::*, Mode},
-    opcode_tables::common::reg_constant::*,
 };
 use crate::bus::BusInterface;
 

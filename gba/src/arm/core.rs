@@ -1,7 +1,10 @@
-use crate::arm::constants::{ArmConditionCode, AccessCode};
+use crate::arm::arm_json_test_states::*;
+use crate::arm::constants::{AccessCode, ArmConditionCode};
 use crate::arm::decoder_tables::*;
-use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
-use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
+use crate::arm::opcode_tables::{
+    ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler, generate_arm_table,
+    generate_thumb_table,
+};
 use crate::bus::BusInterface;
 use bitfield_struct::*;
 use std::num::Wrapping;

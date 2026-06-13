@@ -1,4 +1,5 @@
-use crate::arm::opcode_tables::{ASR, LSL, LSR, to_negative, };
+use crate::arm::common::to_negative;
+use crate::arm::common::arithmetic::{ASR, LSL, LSR};
 
 #[rustfmt::skip]
 pub enum ThumbInstruction {

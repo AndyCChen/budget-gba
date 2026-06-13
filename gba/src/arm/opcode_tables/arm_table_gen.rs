@@ -1,4 +1,4 @@
-use super::common::arm_data_op;
+use crate::arm::common::arm_data_op;
 use crate::arm::core::Arm7tdmi;
 use crate::bus::BusInterface;
 
