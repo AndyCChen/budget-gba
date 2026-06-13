@@ -7,6 +7,7 @@ use crate::gamepak::{AccessType, GamePak, GamepakRegion};
 use crate::keypad::Keypad;
 use crate::ppu::Ppu;
 use crate::scheduler::{GbaEvent::*, Scheduler};
+use crate::arm::AccessCode;
 use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
@@ -52,7 +53,7 @@ impl Bus {
         self.wram_32.fill(0);
     }
 
-    fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: u8) -> T {
+    fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: AccessCode) -> T {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
@@ -151,7 +152,7 @@ impl Bus {
         }
     }
 
-    fn write<T: GbaBusInt + Display>(&mut self, address: u32, value: T, _access: u8) {
+    fn write<T: GbaBusInt + Display>(&mut self, address: u32, value: T, _access: AccessCode) {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
@@ -266,57 +267,57 @@ impl BusInterface for Bus {
         self.scheduler.get_timestamp()
     }
 
-    fn pipeline_read_word(&mut self, address: u32, access: u8) -> u32 {
+    fn pipeline_read_word(&mut self, address: u32, access: AccessCode) -> u32 {
         self.read(address, access)
     }
 
-    fn pipeline_read_halfword(&mut self, address: u32, access: u8) -> u16 {
+    fn pipeline_read_halfword(&mut self, address: u32, access: AccessCode) -> u16 {
         self.read(address, access)
     }
 
-    fn read_word(&mut self, address: u32, access: u8) -> u32 {
+    fn read_word(&mut self, address: u32, access: AccessCode) -> u32 {
         self.read(address, access)
     }
 
-    fn read_rotate_word(&mut self, address: u32, access: u8) -> u32 {
+    fn read_rotate_word(&mut self, address: u32, access: AccessCode) -> u32 {
         let word: u32 = self.read(address, access);
         common::read_rotate_word(address, word)
     }
 
-    fn read_halfword(&mut self, address: u32, access: u8) -> u32 {
+    fn read_halfword(&mut self, address: u32, access: AccessCode) -> u32 {
         let halfword: u16 = self.read(address, access);
         u32::from(halfword)
     }
 
-    fn read_rotate_halfword(&mut self, address: u32, access: u8) -> u32 {
+    fn read_rotate_halfword(&mut self, address: u32, access: AccessCode) -> u32 {
         let halfword: u16 = self.read(address, access);
         common::read_rotate_halfword(address, halfword)
     }
 
-    fn read_signed_halfword(&mut self, address: u32, access: u8) -> u32 {
+    fn read_signed_halfword(&mut self, address: u32, access: AccessCode) -> u32 {
         let halfword: u16 = self.read(address, access);
         common::read_signed_halfword(address, halfword)
     }
 
-    fn read_byte(&mut self, address: u32, access: u8) -> u32 {
+    fn read_byte(&mut self, address: u32, access: AccessCode) -> u32 {
         let byte: u8 = self.read(address, access);
         u32::from(byte)
     }
 
-    fn read_signed_byte(&mut self, address: u32, access: u8) -> u32 {
+    fn read_signed_byte(&mut self, address: u32, access: AccessCode) -> u32 {
         let byte: u8 = self.read(address, access);
         common::read_signed_byte(byte)
     }
 
-    fn write_word(&mut self, address: u32, value: u32, access: u8) {
+    fn write_word(&mut self, address: u32, value: u32, access: AccessCode) {
         self.write(address, value, access);
     }
 
-    fn write_halfword(&mut self, address: u32, value: u16, access: u8) {
+    fn write_halfword(&mut self, address: u32, value: u16, access: AccessCode) {
         self.write(address, value, access);
     }
 
-    fn write_byte(&mut self, address: u32, value: u8, access: u8) {
+    fn write_byte(&mut self, address: u32, value: u8, access: AccessCode) {
         self.write(address, value, access);
     }
 }
@@ -423,7 +424,7 @@ impl GbaBusInt for u32 {
 #[cfg(test)]
 mod gba_bus_test {
     use crate::{
-        arm::access_code,
+        arm::AccessCode,
         bus::{Bus, BusInterface},
     };
 
@@ -441,29 +442,29 @@ mod gba_bus_test {
         // read at aligned addresses
 
         assert_eq!(
-            bus.read_word(wram_256_start + 0x3FF00, access_code::NONSEQUENTIAL),
+            bus.read_word(wram_256_start + 0x3FF00, AccessCode::NONSEQUENTIAL),
             0xDDCC_BBAA
         );
 
         assert_eq!(
-            bus.read_halfword(wram_256_start + 0x3FF00, access_code::NONSEQUENTIAL),
+            bus.read_halfword(wram_256_start + 0x3FF00, AccessCode::NONSEQUENTIAL),
             0xBBAA
         );
 
         assert_eq!(
-            bus.read_byte(wram_256_start + 0x3FF00, access_code::NONSEQUENTIAL),
+            bus.read_byte(wram_256_start + 0x3FF00, AccessCode::NONSEQUENTIAL),
             0xAA
         );
 
         // read at unaligned addresses
 
         assert_eq!(
-            bus.read_word(wram_256_start + 2 + 0x3FF00, access_code::NONSEQUENTIAL),
+            bus.read_word(wram_256_start + 2 + 0x3FF00, AccessCode::NONSEQUENTIAL),
             0xDDCC_BBAA
         );
 
         assert_eq!(
-            bus.read_halfword(wram_256_start + 1 + 0x3FF00, access_code::NONSEQUENTIAL),
+            bus.read_halfword(wram_256_start + 1 + 0x3FF00, AccessCode::NONSEQUENTIAL),
             0xBBAA
         );
     }
@@ -476,25 +477,25 @@ mod gba_bus_test {
 
         // test writes to aligned addresses
 
-        bus.write_word(wram_256_start, 0xAABB_CCDD, access_code::NONSEQUENTIAL);
+        bus.write_word(wram_256_start, 0xAABB_CCDD, AccessCode::NONSEQUENTIAL);
         assert_eq!(bus.wram_256[0..4], [0xDD, 0xCC, 0xBB, 0xAA]);
 
         bus.reset();
-        bus.write_halfword(wram_256_start + 2, 0xAABB, access_code::NONSEQUENTIAL);
+        bus.write_halfword(wram_256_start + 2, 0xAABB, AccessCode::NONSEQUENTIAL);
         assert_eq!(bus.wram_256[2..4], [0xBB, 0xAA]);
 
         bus.reset();
-        bus.write_byte(wram_256_start + 1, 0xFF, access_code::NONSEQUENTIAL);
+        bus.write_byte(wram_256_start + 1, 0xFF, AccessCode::NONSEQUENTIAL);
         assert_eq!(bus.wram_256[1], 0xFF);
 
         // test writes to unaligned addresses
 
         bus.reset();
-        bus.write_word(wram_256_start + 1, 0xAABB_CCDD, access_code::NONSEQUENTIAL);
+        bus.write_word(wram_256_start + 1, 0xAABB_CCDD, AccessCode::NONSEQUENTIAL);
         assert_eq!(bus.wram_256[0..4], [0xDD, 0xCC, 0xBB, 0xAA]);
 
         bus.reset();
-        bus.write_halfword(wram_256_start + 3, 0xAABB, access_code::NONSEQUENTIAL);
+        bus.write_halfword(wram_256_start + 3, 0xAABB, AccessCode::NONSEQUENTIAL);
         assert_eq!(bus.wram_256[2..4], [0xBB, 0xAA]);
     }
 }

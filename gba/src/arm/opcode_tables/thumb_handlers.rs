@@ -2,7 +2,7 @@ use std::num::Wrapping;
 
 use super::common::arithmetic::*;
 use crate::arm::{
-    constants::access_code,
+    constants::AccessCode,
     core::{Arm7tdmi, CpuMode::*, Mode},
     opcode_tables::common::reg_constant::*,
 };
@@ -13,7 +13,7 @@ pub fn move_shifted<T: BusInterface, const SHIFT_OP: u8>(
     _bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = (opcode & 0x7).into();
@@ -40,7 +40,7 @@ pub fn add_subtract<T: BusInterface, const IMM: bool, const IS_SUBTRACT: bool>(
     _bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = (opcode & 0x7).into(); // destination register
@@ -69,7 +69,7 @@ pub fn mov_cmp_add_sub_immediate<T: BusInterface, const OP: u8>(
     const ADD: u8 = 2;
     const SUB: u8 = 3;
 
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = ((opcode >> 8) & 0x7).into();
@@ -153,7 +153,7 @@ pub fn alu_operations<T: BusInterface, const OP: u8>(
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd = (opcode & 0x7).into();
@@ -164,7 +164,7 @@ pub fn alu_operations<T: BusInterface, const OP: u8>(
 
     if matches!(OP, alu_op::LSL | alu_op::LSR | alu_op::ASR | alu_op::ROR) {
         // handle extra i cycle from register specified shift
-        cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+        cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
         bus.i_cycle();
     }
 
@@ -236,7 +236,7 @@ pub fn add_cmp_mov_hi<T: BusInterface, const OP: u8, const H1: bool, const H2: b
         cpu.get_banked_register(rs)
     };
 
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     match OP {
@@ -281,13 +281,13 @@ pub fn pc_relative_load<T: BusInterface>(cpu: &mut Arm7tdmi<T>, bus: &mut T, opc
     let offset: u32 = ((opcode & 0xFF) * 4).into();
 
     let address = (cpu.registers.r15.0 & !2).wrapping_add(offset);
-    let value = bus.read_word(address, access_code::NONSEQUENTIAL);
+    let value = bus.read_word(address, AccessCode::NONSEQUENTIAL);
     cpu.set_banked_register(rd, value);
 
     // todo handle i cycle
     bus.i_cycle();
 
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 }
 
@@ -296,7 +296,7 @@ pub fn load_store_register_offset<T: BusInterface, const LOAD: bool, const TRANS
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = (opcode & 0x7).into(); // source/dest register
@@ -309,9 +309,9 @@ pub fn load_store_register_offset<T: BusInterface, const LOAD: bool, const TRANS
 
     if LOAD {
         let load_value = if TRANSFER_BYTE {
-            bus.read_byte(address, access_code::NONSEQUENTIAL)
+            bus.read_byte(address, AccessCode::NONSEQUENTIAL)
         } else {
-            bus.read_rotate_word(address, access_code::NONSEQUENTIAL)
+            bus.read_rotate_word(address, AccessCode::NONSEQUENTIAL)
         };
 
         // todo handle i cycle for load op
@@ -322,9 +322,9 @@ pub fn load_store_register_offset<T: BusInterface, const LOAD: bool, const TRANS
         let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
-            bus.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+            bus.write_byte(address, store_value as u8, AccessCode::NONSEQUENTIAL);
         } else {
-            bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
+            bus.write_word(address, store_value, AccessCode::NONSEQUENTIAL);
         }
     }
 }
@@ -334,7 +334,7 @@ pub fn load_store_sign_extended<T: BusInterface, const OP: u8>(
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd = u32::from(opcode) & 0x7; // destination
@@ -349,21 +349,21 @@ pub fn load_store_sign_extended<T: BusInterface, const OP: u8>(
         // store halfword
         0 => {
             let store_value = cpu.get_banked_register(rd);
-            bus.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+            bus.write_halfword(address, store_value as u16, AccessCode::NONSEQUENTIAL);
         }
         // load sign extended byte
         1 => {
-            let load_value = bus.read_signed_byte(address, access_code::NONSEQUENTIAL);
+            let load_value = bus.read_signed_byte(address, AccessCode::NONSEQUENTIAL);
             cpu.set_banked_register(rd, load_value);
         }
         // load halfword
         2 => {
-            let load_value = bus.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
+            let load_value = bus.read_rotate_halfword(address, AccessCode::NONSEQUENTIAL);
             cpu.set_banked_register(rd, load_value);
         }
         // load sign extended halfword
         3 => {
-            let load_value = bus.read_signed_halfword(address, access_code::NONSEQUENTIAL);
+            let load_value = bus.read_signed_halfword(address, AccessCode::NONSEQUENTIAL);
             cpu.set_banked_register(rd, load_value);
         }
         _ => panic!("Invalid OP! {OP}"),
@@ -375,7 +375,7 @@ pub fn load_store_immediate_offset<T: BusInterface, const TRANSFER_BYTE: bool, c
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd = Into::<u32>::into(opcode & 7); // src/dest register
@@ -386,9 +386,9 @@ pub fn load_store_immediate_offset<T: BusInterface, const TRANSFER_BYTE: bool, c
 
     if LOAD {
         let load_value = if TRANSFER_BYTE {
-            bus.read_byte(address, access_code::NONSEQUENTIAL)
+            bus.read_byte(address, AccessCode::NONSEQUENTIAL)
         } else {
-            bus.read_rotate_word(address, access_code::NONSEQUENTIAL)
+            bus.read_rotate_word(address, AccessCode::NONSEQUENTIAL)
         };
 
         // todo handle i cycle for load op
@@ -399,9 +399,9 @@ pub fn load_store_immediate_offset<T: BusInterface, const TRANSFER_BYTE: bool, c
         let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
-            bus.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+            bus.write_byte(address, store_value as u8, AccessCode::NONSEQUENTIAL);
         } else {
-            bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
+            bus.write_word(address, store_value, AccessCode::NONSEQUENTIAL);
         }
     }
 }
@@ -411,7 +411,7 @@ pub fn load_store_halfword_immediate_offset<T: BusInterface, const LOAD: bool>(
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd = Into::<u32>::into(opcode & 7); // src/dest register
@@ -421,7 +421,7 @@ pub fn load_store_halfword_immediate_offset<T: BusInterface, const LOAD: bool>(
     let address = cpu.get_banked_register(rb).wrapping_add(offset);
 
     if LOAD {
-        let load_value = bus.read_rotate_halfword(address, access_code::NONSEQUENTIAL);
+        let load_value = bus.read_rotate_halfword(address, AccessCode::NONSEQUENTIAL);
 
         // todo handle i cycle from load op
         bus.i_cycle();
@@ -429,7 +429,7 @@ pub fn load_store_halfword_immediate_offset<T: BusInterface, const LOAD: bool>(
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
-        bus.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+        bus.write_halfword(address, store_value as u16, AccessCode::NONSEQUENTIAL);
     }
 }
 
@@ -438,7 +438,7 @@ pub fn sp_load_store_relative_offset<T: BusInterface, const LOAD: bool>(
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rd: u32 = ((opcode >> 8) & 7).into();
@@ -447,7 +447,7 @@ pub fn sp_load_store_relative_offset<T: BusInterface, const LOAD: bool>(
     let address = cpu.get_banked_register(STACK_POINTER).wrapping_add(offset);
 
     if LOAD {
-        let load_value = bus.read_rotate_word(address, access_code::NONSEQUENTIAL);
+        let load_value = bus.read_rotate_word(address, AccessCode::NONSEQUENTIAL);
 
         // todo handle i cycle
         bus.i_cycle();
@@ -455,7 +455,7 @@ pub fn sp_load_store_relative_offset<T: BusInterface, const LOAD: bool>(
         cpu.set_banked_register(rd, load_value);
     } else {
         let store_value = cpu.get_banked_register(rd);
-        bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
+        bus.write_word(address, store_value, AccessCode::NONSEQUENTIAL);
     }
 }
 
@@ -476,7 +476,7 @@ pub fn pc_sp_load_address<T: BusInterface, const SP: bool>(
 
     cpu.set_banked_register(rd, address);
 
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 }
 
@@ -495,7 +495,7 @@ pub fn add_sub_sp<T: BusInterface, const NEGATIVE_OFFSET: bool>(
 
     cpu.set_banked_register(STACK_POINTER, result);
 
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 }
 
@@ -508,7 +508,7 @@ pub fn push_pop_register<
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rlist = opcode & 0xFF;
@@ -516,7 +516,7 @@ pub fn push_pop_register<
     let base_address;
 
     if !PC_LR_BIT && rlist == 0 {
-        let access = access_code::NONSEQUENTIAL;
+        let access = AccessCode::NONSEQUENTIAL;
 
         if LOAD {
             let pc_load_value = bus.read_word(base, access);
@@ -560,7 +560,7 @@ pub fn push_pop_register<
             yield_value
         });
 
-    let mut access = access_code::NONSEQUENTIAL;
+    let mut access = AccessCode::NONSEQUENTIAL;
     for (address, register_id) in rlist_iter {
         if LOAD {
             let pop_value = bus.read_word(address, access);
@@ -570,7 +570,7 @@ pub fn push_pop_register<
             bus.write_word(address, push_value, access);
         }
 
-        access = access_code::SEQUENTIAL;
+        access = AccessCode::SEQUENTIAL;
     }
 
     if LOAD {
@@ -589,7 +589,7 @@ pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
     bus: &mut T,
     opcode: u16,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 2;
 
     let rlist = opcode & 0xFF;
@@ -599,7 +599,7 @@ pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
 
     // handle empty rlist
     if rlist == 0 {
-        let access = access_code::NONSEQUENTIAL;
+        let access = AccessCode::NONSEQUENTIAL;
 
         if LOAD {
             let load_value = bus.read_word(base, access);
@@ -623,7 +623,7 @@ pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
         });
 
     if let Some((address, register_id)) = rlist_iter.next() {
-        let access = access_code::NONSEQUENTIAL;
+        let access = AccessCode::NONSEQUENTIAL;
         let transfer_byte_size = rlist.count_ones() * 4;
         let write_back = base.wrapping_add(transfer_byte_size);
 
@@ -639,7 +639,7 @@ pub fn multiple_load_store<T: BusInterface, const LOAD: bool>(
     }
 
     for (address, register_id) in rlist_iter {
-        let access = access_code::SEQUENTIAL;
+        let access = AccessCode::SEQUENTIAL;
 
         if LOAD {
             let load_value = bus.read_word(address, access);
@@ -661,30 +661,30 @@ pub fn conditional_branch<T: BusInterface, const COND: u8>(
     bus: &mut T,
     opcode: u16,
 ) {
-    use crate::arm::constants::arm_condition_code::*;
+    use crate::arm::constants::ArmConditionCode::{self, *};
 
-    let do_branch = match COND {
-        EQ => cpu.status.cpsr.z(),
-        NE => !cpu.status.cpsr.z(),
-        CS => cpu.status.cpsr.c(),
-        CC => !cpu.status.cpsr.c(),
-        MI => cpu.status.cpsr.n(),
-        PL => !cpu.status.cpsr.n(),
-        VS => cpu.status.cpsr.v(),
-        VC => !cpu.status.cpsr.v(),
-        HI => cpu.status.cpsr.c() && !cpu.status.cpsr.z(),
-        LS => !cpu.status.cpsr.c() || cpu.status.cpsr.z(),
-        GE => cpu.status.cpsr.n() == cpu.status.cpsr.v(),
-        LT => cpu.status.cpsr.n() != cpu.status.cpsr.v(),
-        GT => !cpu.status.cpsr.z() && (cpu.status.cpsr.n() == cpu.status.cpsr.v()),
-        LE => cpu.status.cpsr.z() || (cpu.status.cpsr.n() != cpu.status.cpsr.v()),
-        14 => panic!("Condition 14 is undefined!"),
-        15 => panic!("Condition 15 defines SWI instruction"),
-        _ => panic!("Invalid cond: {COND}"),
+    let do_branch = match ArmConditionCode::try_from(COND) {
+        Ok(EQ) => cpu.status.cpsr.z(),
+        Ok(NE) => !cpu.status.cpsr.z(),
+        Ok(CS) => cpu.status.cpsr.c(),
+        Ok(CC) => !cpu.status.cpsr.c(),
+        Ok(MI) => cpu.status.cpsr.n(),
+        Ok(PL) => !cpu.status.cpsr.n(),
+        Ok(VS) => cpu.status.cpsr.v(),
+        Ok(VC) => !cpu.status.cpsr.v(),
+        Ok(HI) => cpu.status.cpsr.c() && !cpu.status.cpsr.z(),
+        Ok(LS) => !cpu.status.cpsr.c() || cpu.status.cpsr.z(),
+        Ok(GE) => cpu.status.cpsr.n() == cpu.status.cpsr.v(),
+        Ok(LT) => cpu.status.cpsr.n() != cpu.status.cpsr.v(),
+        Ok(GT) => !cpu.status.cpsr.z() && (cpu.status.cpsr.n() == cpu.status.cpsr.v()),
+        Ok(LE) => cpu.status.cpsr.z() || (cpu.status.cpsr.n() != cpu.status.cpsr.v()),
+        Ok(AL) => panic!("Condition 14 is undefined!"),
+        Err(15) => panic!("Condition 15 defines SWI instruction"),
+        Err(_) => panic!("Invalid cond: {COND}"),
     };
 
     if !do_branch {
-        cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+        cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
         cpu.registers.r15 += 2;
         return;
     }
@@ -764,7 +764,7 @@ pub fn long_branch_with_link<
 
         cpu.set_banked_register(LINK_REGISTER, lr_hi);
 
-        cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+        cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
         cpu.registers.r15 += 2;
     }
 }

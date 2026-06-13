@@ -1,4 +1,4 @@
-use crate::arm::constants::arm_condition_code::*;
+use crate::arm::constants::ArmConditionCode::{self, *};
 use crate::arm::decoder_tables::arm_decoder::{
     ArmDataOp2, ArmInstruction::*, ArmInstructionInfo, Shift, ShiftOperand,
 };
@@ -6,7 +6,7 @@ use super::arm_decoder::{LdrStrAddress, LdrStrAddressShift, LdrhStrhAddress, Blo
 
 impl ArmInstructionInfo {
     pub fn to_asm_string(&self, pc: u32) -> String {
-        let cond_str = get_condition_str(self.condition);
+        let cond_str = get_condition_str(ArmConditionCode::try_from(self.condition).unwrap());
 
         #[rustfmt::skip]
         let arm_str = match self.instruction {
@@ -321,7 +321,7 @@ fn format_block_transfer(
     }
 }
 
-fn get_condition_str(condition_code: u8) -> &'static str {
+fn get_condition_str(condition_code: ArmConditionCode) -> &'static str {
     match condition_code {
         EQ => "eq",
         NE => "ne",
@@ -338,6 +338,5 @@ fn get_condition_str(condition_code: u8) -> &'static str {
         GT => "gt",
         LE => "le",
         AL => "",
-        _ => {println!("Invalid condition code! {condition_code}"); ""},
     }
 }

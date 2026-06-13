@@ -1,4 +1,4 @@
-use crate::arm::access_code::*;
+use crate::arm::AccessCode;
 use crate::gamepak::Registers;
 
 pub struct GamePak {
@@ -88,17 +88,19 @@ pub enum AccessType {
     Second,
 }
 
-impl TryFrom<u8> for AccessType {
+impl TryFrom<AccessCode> for AccessType {
     type Error = &'static str;
 
-    fn try_from(mut value: u8) -> Result<Self, Self::Error> {
+    fn try_from(mut value: AccessCode) -> Result<Self, Self::Error> {
+        value = value & (AccessCode::NONSEQUENTIAL | AccessCode:: SEQUENTIAL);
+        
         // Ignore the other bitflags for now and only care about whether it is sequential or nonsequential.
-        value &= 1;
-
-        match value {
-            NONSEQUENTIAL => Ok(AccessType::First),
-            SEQUENTIAL => Ok(AccessType::Second),
-            _ => Err("Access type must be 0 or 1"),
+        if AccessCode::NONSEQUENTIAL.contains(value) {
+            Ok(AccessType::First)
+        } else if AccessCode::SEQUENTIAL.contains(value) {
+            Ok(AccessType::Second)
+        } else {
+            Err("Access type must be sequential or nonsequential!")
         }
     }
 }

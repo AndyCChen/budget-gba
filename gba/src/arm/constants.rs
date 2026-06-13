@@ -1,49 +1,82 @@
+use bitflags::bitflags;
+
 // 16.78 MHz clock rate
 pub const ARM7TDMI_CLOCK_RATE: usize = 16 * 1024 * 1024;
 
-pub mod arm_condition_code {
+#[repr(u8)]
+pub enum ArmConditionCode {
     /// Z set
-    pub const EQ: u8 = 0b0000;
+    EQ = 0b0000,
     /// Z clear
-    pub const NE: u8 = 0b0001;
+    NE = 0b0001,
     /// C set
-    pub const CS: u8 = 0b0010;
+    CS = 0b0010,
     /// C clear
-    pub const CC: u8 = 0b0011;
+    CC = 0b0011,
     /// N set
-    pub const MI: u8 = 0b0100;
+    MI = 0b0100,
     /// N clear
-    pub const PL: u8 = 0b0101;
+    PL = 0b0101,
     /// V set
-    pub const VS: u8 = 0b0110;
+    VS = 0b0110,
     /// V clear
-    pub const VC: u8 = 0b0111;
+    VC = 0b0111,
     /// C set & Z clear
-    pub const HI: u8 = 0b1000;
+    HI = 0b1000,
     /// C clear or Z set
-    pub const LS: u8 = 0b1001;
+    LS = 0b1001,
     /// N equals V
-    pub const GE: u8 = 0b1010;
+    GE = 0b1010,
     /// N not equal V
-    pub const LT: u8 = 0b1011;
+    LT = 0b1011,
     /// Z clear AND (N equals V)
-    pub const GT: u8 = 0b1100;
+    GT = 0b1100,
     /// Z set OR (N not equal V)
-    pub const LE: u8 = 0b1101;
+    LE = 0b1101,
     /// always
-    pub const AL: u8 = 0b1110;
+    AL = 0b1110,
 }
 
-pub mod access_code {
-    pub const NONSEQUENTIAL: u8 = 0;
-    pub const SEQUENTIAL: u8 = 1 << 0;
-    pub const CODE: u8 = 1 << 1;
-    pub const _DMA: u8 = 1 << 2;
-    pub const LOCK: u8 = 1 << 3;
+impl TryFrom<u8> for ArmConditionCode {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0b0000 => Ok(ArmConditionCode::EQ),
+            0b0001 => Ok(ArmConditionCode::NE),
+            0b0010 => Ok(ArmConditionCode::CS),
+            0b0011 => Ok(ArmConditionCode::CC),
+            0b0100 => Ok(ArmConditionCode::MI),
+            0b0101 => Ok(ArmConditionCode::PL),
+            0b0110 => Ok(ArmConditionCode::VS),
+            0b0111 => Ok(ArmConditionCode::VC),
+            0b1000 => Ok(ArmConditionCode::HI),
+            0b1001 => Ok(ArmConditionCode::LS),
+            0b1010 => Ok(ArmConditionCode::GE),
+            0b1011 => Ok(ArmConditionCode::LT),
+            0b1100 => Ok(ArmConditionCode::GT),
+            0b1101 => Ok(ArmConditionCode::LE),
+            0b1110 => Ok(ArmConditionCode::AL),
+            _ => Err(value),
+        }
+    }
 }
 
-pub mod kind_code {
-    pub const INSTRUCTION_READ: u8 = 0;
-    pub const GENERAL_READ: u8 = 1 << 0;
-    pub const WRITE: u8 = 1 << 1;
+bitflags! {
+    #[derive(Clone, Copy)]
+    pub struct AccessCode: u8 {
+        const NONSEQUENTIAL = 0;
+        const SEQUENTIAL = 1 << 0;
+        const CODE = 1 << 1;
+        const DMA = 1 << 2;
+        const LOCK = 1 << 3;
+    }
+}
+
+bitflags! {
+    pub struct KindCode: u8 {
+        const INSTRUCTION_READ = 0;
+        const GENERAL_READ = 1 << 0;
+        const WRITE = 1 << 1;
+    }
 }

@@ -1,4 +1,4 @@
-use crate::arm::constants::access_code;
+use crate::arm::constants::{ArmConditionCode, AccessCode};
 use crate::arm::decoder_tables::*;
 use crate::arm::opcode_tables::{ARM_TABLE_SIZE, ArmHandler, THUMB_TABLE_SIZE, ThumbHandler};
 use crate::arm::{arm_json_test_states::*, generate_arm_table, generate_thumb_table};
@@ -136,7 +136,7 @@ pub struct Arm7tdmi<T: BusInterface> {
     pub registers: GeneralRegisters,
     pub status: StatusRegisters,
     pub pipeline: [CpuInstruction; 2], // make sure pipeline is filled first before running!
-    pub pipeline_state: u8,
+    pub pipeline_state: AccessCode,
     pub instruction_log_enable: bool,
     arm_table: [ArmHandler<T>; ARM_TABLE_SIZE],
     thumb_table: [ThumbHandler<T>; THUMB_TABLE_SIZE],
@@ -164,7 +164,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [Arm(0); 2],
-            pipeline_state: access_code::NONSEQUENTIAL,
+            pipeline_state: AccessCode::NONSEQUENTIAL,
             instruction_log_enable: false,
             instruction_buffer: RingBuffer::new(32),
             arm_table: generate_arm_table(),
@@ -179,7 +179,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [Arm(0); 2],
-            pipeline_state: access_code::NONSEQUENTIAL,
+            pipeline_state: AccessCode::NONSEQUENTIAL,
             instruction_buffer: RingBuffer::new(50_000),
             instruction_log_enable: false,
             arm_table: generate_arm_table(),
@@ -200,7 +200,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
         };
 
         self.pipeline = pipeline;
-        self.pipeline_state = input_state.initial.access;
+        self.pipeline_state = AccessCode::from_bits(input_state.initial.access).unwrap();
 
         self.registers = GeneralRegisters {
             r0: input_state.initial.R[0],
@@ -258,7 +258,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
         self.registers = GeneralRegisters::default();
         self.status = StatusRegisters::default();
         self.pipeline.fill(Arm(0));
-        self.pipeline_state = access_code::NONSEQUENTIAL;
+        self.pipeline_state = AccessCode::NONSEQUENTIAL;
         // self.instruction_buffer.clear();
     }
 
@@ -279,7 +279,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
                         ((arm_instr & 0x0FF00000) >> 16) | ((arm_instr & 0xF0) >> 4);
                     self.arm_table[arm_table_hash as usize](self, bus, arm_instr);
                 } else {
-                    self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+                    self.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
                     self.registers.r15 += 4;
                 }
             }
@@ -437,14 +437,14 @@ impl<T: BusInterface> Arm7tdmi<T> {
     pub fn pipeline_refill_arm(&mut self, bus: &mut T) {
         self.pipeline[0] = Arm(bus.pipeline_read_word(
             self.registers.r15.0,
-            access_code::CODE | access_code::NONSEQUENTIAL,
+            AccessCode::CODE | AccessCode::NONSEQUENTIAL,
         ));
         self.pipeline[1] = Arm(bus.pipeline_read_word(
             self.registers.r15.0.wrapping_add(4),
-            access_code::CODE | access_code::SEQUENTIAL,
+            AccessCode::CODE | AccessCode::SEQUENTIAL,
         ));
 
-        self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+        self.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
         self.registers.r15 += 8;
     }
 
@@ -453,19 +453,19 @@ impl<T: BusInterface> Arm7tdmi<T> {
         self.pipeline[0] = Thumb(
             bus.pipeline_read_halfword(
                 self.registers.r15.0,
-                access_code::CODE | access_code::NONSEQUENTIAL,
+                AccessCode::CODE | AccessCode::NONSEQUENTIAL,
             )
             .into(),
         );
         self.pipeline[1] = Thumb(
             bus.pipeline_read_halfword(
                 self.registers.r15.0.wrapping_add(2),
-                access_code::CODE | access_code::SEQUENTIAL,
+                AccessCode::CODE | AccessCode::SEQUENTIAL,
             )
             .into(),
         );
 
-        self.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+        self.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
         self.registers.r15 += 4;
     }
 
@@ -492,9 +492,9 @@ impl<T: BusInterface> Arm7tdmi<T> {
     /// ### Returns
     /// True if opcode can be executed, else False
     fn condition_check(&self, cond: u8) -> bool {
-        use crate::arm::constants::arm_condition_code::*;
+        use crate::arm::constants::ArmConditionCode::*;
 
-        match cond {
+        match ArmConditionCode::try_from(cond).unwrap() {
             EQ => self.status.cpsr.z(),
             NE => !self.status.cpsr.z(),
             CS => self.status.cpsr.c(),
@@ -510,10 +510,6 @@ impl<T: BusInterface> Arm7tdmi<T> {
             GT => !self.status.cpsr.z() && (self.status.cpsr.n() == self.status.cpsr.v()),
             LE => self.status.cpsr.z() || (self.status.cpsr.n() != self.status.cpsr.v()),
             AL => true,
-            _ => {
-                println!("Undefined condition: {cond}");
-                false
-            }
         }
     }
 }

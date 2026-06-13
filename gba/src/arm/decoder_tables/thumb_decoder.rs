@@ -343,37 +343,42 @@ pub enum ConditionBranchType {
     LE,
 }
 
-pub fn conditional_branch(opcode: u16) -> ThumbInstruction {
-    use crate::arm::constants::arm_condition_code::*;
+impl TryFrom<u8> for ConditionBranchType  {
+    type Error = &'static str;
 
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ConditionBranchType::EQ),
+            1 => Ok(ConditionBranchType::NE),
+            2 => Ok(ConditionBranchType::CS),
+            3 => Ok(ConditionBranchType::CC),
+            4 => Ok(ConditionBranchType::MI),
+            5 => Ok(ConditionBranchType::PL),
+            6 => Ok(ConditionBranchType::VS),
+            7 => Ok(ConditionBranchType::VC),
+            8 => Ok(ConditionBranchType::HI),
+            9 => Ok(ConditionBranchType::LS),
+            10 => Ok(ConditionBranchType::GE),
+            11 => Ok(ConditionBranchType::LT),
+            12 => Ok(ConditionBranchType::GT),
+            13 => Ok(ConditionBranchType::LE), 
+            14 => Err("Condition 14 is undefined!"),
+            15 => Err("Condition 15 defines SWI instruction"),
+            _ => Err("Invalid condition"),
+        }
+    }
+}
+
+pub fn conditional_branch(opcode: u16) -> ThumbInstruction {
     let cond = ((opcode >> 8) & 0xF) as u8;
     let mut offset = u32::from((opcode & 0xFF) << 1);
-
-    let cond = match cond {
-        EQ => ConditionBranchType::EQ,
-        NE => ConditionBranchType::NE,
-        CS => ConditionBranchType::CS,
-        CC => ConditionBranchType::CC,
-        MI => ConditionBranchType::MI,
-        PL => ConditionBranchType::PL,
-        VS => ConditionBranchType::VS,
-        VC => ConditionBranchType::VC,
-        HI => ConditionBranchType::HI,
-        LS => ConditionBranchType::LS,
-        GE => ConditionBranchType::GE,
-        LT => ConditionBranchType::LT,
-        GT => ConditionBranchType::GT,
-        LE => ConditionBranchType::LE,        
-        14 => panic!("Condition 14 is undefined!"),
-        15 => panic!("Condition 15 defines SWI instruction"),
-        _ => panic!("Invalid cond: {cond}"),
-    };
 
     // negative
     if offset & 0x100 != 0 {
         offset |= 0xFFFF_FF00;
-    } 
+    }
 
+    let cond = ConditionBranchType::try_from(cond).unwrap();
     ThumbInstruction::ConditionalBranch { cond, offset }
 }
 

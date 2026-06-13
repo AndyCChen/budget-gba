@@ -1,4 +1,4 @@
-use crate::arm::constants::access_code;
+use crate::arm::constants::AccessCode;
 use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::arm::opcode_tables::common::reg_constant::*;
 use crate::arm::opcode_tables::to_negative;
@@ -92,7 +92,7 @@ pub fn data_processing<
 
             // pc is ahead by 12 when a register specified shift is used
             bus.i_cycle();
-            cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+            cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
             cpu.registers.r15 += 4;
 
             rs_value
@@ -111,7 +111,7 @@ pub fn data_processing<
     let op1 = cpu.get_banked_register(rn);
 
     if !register_specified_shift {
-        cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+        cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
         cpu.registers.r15 += 4;
     }
 
@@ -203,7 +203,7 @@ pub fn read_status_mrs<T: BusInterface, const SPSR_DEST: bool>(
         cpu.set_banked_register(rd, cpu.status.cpsr.into_bits());
     }
 
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 }
 
@@ -268,7 +268,7 @@ pub fn write_status_msr<T: BusInterface, const IMM: bool, const SPSR_DEST: bool>
         cpu.status.cpsr = StatusRegister::from_bits(psr_value);
     }
 
-    cpu.pipeline_state = access_code::SEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 }
 
@@ -277,7 +277,7 @@ pub fn multiply<T: BusInterface, const ACCUMULATE: bool, const SET_COND: bool>(
     bus: &mut T,
     opcode: u32,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 
     let rm = opcode & 0xF; // op1 reg value
@@ -341,7 +341,7 @@ pub fn multiply_long<
     bus: &mut T,
     opcode: u32,
 ) {
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 
     let rm = opcode & 0xF;
@@ -451,14 +451,14 @@ pub fn single_data_transfer<
         cpu.get_banked_register(rn)
     };
 
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 
     if LOAD {
         let load_value: u32 = if TRANSFER_BYTE {
-            bus.read_byte(address, access_code::NONSEQUENTIAL)
+            bus.read_byte(address, AccessCode::NONSEQUENTIAL)
         } else {
-            bus.read_rotate_word(address, access_code::NONSEQUENTIAL)
+            bus.read_rotate_word(address, AccessCode::NONSEQUENTIAL)
         };
 
         // post index transfer will always do a writeback
@@ -474,9 +474,9 @@ pub fn single_data_transfer<
         let store_value = cpu.get_banked_register(rd);
 
         if TRANSFER_BYTE {
-            bus.write_byte(address, store_value as u8, access_code::NONSEQUENTIAL);
+            bus.write_byte(address, store_value as u8, AccessCode::NONSEQUENTIAL);
         } else {
-            bus.write_word(address, store_value, access_code::NONSEQUENTIAL);
+            bus.write_word(address, store_value, AccessCode::NONSEQUENTIAL);
         }
 
         // post index transfer will always do a writeback
@@ -528,14 +528,14 @@ pub fn halfword_and_signed_data_transfer<
         cpu.get_banked_register(rn)
     };
 
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 
     if LOAD {
         let load_value = match (S, H) {
-            (true, true) => bus.read_signed_halfword(address, access_code::NONSEQUENTIAL),
-            (true, false) => bus.read_signed_byte(address, access_code::NONSEQUENTIAL),
-            (false, true) => bus.read_rotate_halfword(address, access_code::NONSEQUENTIAL),
+            (true, true) => bus.read_signed_halfword(address, AccessCode::NONSEQUENTIAL),
+            (true, false) => bus.read_signed_byte(address, AccessCode::NONSEQUENTIAL),
+            (false, true) => bus.read_rotate_halfword(address, AccessCode::NONSEQUENTIAL),
             (false, false) => panic!("Reserved for SWP instruction!"),
         };
 
@@ -554,7 +554,7 @@ pub fn halfword_and_signed_data_transfer<
             (true, true) => panic!("Sign bit should not be set for store operation?"),
             (true, false) => panic!("Sign bit should not be set for store operation?"),
             (false, true) => {
-                bus.write_halfword(address, store_value as u16, access_code::NONSEQUENTIAL);
+                bus.write_halfword(address, store_value as u16, AccessCode::NONSEQUENTIAL);
             }
             (false, false) => panic!("Reserved for SWP instruction!"),
         };
@@ -632,7 +632,7 @@ pub fn block_data_transfer<
         BlockTransferState::None
     };
 
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 
     let mut rlist_iter = (0..16)
@@ -649,7 +649,7 @@ pub fn block_data_transfer<
         });
 
     if let Some((address, register_id)) = rlist_iter.next() {
-        let access = access_code::NONSEQUENTIAL;
+        let access = AccessCode::NONSEQUENTIAL;
 
         if LOAD {
             let load_value = bus.read_word(address, access);
@@ -670,7 +670,7 @@ pub fn block_data_transfer<
     }
 
     for (address, register_id) in rlist_iter {
-        let access = access_code::SEQUENTIAL;
+        let access = AccessCode::SEQUENTIAL;
 
         if LOAD {
             let load_value = bus.read_word(address, access);
@@ -704,15 +704,15 @@ pub fn data_swap<T: BusInterface, const SWAP_BYTE: bool>(
     let rd = (opcode >> 12) & 0xF; // destination register
     let rn = (opcode >> 16) & 0xF; // base register
 
-    cpu.pipeline_state = access_code::NONSEQUENTIAL | access_code::CODE;
+    cpu.pipeline_state = AccessCode::NONSEQUENTIAL | AccessCode::CODE;
     cpu.registers.r15 += 4;
 
     // read from swap address
     let swap_address = cpu.get_banked_register(rn);
     let memory_value: u32 = if SWAP_BYTE {
-        bus.read_byte(swap_address, access_code::NONSEQUENTIAL)
+        bus.read_byte(swap_address, AccessCode::NONSEQUENTIAL)
     } else {
-        bus.read_rotate_word(swap_address, access_code::NONSEQUENTIAL)
+        bus.read_rotate_word(swap_address, AccessCode::NONSEQUENTIAL)
     };
 
     // write rm register value into swap address
@@ -721,13 +721,13 @@ pub fn data_swap<T: BusInterface, const SWAP_BYTE: bool>(
         bus.write_byte(
             swap_address,
             register_value as u8,
-            access_code::NONSEQUENTIAL | access_code::LOCK,
+            AccessCode::NONSEQUENTIAL | AccessCode::LOCK,
         );
     } else {
         bus.write_word(
             swap_address,
             register_value,
-            access_code::NONSEQUENTIAL | access_code::LOCK,
+            AccessCode::NONSEQUENTIAL | AccessCode::LOCK,
         );
     }
 
