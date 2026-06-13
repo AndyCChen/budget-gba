@@ -24,6 +24,6 @@ impl Plugin for GbaCorePlugin {
             FixedUpdate,
             gba_frame_step.run_if(in_state(AppState::Running)),
         );
-        app.add_systems(Update, handle_inputs);
+        app.add_systems(Update, (handle_app_input, handle_gba_input));
     }
 }

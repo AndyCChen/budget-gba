@@ -1,6 +1,7 @@
 use bitfield_struct::bitenum;
 use register_macros::gba_register;
 
+#[derive(Debug)]
 pub enum KeyCode {
     KeyA,
     KeyB,
