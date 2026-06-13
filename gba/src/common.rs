@@ -30,8 +30,8 @@ impl Rgb5 {
 
         [
             red.round() as u8,
-            blue.round() as u8,
             green.round() as u8,
+            blue.round() as u8,
             255,
         ]
     }
