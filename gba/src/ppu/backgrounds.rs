@@ -29,9 +29,12 @@ pub fn draw_mode3(ppu: &mut Ppu) {
     debug_assert!(remainder.is_empty());
 
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
-    let vram_row = vram_row.iter().map(|src| u16::from_le_bytes(*src));
 
-    for (src, dst) in vram_row.zip(display_buffer_row) {
+    for (src, dst) in vram_row
+        .iter()
+        .map(|src| u16::from_le_bytes(*src))
+        .zip(display_buffer_row)
+    {
         *dst = Rgb5::from_u16(src);
     }
 }
@@ -67,8 +70,11 @@ pub fn draw_mode4(ppu: &mut Ppu) {
     debug_assert_eq!(palettes.len(), 256);
     debug_assert!(remainder.is_empty());
 
-    for (palette_index, dst) in vram_row.iter().zip(display_buffer_row) {
-        let color_u16 = u16::from_le_bytes(palettes[usize::from(*palette_index)]);
-        *dst = Rgb5::from_u16(color_u16);
+    for (src, dst) in vram_row
+        .iter()
+        .map(|palette_index| u16::from_le_bytes(palettes[usize::from(*palette_index)]))
+        .zip(display_buffer_row)
+    {
+        *dst = Rgb5::from_u16(src);
     }
 }
