@@ -3,11 +3,13 @@ use crate::ppu::registers::FrameSelect;
 use crate::{DISPLAY_WIDTH, Rgb5};
 use std::ops::Range;
 
+const PALETTE_REGION_SIZE: usize = 512;
+
 /// bg palette uses the first 512 bytes of palette ram
-const BG_PALETTE: Range<usize> = 0..512;
+const BG_PALETTE: Range<usize> = 0..PALETTE_REGION_SIZE;
 
 /// obj palette usees the second 512 bytes of palette ram
-const _OBJ_PALETTE: Range<usize> = 512..1024;
+const _OBJ_PALETTE: Range<usize> = 512..(PALETTE_REGION_SIZE * 2);
 
 pub fn draw_mode3(ppu: &mut Ppu) {
     if !ppu.registers.lcd_control.bg2_enable() {
