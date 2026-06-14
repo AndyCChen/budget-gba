@@ -70,7 +70,7 @@ impl Ppu {
             BgMode::Mode1 => (),
             BgMode::Mode2 => (),
             BgMode::Mode3 => draw_mode3(self),
-            BgMode::Mode4 => (),
+            BgMode::Mode4 => draw_mode4(self),
             BgMode::Mode5 => (),
         }
     }

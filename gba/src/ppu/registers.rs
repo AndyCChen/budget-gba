@@ -1,3 +1,4 @@
+use bitfield_struct::bitenum;
 use register_macros::gba_register;
 
 pub struct Registers {
@@ -47,12 +48,24 @@ impl BgMode {
     }
 }
 
+#[bitenum]
+#[repr(u8)]
+#[derive(Debug)]
+pub enum FrameSelect {
+    #[fallback]
+    Page0 = 0,
+    Page1 = 1,
+}
+
 #[gba_register(u16)]
 pub struct LcdControl {
     #[bits(3, default = BgMode::Mode0, from = BgMode::from_bits)]
     pub bg_mode: BgMode,
     pub cgb_mode: bool, // only set by bios
-    pub display_frame_select: bool,
+
+    #[bits(1, default = FrameSelect::Page0)]
+    pub display_frame_select: FrameSelect,
+
     pub hblank_interval_free: bool,
     pub obj_vram_mapping: bool,
     pub forced_blank: bool,
