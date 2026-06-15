@@ -10,6 +10,7 @@ use gba::{GbaCore, GbaCoreConfig};
 #[derive(Resource)]
 pub struct Config {
     pub gba_config: GbaCoreConfig,
+    pub paused: bool,
 }
 
 pub struct App;

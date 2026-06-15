@@ -173,7 +173,10 @@ impl<T: BusInterface> Arm7tdmi<T> {
             arm_table: generate_arm_table(),
             thumb_table: generate_thumb_table(),
         };
-        cpu.registers.r15 = Wrapping(0x8000000);
+        // TODO: Initialize pc to begin at gamepak and stack pointer to 0x0300_7F00
+        // for now as we can't boot through bios yet.
+        cpu.registers.r15 = Wrapping(0x0800_0000);
+        cpu.registers.r13 = 0x0300_7F00;
         cpu
     }
 

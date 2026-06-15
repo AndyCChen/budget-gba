@@ -15,7 +15,11 @@ pub fn gba_setup(
             AppState::WaitingForGamepak
         } else {
             gba.0.cpu_pipeline_fill();
-            AppState::Running
+            if config.paused {
+                AppState::Paused
+            } else {
+                AppState::Running
+            }
         }),
         Err(e) => match e {
             GamepakLoadFail(e) => {
