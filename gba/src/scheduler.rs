@@ -41,9 +41,7 @@ impl Scheduler {
     }
 
     pub fn poll_event(&mut self) -> Option<GbaEvent> {
-        let Some(event) = self.heap.peek() else {
-            return None;
-        };
+        let event = self.heap.peek()?;
 
         if event.timestamp <= self.timestamp_now {
             let gba_event = event.gba_event;

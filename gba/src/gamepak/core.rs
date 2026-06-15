@@ -92,8 +92,8 @@ impl TryFrom<AccessCode> for AccessType {
     type Error = &'static str;
 
     fn try_from(mut value: AccessCode) -> Result<Self, Self::Error> {
-        value = value & (AccessCode::NONSEQUENTIAL | AccessCode:: SEQUENTIAL);
-        
+        value &= AccessCode::NONSEQUENTIAL | AccessCode::SEQUENTIAL;
+
         // Ignore the other bitflags for now and only care about whether it is sequential or nonsequential.
         if AccessCode::NONSEQUENTIAL.contains(value) {
             Ok(AccessType::First)

@@ -12,7 +12,7 @@ const fn gen_condition_table() -> ConditionTable {
         let z = (i & 4) != 0;
         let n = (i & 8) != 0;
 
-        table[(0 << 4) | i] = z;
+        table[i] = z;
         table[(1 << 4) | i] = !z;
         table[(2 << 4) | i] = c;
         table[(3 << 4) | i] = !c;
