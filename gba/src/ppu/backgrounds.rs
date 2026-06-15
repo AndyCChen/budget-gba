@@ -1,4 +1,5 @@
 use crate::ppu::Ppu;
+use crate::ppu::core::PaletteRam;
 use crate::ppu::registers::FrameSelect;
 use crate::{DISPLAY_WIDTH, Rgb5};
 use std::ops::Range;
@@ -79,4 +80,52 @@ pub fn draw_mode4(ppu: &mut Ppu) {
     {
         *dst = Rgb5::from_u16(src);
     }
+}
+
+pub fn draw_mode5(ppu: &mut Ppu) {
+    if !ppu.registers.lcd_control.bg2_enable() {
+        return;
+    }
+
+    const MODE5_WIDTH: usize = 160;
+    const PIXEL_ROW_BYTE_SIZE: usize = MODE5_WIDTH * size_of::<u16>();
+
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    let vram = match ppu.registers.lcd_control.display_frame_select() {
+        FrameSelect::Page0 => &ppu.mem.vram[PAGE_0],
+        FrameSelect::Page1 => &ppu.mem.vram[PAGE_1],
+    };
+
+    let display_buffer_row = &mut ppu.display_buffer[scanline_y];
+
+    // Mode 5 is only 128 scanlines in height, remaining scanlines filled in with color0 of bg from palette ram.
+    let Some(vram_row) = vram.chunks(PIXEL_ROW_BYTE_SIZE).nth(scanline_y) else {
+        display_buffer_row.fill(bg_color0(&ppu.mem.palette_ram));
+        return;
+    };
+
+    let (vram_row, remainder) = vram_row.as_chunks::<2>();
+    debug_assert_eq!(vram_row.len(), MODE5_WIDTH);
+    debug_assert!(remainder.is_empty());
+
+    for (src, dst) in vram_row
+        .iter()
+        .map(|src| u16::from_le_bytes(*src))
+        .zip(display_buffer_row)
+    {
+        *dst = Rgb5::from_u16(src);
+    }
+
+    // Mode 5 is only 160 pixels in width, fill in remaining pixels on scanline with color0
+    // of bg from palette ram.
+    let display_buffer_row = &mut ppu.display_buffer[scanline_y];
+    let remaining = &mut display_buffer_row[MODE5_WIDTH..];
+    remaining.fill(bg_color0(&ppu.mem.palette_ram));
+}
+
+fn bg_color0(palette: &PaletteRam) -> Rgb5 {
+    let color_0 = palette.first_chunk::<2>().unwrap();
+    let color_u16 = u16::from_le_bytes(*color_0);
+    Rgb5::from_u16(color_u16)
 }

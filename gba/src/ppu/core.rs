@@ -8,6 +8,8 @@ const PALETTE_SIZE: usize = 1024;
 const VRAM_SIZE: usize = 1024 * 96;
 const OAM_SIZE: usize = 1024;
 
+pub type PaletteRam = [u8; PALETTE_SIZE];
+
 pub struct Ppu {
     pub mem: Box<Memory>,
     pub registers: Registers,
@@ -16,7 +18,7 @@ pub struct Ppu {
 }
 
 pub struct Memory {
-    pub palette_ram: [u8; PALETTE_SIZE],
+    pub palette_ram: PaletteRam,
     pub vram: [u8; VRAM_SIZE],
     pub oam: [u8; OAM_SIZE],
 }
@@ -71,7 +73,7 @@ impl Ppu {
             BgMode::Mode2 => (),
             BgMode::Mode3 => draw_mode3(self),
             BgMode::Mode4 => draw_mode4(self),
-            BgMode::Mode5 => (),
+            BgMode::Mode5 => draw_mode5(self),
         }
     }
 
