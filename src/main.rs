@@ -21,7 +21,6 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    println!("{}", args.paused);
 
     let gba_config = GbaCoreConfig {
         bios_path: PathBuf::from("resource/gba_bios.bin"),
