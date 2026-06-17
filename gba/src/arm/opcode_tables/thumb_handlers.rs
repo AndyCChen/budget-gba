@@ -728,8 +728,7 @@ pub fn long_branch_with_link<
     opcode: u16,
 ) {
     if H_BIT {
-        let offset_lo: u32 = ((opcode & 0x7FF) << 1).into();
-
+        let offset_lo = (u32::from(opcode) & 0x7FF) << 1;
         let branch_address = cpu
             .get_banked_register(LINK_REGISTER)
             .wrapping_add(offset_lo);
@@ -741,15 +740,12 @@ pub fn long_branch_with_link<
     } else {
         let mut offset_hi = (u32::from(opcode) & 0x7FF) << 12;
 
-        // positive
-        let lr_hi = if offset_hi & (1 << 22) == 0 {
-            cpu.registers.r15.0.wrapping_add(offset_hi)
-        } else {
+        // negative
+        if offset_hi & (1 << 22) != 0 {
             offset_hi |= 0xFFC0_0000;
-            offset_hi = !offset_hi + 1;
-            cpu.registers.r15.0.wrapping_sub(offset_hi)
-        };
+        }
 
+        let lr_hi = cpu.registers.r15.0.wrapping_add(offset_hi);
         cpu.set_banked_register(LINK_REGISTER, lr_hi);
 
         cpu.pipeline_state = AccessCode::SEQUENTIAL | AccessCode::CODE;

@@ -1,7 +1,7 @@
-use crate::arm::constants::AccessCode;
-use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::arm::common::reg_constant::*;
 use crate::arm::common::to_negative;
+use crate::arm::constants::AccessCode;
+use crate::arm::core::{Arm7tdmi, CpuMode::*, Mode, StatusRegister};
 use crate::bus::BusInterface;
 use std::num::Wrapping;
 
