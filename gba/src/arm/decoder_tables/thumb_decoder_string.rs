@@ -1,7 +1,7 @@
 use crate::arm::decoder_tables::thumb_decoder::{AddSubOp, AluOperation, ThumbInstruction, ConditionBranchType};
 
 impl ThumbInstruction {
-    pub fn to_asm_string(&self, opcode_address: u32) -> String {
+    pub fn to_asm_string(&self, pc: u32) -> String {
         #[rustfmt::skip]
         let asm_string = match self {
             ThumbInstruction::Lsl { shift, rs, rd } => format!("{:10} r{rd}, r{rs}, #{shift}", "lsl"),
@@ -82,14 +82,14 @@ impl ThumbInstruction {
             ThumbInstruction::Ldm { rb, rlist } => format!("{:10} r{rb}! {{{}}}", "ldmia", format_rlist(*rlist)),
             ThumbInstruction::Stm { rb, rlist } => format!("{:10} r{rb}! {{{}}}", "stmia", format_rlist(*rlist)),
 
-            ThumbInstruction::ConditionalBranch { cond, offset } => format!("{:10} 0x{:08X}", format!("b{}", format_branch_condition(*cond)), opcode_address.wrapping_add(*offset)),
+            ThumbInstruction::ConditionalBranch { cond, offset } => format!("{:10} 0x{:08X}", format!("b{}", format_branch_condition(*cond)), pc.wrapping_add(*offset)),
 
             ThumbInstruction::Swi { comment_field } => format!("{:10} 0x{comment_field:02X}", "swi"),
 
-            ThumbInstruction::UnconditionalBranch { offset } => format!("{:10} 0x{:08X}", "b", opcode_address.wrapping_add(*offset)),
+            ThumbInstruction::UnconditionalBranch { offset } => format!("{:10} 0x{:08X}", "b", pc.wrapping_add(*offset)),
 
-            ThumbInstruction::LongBranchLinkFirst { offset } => format!("{:10} hi 0x{offset:08X}", "bl"),
-            ThumbInstruction::LongBranchLinkSecond { offset } => format!("{:10} lo 0x{offset:08X}", "bl"),
+            ThumbInstruction::LongBranchHi { offset } => format!("{:10} hi 0x{:08X}", "bl", offset.wrapping_add(pc)),
+            ThumbInstruction::LongBranchLo { offset } => format!("{:10} lo 0x{offset:08X}", "bl"),
 
             ThumbInstruction::Und { opcode } => format!("{:10} 0x{opcode:08X}", "undef"),
         };

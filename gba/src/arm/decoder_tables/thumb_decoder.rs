@@ -55,8 +55,8 @@ pub enum ThumbInstruction {
 
     UnconditionalBranch { offset: u32 },
 
-    LongBranchLinkFirst { offset: u32 },
-    LongBranchLinkSecond { offset: u32 },
+    LongBranchHi { offset: u32 },
+    LongBranchLo { offset: u32 },
 
     Und { opcode: u16 },
 }
@@ -401,12 +401,21 @@ pub fn unconditional_branch(opcode: u16) -> ThumbInstruction {
 // todo: figure out way to decode this 32 bit instruction which is split into 2 16 bit instructions
 // need to store some intermediate state to hold previous address to form the full branch target address.
 pub fn long_branch_with_link(opcode: u16) -> ThumbInstruction {
-    let offset_lo = (opcode >> 11) & 1 == 1;
+    let h_bit = (opcode >> 11) & 1 == 1;
     let offset = u32::from(opcode & 0x7FF);
 
-    match offset_lo {
-        true => ThumbInstruction::LongBranchLinkSecond { offset: offset << 1 },
-        false => ThumbInstruction::LongBranchLinkFirst { offset: offset << 12 },
+    match h_bit {
+        true => ThumbInstruction::LongBranchLo { offset: offset << 1 },
+        false => {
+            let mut offset_hi = offset << 12;    
+
+            // negative
+            if offset_hi & (1 << 22) != 0 {
+                offset_hi |= 0xFFC0_0000;
+            }
+
+            ThumbInstruction::LongBranchHi { offset: offset_hi }
+        },
     }
 }
 

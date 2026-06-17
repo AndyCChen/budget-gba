@@ -85,3 +85,16 @@ impl TryFrom<u8> for ArmConditionCode {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_thumb() {
+        let lo = decode_thumb(0xF000).to_asm_string(0x890 + 4);
+        let hi = decode_thumb(0xF95C).to_asm_string(0x892 + 4);
+        println!("{lo}");
+        println!("{hi}");
+    }
+}
