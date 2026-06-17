@@ -72,7 +72,7 @@ impl ThumbInstruction {
             ThumbInstruction::LoadSpRelative { rd, offset } => format!("{:10} r{rd}, [SP, #{offset}]", "ldr"),
             ThumbInstruction::StoreSpRelative { rd, offset } => format!("{:10} r{rd}, [SP, #{offset}]", "str"),
 
-            ThumbInstruction::PcSpLoad { is_stack_pointer, rd, offset } => format!("{:10} r{rd}, {}, #{offset}", if *is_stack_pointer {"SP"} else {"PC"}, "add"),
+            ThumbInstruction::PcSpLoad { is_stack_pointer, rd, offset } => format!("{:10} r{rd}, {}, #{offset}", "add", if *is_stack_pointer {"SP"} else {"PC"}),
 
             ThumbInstruction::SpAddOffset { offset } => format!("{:10} SP, #{offset}", "add"),
 
