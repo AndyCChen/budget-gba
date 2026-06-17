@@ -22,10 +22,8 @@ impl Bus {
 
             // APU
 
-            SOUNDBIAS_0 => self.apu.registers.sound_bias.read(WordIo::B0),
-            SOUNDBIAS_1 => self.apu.registers.sound_bias.read(WordIo::B1),
-            SOUNDBIAS_2 => self.apu.registers.sound_bias.read(WordIo::B2),
-            SOUNDBIAS_3 => self.apu.registers.sound_bias.read(WordIo::B3),
+            SOUNDBIAS_0 => self.apu.registers.sound_bias.read(HalfwordIo::B0),
+            SOUNDBIAS_1 => self.apu.registers.sound_bias.read(HalfwordIo::B1),
 
             // keypad
              
@@ -35,10 +33,15 @@ impl Bus {
             KEYCNT_1 => self.keypad.interrupt_control.read(HalfwordIo::B1),
 
             // Interrupt, Waitstate, and Power-Down Control
-            WAITCNT_0 => self.gamepak.registers.waitstate_control.read(WordIo::B0),
-            WAITCNT_1 => self.gamepak.registers.waitstate_control.read(WordIo::B1),
-            WAITCNT_2 => self.gamepak.registers.waitstate_control.read(WordIo::B2),
-            WAITCNT_3 => self.gamepak.registers.waitstate_control.read(WordIo::B3),
+            IE_0 => self.interrupt.interrupt_enable.read(HalfwordIo::B0),
+            IE_1 => self.interrupt.interrupt_enable.read(HalfwordIo::B1),
+            IF_0 => self.interrupt.interrupt_flags.read(HalfwordIo::B0),
+            IF_1 => self.interrupt.interrupt_flags.read(HalfwordIo::B1),
+            IME_0 => self.interrupt.master_interrupt.read(HalfwordIo::B0),
+            IME_1 => self.interrupt.master_interrupt.read(HalfwordIo::B1),
+
+            WAITCNT_0 => self.gamepak.registers.waitstate_control.read(HalfwordIo::B0),
+            WAITCNT_1 => self.gamepak.registers.waitstate_control.read(HalfwordIo::B1),
 
             _ => 0,
         }
@@ -60,10 +63,8 @@ impl Bus {
 
             // APU
 
-            SOUNDBIAS_0 => self.apu.registers.sound_bias.write(value, WordIo::B0),
-            SOUNDBIAS_1 => self.apu.registers.sound_bias.write(value, WordIo::B1),
-            SOUNDBIAS_2 => self.apu.registers.sound_bias.write(value, WordIo::B2),
-            SOUNDBIAS_3 => self.apu.registers.sound_bias.write(value, WordIo::B3),
+            SOUNDBIAS_0 => self.apu.registers.sound_bias.write(value, HalfwordIo::B0),
+            SOUNDBIAS_1 => self.apu.registers.sound_bias.write(value, HalfwordIo::B1),
 
             // keypad
              
@@ -71,13 +72,29 @@ impl Bus {
             KEYCNT_1 => self.keypad.interrupt_control.write(value, HalfwordIo::B1),
 
             // Interrupt, Waitstate, and Power-Down Control
+            IE_0 => self.interrupt.interrupt_enable.write(value, HalfwordIo::B0),
+            IE_1 => self.interrupt.interrupt_enable.write(value, HalfwordIo::B1),
 
-            WAITCNT_0 => self.gamepak.registers.waitstate_control.write(value, WordIo::B0),
-            WAITCNT_1 => self.gamepak.registers.waitstate_control.write(value, WordIo::B1),
-            WAITCNT_2 => self.gamepak.registers.waitstate_control.write(value, WordIo::B2),
-            WAITCNT_3 => self.gamepak.registers.waitstate_control.write(value, WordIo::B3),
+            
+            // writing a 1 clears/acknowledges any interrupt flags that are set
+            IF_0 => {
+                let flags = self.interrupt.interrupt_flags.read(HalfwordIo::B0);
+                let value = (value & flags) ^ flags;
+                self.interrupt.interrupt_flags.write(value, HalfwordIo::B0)
+            },
+            IF_1 => {
+                let flags = self.interrupt.interrupt_flags.read(HalfwordIo::B1);
+                let value = (value & flags) ^ flags;
+                self.interrupt.interrupt_flags.write(value, HalfwordIo::B1)
+            },
 
-            _ => (),
+            IME_0 => self.interrupt.master_interrupt.write(value, HalfwordIo::B0),
+            IME_1 => self.interrupt.master_interrupt.write(value, HalfwordIo::B1),
+
+            WAITCNT_0 => self.gamepak.registers.waitstate_control.write(value, HalfwordIo::B0),
+            WAITCNT_1 => self.gamepak.registers.waitstate_control.write(value, HalfwordIo::B1),
+
+            _ => ()
         }
     }
 

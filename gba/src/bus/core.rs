@@ -1,13 +1,14 @@
 use std::fmt::Display;
 
 use crate::apu::Apu;
+use crate::arm::AccessCode;
 use crate::bus::BusInterface;
 use crate::bus::common;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
+use crate::interrupts::Interrupt;
 use crate::keypad::Keypad;
 use crate::ppu::Ppu;
 use crate::scheduler::{GbaEvent::*, Scheduler};
-use crate::arm::AccessCode;
 use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
@@ -19,6 +20,7 @@ pub struct Bus {
     pub ppu: Ppu,
     pub apu: Apu,
     pub keypad: Keypad,
+    pub interrupt: Interrupt,
     pub bios_ram: [u8; BIOS_SIZE],
     pub wram_256: [u8; WRAM_256],
     pub wram_32: [u8; WRAM_32],
@@ -36,6 +38,7 @@ impl Bus {
             ppu,
             apu: Apu::new(),
             keypad: Keypad::new(),
+            interrupt: Interrupt::new(),
             bios_ram: [0; BIOS_SIZE],
             wram_256: [0; WRAM_256],
             wram_32: [0; WRAM_32],
@@ -47,7 +50,8 @@ impl Bus {
         self.gamepak.reset();
         self.ppu.reset();
         self.apu.reset();
-        self.keypad.reset();
+        self.keypad = Keypad::new();
+        self.interrupt = Interrupt::new();
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
@@ -113,7 +117,7 @@ impl Bus {
             }
 
             // gamepak region 8/9
-            8 => {
+            8 | 9 => {
                 let address = address & 0xFFFFFF;
                 let wait_states = self.gamepak.get_wait_states(
                     AccessType::try_from(access).unwrap(),
@@ -125,7 +129,7 @@ impl Bus {
             }
 
             // gamepak region 10/11
-            10 => {
+            10 | 11 => {
                 let address = address & 0xFFFFFF;
                 let wait_states = self.gamepak.get_wait_states(
                     AccessType::try_from(access).unwrap(),
@@ -137,7 +141,7 @@ impl Bus {
             }
 
             // gamepak region 12/13
-            12 => {
+            12 | 13 => {
                 let address = address & 0xFFFFFF;
                 let wait_states = self.gamepak.get_wait_states(
                     AccessType::try_from(access).unwrap(),
@@ -148,7 +152,7 @@ impl Bus {
                 T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
             }
 
-            _ => todo!("read open bus value"),
+            _ => todo!("read open bus value at {address:08X}"),
         }
     }
 
@@ -252,7 +256,9 @@ impl Bus {
                 VBlankHDraw => self.ppu.vblank_hdraw(&mut self.scheduler),
                 VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler),
                 UpdateVCount => self.ppu.update_vcount(),
-                ToggleVBlankFlag(flag) => self.ppu.toggle_vblank_flag(flag),
+                ToggleVBlankFlag(flag) => self
+                    .ppu
+                    .toggle_vblank_flag(flag, &mut self.interrupt.interrupt_flags),
             }
         }
     }
@@ -319,6 +325,14 @@ impl BusInterface for Bus {
 
     fn write_byte(&mut self, address: u32, value: u8, access: AccessCode) {
         self.write(address, value, access);
+    }
+
+    fn interrupt_requested(&self) -> bool {
+        let master_enable = self.interrupt.master_interrupt.enable();
+        let enabled_interrupts = self.interrupt.interrupt_enable.into_bits() & 0x3FFF;
+        let requested_interrupts = self.interrupt.interrupt_flags.into_bits() & 0x3FFF;
+        let is_interrupt_requests = (enabled_interrupts & requested_interrupts) != 0;
+        master_enable && is_interrupt_requests
     }
 }
 

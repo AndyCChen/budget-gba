@@ -85,7 +85,7 @@ io_register_u16!(BG0CNT, 0x400_0008);
 // io_register_u16!(SOUNDCNT_L, 0x400_0080);
 // io_register_u16!(SOUNDCNT_H, 0x400_0082);
 // io_register_u16!(SOUNDCNT_X, 0x400_0084);
-io_register_u32!(SOUNDBIAS, 0x400_0088);
+io_register_u16!(SOUNDBIAS, 0x400_0088);
 // io_register_u16!(WAVE_RAM, 0x400_0090);
 // io_register_u32!(FIFO_A, 0x400_00A0);
 // io_register_u32!(FIFO_B, 0x400_00A4);
@@ -130,7 +130,7 @@ io_register_u16!(KEYCNT, 0x400_0132);
 // Serial Communication (2)
 
 // Watstate, and Power-Down Control
-// io_register_u16!(IE, 0x400_0200);
-// io_register_u16!(IF, 0x400_0202);
-io_register_u32!(WAITCNT, 0x400_0204);
-// io_register_u16!(IME, 0x400_0208);
+io_register_u16!(IE, 0x400_0200);
+io_register_u16!(IF, 0x400_0202);
+io_register_u16!(WAITCNT, 0x400_0204);
+io_register_u16!(IME, 0x400_0208);

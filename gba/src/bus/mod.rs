@@ -30,7 +30,6 @@ pub trait BusInterface {
     fn i_cycle(&mut self) {}
 
     #[allow(dead_code)]
-    fn get_timestamp(&self) -> u64 {
-        0
-    }
+    fn get_timestamp(&self) -> u64;
+    fn interrupt_requested(&self) -> bool;
 }

@@ -12,7 +12,7 @@ impl Registers {
     }
 }
 
-#[gba_register(u32)]
+#[gba_register(u16)]
 pub struct SoundBias {
     #[bits(1)]
     __: u8,
@@ -25,7 +25,4 @@ pub struct SoundBias {
 
     #[bits(2)]
     pub sampling_cycle: u8,
-
-    #[bits(16)]
-    __: u16,
 }

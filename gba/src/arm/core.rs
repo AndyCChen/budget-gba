@@ -163,7 +163,7 @@ use CpuMode::*;
 
 impl<T: BusInterface> Arm7tdmi<T> {
     pub fn new() -> Self {
-        let mut cpu = Arm7tdmi {
+        Self {
             registers: GeneralRegisters::default(),
             status: StatusRegisters::default(),
             pipeline: [Arm(0); 2],
@@ -172,12 +172,7 @@ impl<T: BusInterface> Arm7tdmi<T> {
             instruction_buffer: RingBuffer::new(32),
             arm_table: generate_arm_table(),
             thumb_table: generate_thumb_table(),
-        };
-        // TODO: Initialize pc to begin at gamepak and stack pointer to 0x0300_7F00
-        // for now as we can't boot through bios yet.
-        cpu.registers.r15 = Wrapping(0x0800_0000);
-        cpu.registers.r13 = 0x0300_7F00;
-        cpu
+        }
     }
 
     pub fn test_init() -> Self {
@@ -269,6 +264,11 @@ impl<T: BusInterface> Arm7tdmi<T> {
     }
 
     pub fn step(&mut self, bus: &mut T) {
+        // handle interrupt is one is requested and interupts are enable in cpsr
+        if !self.status.cpsr.i() && bus.interrupt_requested() {
+            self.do_interrupt(bus);
+        }
+
         let instruction = self.pipeline[0];
         let pc = self.registers.r15.0;
 
@@ -279,9 +279,9 @@ impl<T: BusInterface> Arm7tdmi<T> {
         match instruction {
             Arm(arm_instr) => {
                 self.pipeline_prefetch(bus, ArmMode);
-
                 let condition = (arm_instr & 0xF000_0000) >> 24;
                 let flags = self.status.cpsr.into_bits() >> 28;
+
                 if CONDITION_TABLE[(condition | flags) as usize] {
                     let arm_table_hash =
                         ((arm_instr & 0x0FF00000) >> 16) | ((arm_instr & 0xF0) >> 4);
@@ -293,7 +293,6 @@ impl<T: BusInterface> Arm7tdmi<T> {
             }
             Thumb(thumb_instr) => {
                 self.pipeline_prefetch(bus, ThumbMode);
-
                 let thumb_table_hash = (thumb_instr >> 6) & 0x3FF;
                 self.thumb_table[thumb_table_hash as usize](self, bus, thumb_instr as u16);
             }
@@ -415,8 +414,8 @@ impl<T: BusInterface> Arm7tdmi<T> {
         }
     }
 
-    // retrieve banked spsr from current corresponding mode.
-    // if mode is user/system, returns the cpsr
+    /// Retrieve banked spsr from current corresponding mode.
+    /// If mode is user/system, returns the cpsr
     pub fn get_spsr(&self) -> u32 {
         match self.status.cpsr.mode_bits() {
             Mode::User | Mode::System => self.status.cpsr.into_bits(),
@@ -428,8 +427,8 @@ impl<T: BusInterface> Arm7tdmi<T> {
         }
     }
 
-    // set banked spsr of the current corresponding mode.
-    // if mode is user/system, sets the cpsr
+    /// Set banked spsr of the current corresponding mode.
+    /// No spsr exists for User and System mode.
     pub fn set_spsr(&mut self, value: u32) {
         match self.status.cpsr.mode_bits() {
             Mode::User | Mode::System => (),
@@ -494,6 +493,22 @@ impl<T: BusInterface> Arm7tdmi<T> {
                 );
             }
         }
+    }
+
+    fn do_interrupt(&mut self, bus: &mut T) {
+        self.status.spsr_irq = self.status.cpsr;
+        self.status.cpsr.set_mode_bits(Mode::Irq);
+
+        match self.status.cpsr.t() {
+            ArmMode => self.registers.r14_irq = self.registers.r15.0.wrapping_sub(4),
+            ThumbMode => self.registers.r14_irq = self.registers.r15.0,
+        }
+
+        // jump to bios interrupt vector at 0x18.
+        self.registers.r15 = Wrapping(0x18);
+        self.status.cpsr.set_i(true); // Disable further interrupt from occuring
+        self.status.cpsr.set_t(CpuMode::ArmMode);
+        self.pipeline_refill_arm(bus);
     }
 }
 

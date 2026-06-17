@@ -1,4 +1,5 @@
 use crate::common::*;
+use crate::interrupts::InterruptFlags;
 use crate::ppu::Registers;
 use crate::ppu::backgrounds::*;
 use crate::ppu::registers::BgMode;
@@ -111,7 +112,11 @@ impl Ppu {
         self.registers.lcd_status.set_hblank_flag(true);
     }
 
-    pub fn toggle_vblank_flag(&mut self, flag: bool) {
+    pub fn toggle_vblank_flag(&mut self, flag: bool, interrupt_request: &mut InterruptFlags) {
+        if flag && self.registers.lcd_status.vblank_irq_enable() {
+            interrupt_request.set_vblank(true);
+        }
+
         self.registers.lcd_status.set_vblank_flag(flag);
         self.is_frame_complete = flag;
     }

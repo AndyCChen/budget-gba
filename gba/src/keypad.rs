@@ -1,6 +1,20 @@
 use bitfield_struct::bitenum;
 use register_macros::gba_register;
 
+pub struct Keypad {
+    pub keypad_state: KeypadStatus,
+    pub interrupt_control: KeypadInterruptControl,
+}
+
+impl Keypad {
+    pub fn new() -> Self {
+        Self {
+            keypad_state: KeypadStatus::default(),
+            interrupt_control: KeypadInterruptControl::default(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum KeyCode {
     KeyA,
@@ -26,25 +40,6 @@ impl From<KeypadInputType> for bool {
             KeypadInputType::Pressed => false,
             KeypadInputType::Released => true,
         }
-    }
-}
-
-pub struct Keypad {
-    pub keypad_state: KeypadStatus,
-    pub interrupt_control: KeypadInterruptControl,
-}
-
-impl Keypad {
-    pub fn new() -> Self {
-        Self {
-            keypad_state: KeypadStatus::default(),
-            interrupt_control: KeypadInterruptControl::default(),
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.keypad_state = KeypadStatus::default();
-        self.interrupt_control = KeypadInterruptControl::default();
     }
 }
 

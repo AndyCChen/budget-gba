@@ -33,7 +33,7 @@ impl GamePakType {
     }
 }
 
-#[gba_register(u32)]
+#[gba_register(u16)]
 pub struct WaitStateControl {
     #[bits(2)]
     pub sram_wait_control: u8,
@@ -62,19 +62,4 @@ pub struct WaitStateControl {
 
     #[bits(1, default = GamePakType::Gba, from = GamePakType::from_bits)]
     pub gamepak_type: GamePakType,
-
-    __: u16, // unused
-}
-
-#[cfg(test)]
-mod test {
-    use super::WaitStateControl;
-    use crate::io::WordIo;
-
-    #[test]
-    fn test_regsiter() {
-        let mut reg = WaitStateControl::default();
-        reg.write(0xBF, WordIo::B1);
-        println!("{reg:#?}");
-    }
 }

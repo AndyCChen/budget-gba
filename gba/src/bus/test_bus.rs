@@ -105,4 +105,14 @@ impl BusInterface for TestBus {
     fn write_byte(&mut self, address: u32, value: u8, access: AccessCode) {
         self.write(address, value, access)
     }
+
+    /// Test bus has no notion of tracking cpu cyles.
+    fn get_timestamp(&self) -> u64 {
+        0
+    }
+
+    /// Do not care about interrupts for test bus
+    fn interrupt_requested(&self) -> bool {
+        false
+    }
 }
