@@ -13,7 +13,7 @@ pub fn gba_frame_step(mut gba: ResMut<BudgetGba>) {
 
 /// Single step a single cpu instruction
 pub fn gba_single_step(mut gba: ResMut<BudgetGba>) {
-    gba.0.toggle_cpu_log(true);
+    gba.0.toggle_instruction_log(true);
     gba.0.step();
     gba.0.print_cpu_log();
 }

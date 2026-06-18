@@ -10,7 +10,7 @@ use crate::arm::opcode_tables::{ARM_TABLE_SIZE, THUMB_TABLE_SIZE};
 
 use arm_decoder::ArmInstructionInfo;
 use arm_decoder_gen::{ArmDecoder, generate_arm_decoder_table};
-pub use decoder_ringbuffer::*;
+pub use decoder_ringbuffer::RingBuffer;
 use thumb_decoder::ThumbInstruction;
 use thumb_decoder_gen::{ThumbDecoder, generate_thumb_decoder_table};
 

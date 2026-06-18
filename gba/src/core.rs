@@ -1,17 +1,20 @@
-use crate::arm::Arm7tdmi;
+use crate::arm::decoder_tables::{decode_arm, decode_thumb};
+use crate::arm::{Arm7tdmi, InstructionInfo, InstructionType, RingBuffer};
 use crate::bus::Bus;
 use crate::common::DisplayBuffer;
 use crate::config::GbaCoreConfig;
 use crate::keypad::{KeyCode, KeypadInputType};
 use GbaError::*;
 use std::fmt::Display;
-use std::fs::{self, File};
+use std::fs;
 use std::io::Read;
 use std::path::Path;
 
 pub struct GbaCore {
     cpu: Arm7tdmi<Bus>,
     bus: Bus,
+    instruction_buffer: RingBuffer<InstructionInfo>,
+    enable_instruction_log: bool,
 }
 
 impl Default for GbaCore {
@@ -25,21 +28,60 @@ impl GbaCore {
         Self {
             cpu: Arm7tdmi::new(),
             bus: Bus::new(),
+            instruction_buffer: RingBuffer::new(32),
+            enable_instruction_log: false,
         }
     }
 
     pub fn reset(&mut self) {
         self.cpu.reset();
         self.bus.reset();
+        self.instruction_buffer.clear();
+        self.enable_instruction_log = false;
+    }
+
+    #[inline]
+    pub fn is_frame_complete(&mut self) -> bool {
+        self.bus.ppu.is_frame_complete()
     }
 
     #[inline]
     pub fn step(&mut self) {
+        if self.enable_instruction_log {
+            self.cpu.record_instruction(&mut self.instruction_buffer);
+        }
+
         self.cpu.step(&mut self.bus);
     }
 
     pub fn cpu_pipeline_fill(&mut self) {
         self.cpu.pipeline_refill_arm(&mut self.bus);
+    }
+
+    pub fn toggle_instruction_log(&mut self, flag: bool) {
+        self.enable_instruction_log = flag;
+    }
+
+    pub fn print_cpu_log(&self) {
+        let Some(InstructionInfo { pc, instr_type }) = self.instruction_buffer.iter().next() else {
+            return;
+        };
+
+        let (asm_string, pc) = match instr_type {
+            InstructionType::Arm(opcode) => {
+                (decode_arm(*opcode).to_asm_string(*pc), pc.wrapping_sub(8))
+            }
+            InstructionType::Thumb(opcode) => (
+                decode_thumb(*opcode as u16).to_asm_string(*pc),
+                pc.wrapping_sub(4),
+            ),
+        };
+
+        println!("0x{pc:08X}    {asm_string}");
+    }
+
+    pub fn get_display_buffer(&self) -> &DisplayBuffer {
+        &self.bus.ppu.display_buffer
     }
 
     pub fn keypad_set_input(&mut self, input_type: KeypadInputType, keycode: KeyCode) {
@@ -68,25 +110,8 @@ impl GbaCore {
         Ok(())
     }
 
-    pub fn toggle_cpu_log(&mut self, toggle: bool) {
-        self.cpu.instruction_log_enable = toggle;
-    }
-
-    pub fn print_cpu_log(&mut self) {
-        self.cpu.print_log();
-    }
-
-    pub fn get_display_buffer(&self) -> &DisplayBuffer {
-        &self.bus.ppu.display_buffer
-    }
-
-    #[inline]
-    pub fn is_frame_complete(&mut self) -> bool {
-        self.bus.ppu.is_frame_complete()
-    }
-
     fn load_bios<P: AsRef<Path>>(&mut self, bios_path: P) -> Result<(), GbaError> {
-        let mut bios_file = File::open(&bios_path).map_err(|e| {
+        let mut bios_file = fs::File::open(&bios_path).map_err(|e| {
             BiosLoadFail(format!(
                 "Failed to load bios at: {:?}, {e}",
                 bios_path.as_ref(),
