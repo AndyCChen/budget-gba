@@ -31,6 +31,14 @@ macro_rules! io_register_u32 {
     };
 }
 
+macro_rules! io_register_u8 {
+    ($identifier:tt, $base_address:expr) => {
+        paste! {
+            pub const [<$identifier _0>]: usize = $base_address;
+        }
+    };
+}
+
 // LCD I/O Registers
 io_register_u16!(DISPCNT, 0x400_0000);
 //io_register_u16!(GREENSWAP, 0x400_0002); // Not sure what this register does yet
@@ -134,3 +142,4 @@ io_register_u16!(IE, 0x400_0200);
 io_register_u16!(IF, 0x400_0202);
 io_register_u16!(WAITCNT, 0x400_0204);
 io_register_u16!(IME, 0x400_0208);
+io_register_u8!(HALTCNT, 0x400_0301);

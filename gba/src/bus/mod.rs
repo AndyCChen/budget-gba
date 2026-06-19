@@ -31,5 +31,4 @@ pub trait BusInterface {
 
     #[allow(dead_code)]
     fn get_timestamp(&self) -> u64;
-    fn interrupt_requested(&self) -> bool;
 }

@@ -37,11 +37,10 @@ impl Bus {
             IE_1 => self.interrupt.interrupt_enable.read(HalfwordIo::B1),
             IF_0 => self.interrupt.interrupt_flags.read(HalfwordIo::B0),
             IF_1 => self.interrupt.interrupt_flags.read(HalfwordIo::B1),
-            IME_0 => self.interrupt.master_interrupt.read(HalfwordIo::B0),
-            IME_1 => self.interrupt.master_interrupt.read(HalfwordIo::B1),
-
             WAITCNT_0 => self.gamepak.registers.waitstate_control.read(HalfwordIo::B0),
             WAITCNT_1 => self.gamepak.registers.waitstate_control.read(HalfwordIo::B1),
+            IME_0 => self.interrupt.master_interrupt.read(HalfwordIo::B0),
+            IME_1 => self.interrupt.master_interrupt.read(HalfwordIo::B1),
 
             _ => 0,
         }
@@ -88,11 +87,17 @@ impl Bus {
                 self.interrupt.interrupt_flags.write(value, HalfwordIo::B1)
             },
 
+            WAITCNT_0 => self.gamepak.registers.waitstate_control.write(value, HalfwordIo::B0),
+            WAITCNT_1 => self.gamepak.registers.waitstate_control.write(value, HalfwordIo::B1),
+
             IME_0 => self.interrupt.master_interrupt.write(value, HalfwordIo::B0),
             IME_1 => self.interrupt.master_interrupt.write(value, HalfwordIo::B1),
 
-            WAITCNT_0 => self.gamepak.registers.waitstate_control.write(value, HalfwordIo::B0),
-            WAITCNT_1 => self.gamepak.registers.waitstate_control.write(value, HalfwordIo::B1),
+            HALTCNT_0 => {
+                self.halt_controller.halt_control.write(value);
+                let halt_state = Some(self.halt_controller.halt_control.power_down_mode());
+                self.halt_controller.state = halt_state;
+            }
 
             _ => ()
         }

@@ -1,8 +1,9 @@
 use crate::arm::decoder_tables::{decode_arm, decode_thumb};
 use crate::arm::{Arm7tdmi, InstructionInfo, InstructionType, RingBuffer};
-use crate::bus::Bus;
+use crate::bus::{Bus, BusInterface};
 use crate::common::DisplayBuffer;
 use crate::config::GbaCoreConfig;
+use crate::halt_control::PowerMode;
 use crate::keypad::{KeyCode, KeypadInputType};
 use GbaError::*;
 use std::fmt::Display;
@@ -47,11 +48,29 @@ impl GbaCore {
 
     #[inline]
     pub fn step(&mut self) {
-        if self.enable_instruction_log {
-            self.cpu.record_instruction(&mut self.instruction_buffer);
+        // handle interrupt if one is requested and interupts are enabled in cpsr
+        if !self.cpu.status.cpsr.i() && self.bus.interrupt.interrupt_requested() {
+            self.bus.halt_controller.state = None; // "wake up" cpu when interrupt occurs 
+            self.cpu.do_interrupt(&mut self.bus);
         }
 
-        self.cpu.step(&mut self.bus);
+        // handle halt or stop
+        match self.bus.halt_controller.state {
+            Some(PowerMode::Halt) => {
+                while !self.bus.ppu.is_frame_complete_retain()
+                    && !self.bus.interrupt.interrupt_raised()
+                {
+                    self.bus.i_cycle();
+                }
+            }
+            Some(PowerMode::Stop) => todo!("STOP not implemented!"),
+            None => {
+                if self.enable_instruction_log {
+                    self.cpu.record_instruction(&mut self.instruction_buffer);
+                }
+                self.cpu.step(&mut self.bus)
+            }
+        }
     }
 
     pub fn cpu_pipeline_fill(&mut self) {

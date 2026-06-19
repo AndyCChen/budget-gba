@@ -262,11 +262,6 @@ impl<T: BusInterface> Arm7tdmi<T> {
     }
 
     pub fn step(&mut self, bus: &mut T) {
-        // handle interrupt is one is requested and interupts are enable in cpsr
-        if !self.status.cpsr.i() && bus.interrupt_requested() {
-            self.do_interrupt(bus);
-        }
-
         match self.pipeline[0] {
             Arm(arm_instr) => {
                 self.pipeline_prefetch(bus, ArmMode);
@@ -451,6 +446,22 @@ impl<T: BusInterface> Arm7tdmi<T> {
         self.registers.r15 += 4;
     }
 
+    pub fn do_interrupt(&mut self, bus: &mut T) {
+        self.status.spsr_irq = self.status.cpsr;
+        self.status.cpsr.set_mode_bits(Mode::Irq);
+
+        match self.status.cpsr.t() {
+            ArmMode => self.registers.r14_irq = self.registers.r15.0.wrapping_sub(4),
+            ThumbMode => self.registers.r14_irq = self.registers.r15.0,
+        }
+
+        // jump to bios interrupt vector at 0x18.
+        self.registers.r15 = Wrapping(0x18);
+        self.status.cpsr.set_i(true); // Disable further interrupt from occuring
+        self.status.cpsr.set_t(CpuMode::ArmMode);
+        self.pipeline_refill_arm(bus);
+    }
+
     /// fetch opcode and push into pipeline
     fn pipeline_prefetch(&mut self, bus: &mut T, mode: CpuMode) {
         self.pipeline.copy_within(1.., 0);
@@ -468,22 +479,6 @@ impl<T: BusInterface> Arm7tdmi<T> {
                 );
             }
         }
-    }
-
-    fn do_interrupt(&mut self, bus: &mut T) {
-        self.status.spsr_irq = self.status.cpsr;
-        self.status.cpsr.set_mode_bits(Mode::Irq);
-
-        match self.status.cpsr.t() {
-            ArmMode => self.registers.r14_irq = self.registers.r15.0.wrapping_sub(4),
-            ThumbMode => self.registers.r14_irq = self.registers.r15.0,
-        }
-
-        // jump to bios interrupt vector at 0x18.
-        self.registers.r15 = Wrapping(0x18);
-        self.status.cpsr.set_i(true); // Disable further interrupt from occuring
-        self.status.cpsr.set_t(CpuMode::ArmMode);
-        self.pipeline_refill_arm(bus);
     }
 }
 

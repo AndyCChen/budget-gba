@@ -10,6 +10,7 @@ mod keypad;
 mod ppu;
 mod scheduler;
 mod interrupts;
+mod halt_control;
 
 pub use arm::ARM7TDMI_CLOCK_RATE;
 pub use common::{DISPLAY_HEIGHT, DISPLAY_WIDTH, Rgb5};

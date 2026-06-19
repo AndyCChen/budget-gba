@@ -121,9 +121,15 @@ impl Ppu {
         self.is_frame_complete = flag;
     }
 
+    /// Read the status of frame complete and resets it.
     pub fn is_frame_complete(&mut self) -> bool {
         let flag = self.is_frame_complete;
         self.is_frame_complete = false;
         flag
+    }
+
+    /// Read the status of frame complete without reseting it.
+    pub fn is_frame_complete_retain(&self) -> bool {
+        self.is_frame_complete
     }
 }

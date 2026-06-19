@@ -110,9 +110,4 @@ impl BusInterface for TestBus {
     fn get_timestamp(&self) -> u64 {
         0
     }
-
-    /// Do not care about interrupts for test bus
-    fn interrupt_requested(&self) -> bool {
-        false
-    }
 }

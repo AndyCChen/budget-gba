@@ -1,3 +1,4 @@
+use num_traits::FromPrimitive;
 use std::fmt::Display;
 
 use crate::apu::Apu;
@@ -5,11 +6,11 @@ use crate::arm::AccessCode;
 use crate::bus::BusInterface;
 use crate::bus::common;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
+use crate::halt_control::*;
 use crate::interrupts::Interrupt;
 use crate::keypad::Keypad;
 use crate::ppu::Ppu;
 use crate::scheduler::{GbaEvent::*, Scheduler};
-use num_traits::FromPrimitive;
 
 const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
@@ -25,6 +26,7 @@ pub struct Bus {
     pub wram_256: [u8; WRAM_256],
     pub wram_32: [u8; WRAM_32],
     pub scheduler: Scheduler,
+    pub halt_controller: HaltController,
 }
 
 impl Bus {
@@ -42,6 +44,7 @@ impl Bus {
             bios_ram: [0; BIOS_SIZE],
             wram_256: [0; WRAM_256],
             wram_32: [0; WRAM_32],
+            halt_controller: HaltController::new(),
         }
     }
 
@@ -55,6 +58,24 @@ impl Bus {
         self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
+        self.halt_controller = HaltController::new();
+    }
+
+    fn step(&mut self, cycles: u8) {
+        self.scheduler.step(cycles);
+
+        while let Some(gba_event) = self.scheduler.poll_event() {
+            match gba_event {
+                HDraw => self.ppu.hdraw(&mut self.scheduler),
+                HBlank => self.ppu.hblank(&mut self.scheduler),
+                VBlankHDraw => self.ppu.vblank_hdraw(&mut self.scheduler),
+                VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler),
+                UpdateVCount => self.ppu.update_vcount(),
+                ToggleVBlankFlag(flag) => self
+                    .ppu
+                    .toggle_vblank_flag(flag, &mut self.interrupt.interrupt_flags),
+            }
+        }
     }
 
     fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: AccessCode) -> T {
@@ -245,28 +266,11 @@ impl Bus {
             _ => todo!("write set open bus value, address: {address:08X}, value: {value}"),
         }
     }
-
-    fn step(&mut self, cycles: u8) {
-        self.scheduler.step(cycles);
-
-        while let Some(gba_event) = self.scheduler.poll_event() {
-            match gba_event {
-                HDraw => self.ppu.hdraw(&mut self.scheduler),
-                HBlank => self.ppu.hblank(&mut self.scheduler),
-                VBlankHDraw => self.ppu.vblank_hdraw(&mut self.scheduler),
-                VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler),
-                UpdateVCount => self.ppu.update_vcount(),
-                ToggleVBlankFlag(flag) => self
-                    .ppu
-                    .toggle_vblank_flag(flag, &mut self.interrupt.interrupt_flags),
-            }
-        }
-    }
 }
 
 impl BusInterface for Bus {
     fn i_cycle(&mut self) {
-        self.scheduler.step(1);
+        self.step(1);
     }
 
     fn get_timestamp(&self) -> u64 {
@@ -325,14 +329,6 @@ impl BusInterface for Bus {
 
     fn write_byte(&mut self, address: u32, value: u8, access: AccessCode) {
         self.write(address, value, access);
-    }
-
-    fn interrupt_requested(&self) -> bool {
-        let master_enable = self.interrupt.master_interrupt.enable();
-        let enabled_interrupts = self.interrupt.interrupt_enable.into_bits() & 0x3FFF;
-        let requested_interrupts = self.interrupt.interrupt_flags.into_bits() & 0x3FFF;
-        let is_interrupt_requests = (enabled_interrupts & requested_interrupts) != 0;
-        master_enable && is_interrupt_requests
     }
 }
 
