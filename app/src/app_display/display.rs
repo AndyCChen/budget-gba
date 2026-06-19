@@ -6,7 +6,6 @@ use bevy::{
     window::WindowResized,
 };
 
-use crate::app_display::DisplayTexture;
 use crate::{BudgetGba, Config};
 use gba::Rgb5;
 
@@ -69,10 +68,7 @@ pub fn display_setup(
     );
     image.sampler = ImageSampler::nearest();
 
-    let handle = images.add(image);
-    commands.insert_resource(DisplayTexture(handle.clone()));
-
-    let mut sprite = Sprite::from_image(handle);
+    let mut sprite = Sprite::from_image(images.add(image));
     sprite.custom_size = Some(Vec2 {
         x: config.window_size.x,
         y: config.window_size.y,
@@ -83,11 +79,11 @@ pub fn display_setup(
 
 pub fn display_update(
     gba: Res<BudgetGba>,
-    display_handle: Res<DisplayTexture>,
+    sprite: Single<&Sprite, With<DisplaySprite>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     let display_texture = images
-        .get_mut(&display_handle.0)
+        .get_mut(&sprite.image)
         .expect("Failed to retrieve display texture!");
 
     let pixel_data = display_texture.data.as_mut().unwrap();

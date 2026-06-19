@@ -1,11 +1,6 @@
 mod display;
 
-use bevy::{
-    app::{App, Plugin, Startup, Update},
-    asset::Handle,
-    ecs::resource::Resource,
-    image::Image,
-};
+use bevy::app::{App, Plugin, Startup, Update};
 use display::*;
 
 /// Plugin that handles rendering the main pixel viewport
@@ -17,6 +12,3 @@ impl Plugin for GbaDisplayPlugin {
         app.add_systems(Update, (window_resize, display_update));
     }
 }
-
-#[derive(Resource)]
-struct DisplayTexture(Handle<Image>);
