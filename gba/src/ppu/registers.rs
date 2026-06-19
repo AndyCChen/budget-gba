@@ -90,7 +90,7 @@ pub struct LcdStatus {
 
     pub vblank_irq_enable: bool,
     pub hblank_irq_enable: bool,
-    pub vounter_irq_enable: bool,
+    pub vcounter_irq_enable: bool,
 
     #[bits(2)]
     __: u8, // unused

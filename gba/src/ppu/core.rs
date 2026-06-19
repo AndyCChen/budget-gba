@@ -57,11 +57,15 @@ impl Ppu {
             .for_each(|rbg_5| *rbg_5 = Rgb5::black());
     }
 
-    pub fn update_vcount(&mut self) {
-        let current_count = self.registers.v_counter.scanline_count();
-        self.registers
-            .v_counter
-            .set_scanline_count(current_count + 1);
+    pub fn update_vcount(&mut self, interrupt_request: &mut InterruptFlags) {
+        let new_count = self.registers.v_counter.scanline_count() + 1;
+        self.registers.v_counter.set_scanline_count(new_count);
+
+        if new_count == self.registers.lcd_status.vcount()
+            && self.registers.lcd_status.vcounter_irq_enable()
+        {
+            interrupt_request.set_vcounter_match(true);
+        }
     }
 
     pub fn hdraw(&mut self, scheduler: &mut Scheduler) {
@@ -78,7 +82,11 @@ impl Ppu {
         }
     }
 
-    pub fn hblank(&mut self, scheduler: &mut Scheduler) {
+    pub fn hblank(&mut self, scheduler: &mut Scheduler, interrupt_request: &mut InterruptFlags) {
+        if self.registers.lcd_status.hblank_irq_enable() {
+            interrupt_request.set_hblank(true);
+        }
+
         scheduler.add(225, GbaEvent::UpdateVCount);
 
         if self.registers.v_counter.scanline_count() == 159 {
@@ -96,7 +104,15 @@ impl Ppu {
         self.registers.lcd_status.set_hblank_flag(false);
     }
 
-    pub fn vblank_hblank(&mut self, scheduler: &mut Scheduler) {
+    pub fn vblank_hblank(
+        &mut self,
+        scheduler: &mut Scheduler,
+        interrupt_request: &mut InterruptFlags,
+    ) {
+        if self.registers.lcd_status.hblank_irq_enable() {
+            interrupt_request.set_hblank(true);
+        }
+
         if self.registers.v_counter.scanline_count() == 227 {
             self.registers.v_counter.set_scanline_count(0);
             scheduler.add(225, GbaEvent::HDraw);

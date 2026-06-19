@@ -65,16 +65,15 @@ impl Bus {
         self.scheduler.step(cycles);
 
         while let Some(gba_event) = self.scheduler.poll_event() {
+            #[rustfmt::skip]
             match gba_event {
                 HDraw => self.ppu.hdraw(&mut self.scheduler),
-                HBlank => self.ppu.hblank(&mut self.scheduler),
+                HBlank => self.ppu.hblank(&mut self.scheduler, &mut self.interrupt.interrupt_flags),
                 VBlankHDraw => self.ppu.vblank_hdraw(&mut self.scheduler),
-                VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler),
-                UpdateVCount => self.ppu.update_vcount(),
-                ToggleVBlankFlag(flag) => self
-                    .ppu
-                    .toggle_vblank_flag(flag, &mut self.interrupt.interrupt_flags),
-            }
+                VBlankHBlank => self.ppu.vblank_hblank(&mut self.scheduler, &mut self.interrupt.interrupt_flags),
+                UpdateVCount => self.ppu.update_vcount(&mut self.interrupt.interrupt_flags),
+                ToggleVBlankFlag(flag) => self.ppu.toggle_vblank_flag(flag, &mut self.interrupt.interrupt_flags),
+            };
         }
     }
 

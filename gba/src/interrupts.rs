@@ -18,10 +18,7 @@ impl Interrupt {
     /// Checks if IME && IE && IF != 0.
     pub fn interrupt_requested(&self) -> bool {
         let master_enable = self.master_interrupt.enable();
-        let enabled_interrupts = self.interrupt_enable.into_bits() & 0x3FFF;
-        let requested_interrupts = self.interrupt_flags.into_bits() & 0x3FFF;
-        let is_interrupt_requests = (enabled_interrupts & requested_interrupts) != 0;
-        master_enable && is_interrupt_requests
+        master_enable && self.interrupt_raised()
     }
 
     pub fn interrupt_raised(&self) -> bool {

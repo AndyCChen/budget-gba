@@ -50,25 +50,32 @@ impl GbaCore {
     pub fn step(&mut self) {
         // handle interrupt if one is requested and interupts are enabled in cpsr
         if !self.cpu.status.cpsr.i() && self.bus.interrupt.interrupt_requested() {
-            self.bus.halt_controller.state = None; // "wake up" cpu when interrupt occurs 
             self.cpu.do_interrupt(&mut self.bus);
         }
 
-        // handle halt or stop
         match self.bus.halt_controller.state {
-            Some(PowerMode::Halt) => {
-                while !self.bus.ppu.is_frame_complete_retain()
-                    && !self.bus.interrupt.interrupt_raised()
-                {
-                    self.bus.i_cycle();
-                }
-            }
-            Some(PowerMode::Stop) => todo!("STOP not implemented!"),
             None => {
                 if self.enable_instruction_log {
                     self.cpu.record_instruction(&mut self.instruction_buffer);
                 }
+
                 self.cpu.step(&mut self.bus)
+            }
+            Some(PowerMode::Halt) => {
+                while !self.bus.ppu.is_frame_complete_retain() {
+                    self.bus.i_cycle();
+                    if self.bus.interrupt.interrupt_raised() {
+                        self.bus.halt_controller.state = None; // "wake up" cpu when interrupt is raised, regardless of if IME is set 
+                        break;
+                    }
+                }
+            }
+            // Stop mode suspends most components the system, only wakes up when a keypad interrupt is raised, I think...
+            Some(PowerMode::Stop) => {
+                println!("GBA STOP MODE");
+                if self.bus.interrupt.interrupt_raised() {
+                    self.bus.halt_controller.state = None
+                }
             }
         }
     }
@@ -118,6 +125,10 @@ impl GbaCore {
             KeyCode::KeyR => self.bus.keypad.keypad_state.set_key_r(input_type),
             KeyCode::KeyL => self.bus.keypad.keypad_state.set_key_l(input_type),
         };
+
+        if self.bus.keypad.irq_requested() {
+            self.bus.interrupt.interrupt_flags.set_keypad(true);
+        }
     }
 
     pub fn load_config(&mut self, config: &GbaCoreConfig) -> Result<(), GbaError> {

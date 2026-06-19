@@ -13,6 +13,17 @@ impl Keypad {
             interrupt_control: KeypadInterruptControl::default(),
         }
     }
+
+    pub fn irq_requested(&self) -> bool {
+        let irq_mask = self.interrupt_control.into_bits() & 0x3FF;
+        let keypad_state = self.keypad_state.into_bits() & irq_mask;
+
+        self.interrupt_control.irq_enable()
+            && match self.interrupt_control.irq_condition() {
+                KeypadIrqCondition::LogicalOr => keypad_state != 0,
+                KeypadIrqCondition::LogicalAnd => keypad_state == 0,
+            }
+    }
 }
 
 #[derive(Debug)]
@@ -106,10 +117,10 @@ pub struct KeypadInterruptControl {
     #[bits(4)]
     __: u8,
 
-    irq_enable: bool,
+    pub irq_enable: bool,
 
     #[bits(1, default = KeypadIrqCondition::LogicalOr)]
-    irq_condition: KeypadIrqCondition,
+    pub irq_condition: KeypadIrqCondition,
 }
 
 #[bitenum]
