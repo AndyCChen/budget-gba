@@ -61,10 +61,14 @@ impl Ppu {
         let new_count = self.registers.v_counter.scanline_count() + 1;
         self.registers.v_counter.set_scanline_count(new_count);
 
-        if new_count == self.registers.lcd_status.vcount()
-            && self.registers.lcd_status.vcounter_irq_enable()
-        {
-            interrupt_request.set_vcounter_match(true);
+        if new_count == self.registers.lcd_status.vcount() {
+            self.registers.lcd_status.set_v_counter_flag(true);
+
+            if self.registers.lcd_status.vblank_irq_enable() {
+                interrupt_request.set_vcounter_match(true);
+            }
+        } else {
+            self.registers.lcd_status.set_v_counter_flag(false);
         }
     }
 
