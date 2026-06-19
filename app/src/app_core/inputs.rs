@@ -33,8 +33,8 @@ pub fn handle_gba_input(mut gba: ResMut<BudgetGba>, input: Res<ButtonInput<KeyCo
             KeyCode::KeyL => gba.0.keypad_set_input(Released, GbaKeyCode::KeyA),
             KeyCode::KeyE => gba.0.keypad_set_input(Released, GbaKeyCode::Select),
             KeyCode::KeyQ => gba.0.keypad_set_input(Released, GbaKeyCode::Start),
-            KeyCode::ShiftLeft => gba.0.keypad_set_input(Released, GbaKeyCode::KeyL),
-            KeyCode::ShiftRight => gba.0.keypad_set_input(Released, GbaKeyCode::KeyR),
+            KeyCode::KeyF => gba.0.keypad_set_input(Released, GbaKeyCode::KeyL),
+            KeyCode::KeyJ => gba.0.keypad_set_input(Released, GbaKeyCode::KeyR),
             _ => (),
         }
     }
@@ -49,8 +49,8 @@ pub fn handle_gba_input(mut gba: ResMut<BudgetGba>, input: Res<ButtonInput<KeyCo
             KeyCode::KeyL => gba.0.keypad_set_input(Pressed, GbaKeyCode::KeyA),
             KeyCode::KeyE => gba.0.keypad_set_input(Pressed, GbaKeyCode::Select),
             KeyCode::KeyQ => gba.0.keypad_set_input(Pressed, GbaKeyCode::Start),
-            KeyCode::ShiftLeft => gba.0.keypad_set_input(Pressed, GbaKeyCode::KeyL),
-            KeyCode::ShiftRight => gba.0.keypad_set_input(Pressed, GbaKeyCode::KeyR),
+            KeyCode::KeyF => gba.0.keypad_set_input(Pressed, GbaKeyCode::KeyL),
+            KeyCode::KeyJ => gba.0.keypad_set_input(Pressed, GbaKeyCode::KeyR),
             _ => (),
         }
     }

@@ -89,7 +89,7 @@ impl GbaCore {
 
         match keycode {
             KeyCode::KeyA => self.bus.keypad.keypad_state.set_key_a(input_type),
-            KeyCode::KeyB => self.bus.keypad.keypad_state.set_key_a(input_type),
+            KeyCode::KeyB => self.bus.keypad.keypad_state.set_key_b(input_type),
             KeyCode::Select => self.bus.keypad.keypad_state.set_select(input_type),
             KeyCode::Start => self.bus.keypad.keypad_state.set_start(input_type),
             KeyCode::Right => self.bus.keypad.keypad_state.set_right(input_type),
