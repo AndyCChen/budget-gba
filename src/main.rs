@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(version, about)]
-struct Args {
+struct Cli {
     /// Path to bios file (.bin)
     #[arg(short, value_name = "FILE")]
     bios_path: Option<PathBuf>,
@@ -20,7 +20,7 @@ struct Args {
 }
 
 fn main() {
-    let args = Args::parse();
+    let args = Cli::parse();
 
     let gba_config = GbaCoreConfig {
         bios_path: PathBuf::from("resource/gba_bios.bin"),
@@ -30,6 +30,10 @@ fn main() {
     let config = Config {
         gba_config,
         paused: args.paused,
+        window_size: Vec2 {
+            x: gba::DISPLAY_WIDTH as f32 * 2.,
+            y: gba::DISPLAY_HEIGHT as f32 * 2.,
+        },
     };
 
     App::run(config);

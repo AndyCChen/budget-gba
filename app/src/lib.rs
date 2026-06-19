@@ -3,13 +3,15 @@ mod app_display;
 
 use app_core::GbaCorePlugin;
 use app_display::GbaDisplayPlugin;
-
 use bevy::prelude::*;
 use gba::{GbaCore, GbaCoreConfig};
+
+pub use bevy::math::Vec2;
 
 #[derive(Resource)]
 pub struct Config {
     pub gba_config: GbaCoreConfig,
+    pub window_size: Vec2,
     pub paused: bool,
 }
 

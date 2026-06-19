@@ -13,8 +13,8 @@ pub struct GbaDisplayPlugin;
 
 impl Plugin for GbaDisplayPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, display_setup);
-        app.add_systems(Update, display_update);
+        app.add_systems(Startup, (window_setup, display_setup));
+        app.add_systems(Update, (window_resize, display_update));
     }
 }
 
