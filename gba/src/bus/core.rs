@@ -1,4 +1,3 @@
-use num_traits::FromPrimitive;
 use std::fmt::Display;
 
 use crate::apu::Apu;
@@ -77,7 +76,7 @@ impl Bus {
         }
     }
 
-    fn read<T: GbaBusInt + FromPrimitive>(&mut self, address: u32, access: AccessCode) -> T {
+    fn read<T: GbaBusInt<GbaInt = T> + Default>(&mut self, address: u32, access: AccessCode) -> T {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
@@ -85,7 +84,8 @@ impl Bus {
             // bios
             0 => {
                 self.step(1);
-                T::mem_read(T::align(address & 0x3FFF), &self.bios_ram)
+                T::mem_read_checked(T::align(address), &self.bios_ram)
+                    .expect("Todo handle bios open bus!")
             }
 
             // 256kb wram, always has 2 wait states
@@ -144,8 +144,7 @@ impl Bus {
                     GamepakRegion::Region8_9,
                 );
                 self.step(1 + wait_states); // timing is 1 plus number of waitstates
-                let rom_size = self.gamepak.rom.len() as u32;
-                T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
+                T::mem_read_checked(T::align(address), &self.gamepak.rom).unwrap_or(T::default())
             }
 
             // gamepak region 10/11
@@ -156,8 +155,7 @@ impl Bus {
                     GamepakRegion::Region10_11,
                 );
                 self.step(1 + wait_states); // timing is 1 plus number of waitstates
-                let rom_size = self.gamepak.rom.len() as u32;
-                T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
+                T::mem_read_checked(T::align(address), &self.gamepak.rom).unwrap_or(T::default())
             }
 
             // gamepak region 12/13
@@ -168,15 +166,19 @@ impl Bus {
                     GamepakRegion::Region12_13,
                 );
                 self.step(1 + wait_states); // timing is 1 plus number of waitstates
-                let rom_size = self.gamepak.rom.len() as u32;
-                T::mem_read(T::align(address % rom_size), &self.gamepak.rom)
+                T::mem_read_checked(T::align(address), &self.gamepak.rom).unwrap_or(T::default())
             }
 
             _ => todo!("read open bus value at {address:08X}"),
         }
     }
 
-    fn write<T: GbaBusInt + Display>(&mut self, address: u32, value: T, _access: AccessCode) {
+    fn write<T: GbaBusInt<GbaInt = T> + Display>(
+        &mut self,
+        address: u32,
+        value: T,
+        _access: AccessCode,
+    ) {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
 
@@ -338,25 +340,40 @@ enum GbaBusIntType {
 }
 
 trait GbaBusInt {
-    fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T;
+    type GbaInt;
+
+    fn mem_read(address: usize, data: &[u8]) -> Self::GbaInt;
+    fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt>;
     fn mem_write(&self, address: usize, data: &mut [u8]);
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T;
+    fn io_read(bus: &Bus, address: usize) -> Self::GbaInt;
     fn io_write(&self, bus: &mut Bus, address: usize);
     fn align(address: u32) -> usize;
     fn int_type() -> GbaBusIntType;
 }
 
 impl GbaBusInt for u8 {
-    fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T {
-        T::from_u8(data[address]).unwrap()
+    type GbaInt = u8;
+
+    fn mem_read(address: usize, data: &[u8]) -> Self::GbaInt {
+        data[address]
+        // T::from_u8(data[address]).unwrap()
+    }
+
+    fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt> {
+        if address < data.len() {
+            // SAFETY: Bounds checking is already done for address.
+            unsafe { Some(*data.get_unchecked(address)) }
+        } else {
+            None
+        }
     }
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
         data[address] = *self;
     }
 
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T {
-        T::from_u8(bus.read_io_byte(address)).unwrap()
+    fn io_read(bus: &Bus, address: usize) -> Self::GbaInt {
+        bus.read_io_byte(address)
     }
 
     fn io_write(&self, bus: &mut Bus, address: usize) {
@@ -373,19 +390,29 @@ impl GbaBusInt for u8 {
 }
 
 impl GbaBusInt for u16 {
-    fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T {
-        T::from_u16(u16::from_le_bytes(
-            data[address..address + 2].try_into().unwrap(),
-        ))
-        .unwrap()
+    type GbaInt = u16;
+
+    fn mem_read(address: usize, data: &[u8]) -> Self::GbaInt {
+        let halfword = [data[address], data[address + 1]];
+        u16::from_le_bytes(halfword)
+    }
+
+    fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt> {
+        if address < data.len() {
+            Some(u16::from_le_bytes(
+                data[address..address + 2].try_into().unwrap(),
+            ))
+        } else {
+            None
+        }
     }
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
         data[address..address + 2].copy_from_slice(&self.to_le_bytes());
     }
 
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T {
-        T::from_u16(bus.read_io_halfword(address)).unwrap()
+    fn io_read(bus: &Bus, address: usize) -> Self::GbaInt {
+        bus.read_io_halfword(address)
     }
 
     fn io_write(&self, bus: &mut Bus, address: usize) {
@@ -402,19 +429,28 @@ impl GbaBusInt for u16 {
 }
 
 impl GbaBusInt for u32 {
-    fn mem_read<T: FromPrimitive>(address: usize, data: &[u8]) -> T {
-        T::from_u32(u32::from_le_bytes(
-            data[address..address + 4].try_into().unwrap(),
-        ))
-        .unwrap()
+    type GbaInt = u32;
+
+    fn mem_read(address: usize, data: &[u8]) -> Self::GbaInt {
+        u32::from_le_bytes(data[address..address + 4].try_into().unwrap())
+    }
+
+    fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt> {
+        if address < data.len() {
+            Some(u32::from_le_bytes(
+                data[address..address + 4].try_into().unwrap(),
+            ))
+        } else {
+            None
+        }
     }
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
         data[address..address + 4].copy_from_slice(&self.to_le_bytes());
     }
 
-    fn io_read<T: GbaBusInt + FromPrimitive>(bus: &Bus, address: usize) -> T {
-        T::from_u32(bus.read_io_word(address)).unwrap()
+    fn io_read(bus: &Bus, address: usize) -> Self::GbaInt {
+        bus.read_io_word(address)
     }
 
     fn io_write(&self, bus: &mut Bus, address: usize) {
