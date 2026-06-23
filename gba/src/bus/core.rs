@@ -356,16 +356,10 @@ impl GbaBusInt for u8 {
 
     fn mem_read(address: usize, data: &[u8]) -> Self::GbaInt {
         data[address]
-        // T::from_u8(data[address]).unwrap()
     }
 
     fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt> {
-        if address < data.len() {
-            // SAFETY: Bounds checking is already done for address.
-            unsafe { Some(*data.get_unchecked(address)) }
-        } else {
-            None
-        }
+        data.get(address).cloned()
     }
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
@@ -398,13 +392,11 @@ impl GbaBusInt for u16 {
     }
 
     fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt> {
-        if address < data.len() {
-            Some(u16::from_le_bytes(
-                data[address..address + 2].try_into().unwrap(),
-            ))
-        } else {
-            None
+        let mut halfword = [0; 2];
+        for (i, value) in halfword.iter_mut().enumerate() {
+            *value = data.get(address + i).cloned()?;
         }
+        Some(u16::from_le_bytes(halfword))
     }
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
@@ -436,13 +428,11 @@ impl GbaBusInt for u32 {
     }
 
     fn mem_read_checked(address: usize, data: &[u8]) -> Option<Self::GbaInt> {
-        if address < data.len() {
-            Some(u32::from_le_bytes(
-                data[address..address + 4].try_into().unwrap(),
-            ))
-        } else {
-            None
+        let mut word = [0; 4];
+        for (i, value) in word.iter_mut().enumerate() {
+            *value = data.get(address + i).cloned()?;
         }
+        Some(u32::from_le_bytes(word))
     }
 
     fn mem_write(&self, address: usize, data: &mut [u8]) {
