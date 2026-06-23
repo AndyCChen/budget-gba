@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use crate::apu::Apu;
 use crate::arm::AccessCode;
+use crate::arm::KindCode;
 use crate::bus::BusInterface;
 use crate::bus::common;
 use crate::gamepak::{AccessType, GamePak, GamepakRegion};
@@ -10,6 +11,7 @@ use crate::interrupts::Interrupt;
 use crate::keypad::Keypad;
 use crate::ppu::Ppu;
 use crate::scheduler::{GbaEvent::*, Scheduler};
+// use crate::arm::KindCode;
 
 const BIOS_SIZE: usize = 16 * 1024;
 const WRAM_256: usize = 256 * 1024;
@@ -26,6 +28,7 @@ pub struct Bus {
     pub wram_32: [u8; WRAM_32],
     pub scheduler: Scheduler,
     pub halt_controller: HaltController,
+    is_executing_bios: bool,
 }
 
 impl Bus {
@@ -44,6 +47,7 @@ impl Bus {
             wram_256: [0; WRAM_256],
             wram_32: [0; WRAM_32],
             halt_controller: HaltController::new(),
+            is_executing_bios: false,
         }
     }
 
@@ -54,10 +58,10 @@ impl Bus {
         self.apu.reset();
         self.keypad = Keypad::new();
         self.interrupt = Interrupt::new();
-        self.bios_ram.fill(0);
         self.wram_256.fill(0);
         self.wram_32.fill(0);
         self.halt_controller = HaltController::new();
+        self.is_executing_bios = false;
     }
 
     fn step(&mut self, cycles: u8) {
@@ -76,13 +80,27 @@ impl Bus {
         }
     }
 
-    fn read<T: GbaBusInt<GbaInt = T> + Default>(&mut self, address: u32, access: AccessCode) -> T {
+    fn read<T: GbaBusInt<GbaInt = T> + Default>(
+        &mut self,
+        address: u32,
+        access: AccessCode,
+        kind: KindCode,
+    ) -> T {
         let page = address >> 24;
         let address = address & 0x0FFF_FFFF; // upper 4 bits of address is unused
+
+        if KindCode::INSTRUCTION_READ.contains(kind) {
+            self.is_executing_bios = page == 0;
+        }
 
         match page {
             // bios
             0 => {
+                // reading bios is only allowed for code executed from bios
+                if KindCode::GENERAL_READ.contains(kind) && !self.is_executing_bios {
+                    return T::default();
+                }
+
                 self.step(1);
                 T::mem_read_checked(T::align(address), &self.bios_ram)
                     .expect("Todo handle bios open bus!")
@@ -279,44 +297,44 @@ impl BusInterface for Bus {
     }
 
     fn pipeline_read_word(&mut self, address: u32, access: AccessCode) -> u32 {
-        self.read(address, access)
+        self.read(address, access, KindCode::INSTRUCTION_READ)
     }
 
     fn pipeline_read_halfword(&mut self, address: u32, access: AccessCode) -> u16 {
-        self.read(address, access)
+        self.read(address, access, KindCode::INSTRUCTION_READ)
     }
 
     fn read_word(&mut self, address: u32, access: AccessCode) -> u32 {
-        self.read(address, access)
+        self.read(address, access, KindCode::GENERAL_READ)
     }
 
     fn read_rotate_word(&mut self, address: u32, access: AccessCode) -> u32 {
-        let word: u32 = self.read(address, access);
+        let word: u32 = self.read(address, access, KindCode::GENERAL_READ);
         common::read_rotate_word(address, word)
     }
 
     fn read_halfword(&mut self, address: u32, access: AccessCode) -> u32 {
-        let halfword: u16 = self.read(address, access);
+        let halfword: u16 = self.read(address, access, KindCode::GENERAL_READ);
         u32::from(halfword)
     }
 
     fn read_rotate_halfword(&mut self, address: u32, access: AccessCode) -> u32 {
-        let halfword: u16 = self.read(address, access);
+        let halfword: u16 = self.read(address, access, KindCode::GENERAL_READ);
         common::read_rotate_halfword(address, halfword)
     }
 
     fn read_signed_halfword(&mut self, address: u32, access: AccessCode) -> u32 {
-        let halfword: u16 = self.read(address, access);
+        let halfword: u16 = self.read(address, access, KindCode::GENERAL_READ);
         common::read_signed_halfword(address, halfword)
     }
 
     fn read_byte(&mut self, address: u32, access: AccessCode) -> u32 {
-        let byte: u8 = self.read(address, access);
+        let byte: u8 = self.read(address, access, KindCode::GENERAL_READ);
         u32::from(byte)
     }
 
     fn read_signed_byte(&mut self, address: u32, access: AccessCode) -> u32 {
-        let byte: u8 = self.read(address, access);
+        let byte: u8 = self.read(address, access, KindCode::GENERAL_READ);
         common::read_signed_byte(byte)
     }
 

@@ -15,6 +15,7 @@ bitflags! {
 }
 
 bitflags! {
+    #[derive(Clone, Copy)]
     pub struct KindCode: u8 {
         const INSTRUCTION_READ = 0;
         const GENERAL_READ = 1 << 0;
