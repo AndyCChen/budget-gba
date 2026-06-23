@@ -187,7 +187,10 @@ impl Bus {
                 T::mem_read_checked(T::align(address), &self.gamepak.rom).unwrap_or(T::default())
             }
 
-            _ => todo!("read open bus value at {address:08X}"),
+            _ => {
+                println!("read open bus value at {address:08X}");
+                T::default()
+            }
         }
     }
 
@@ -282,7 +285,7 @@ impl Bus {
                 }
             },
 
-            _ => todo!("write set open bus value, address: {address:08X}, value: {value}"),
+            _ => println!("write set open bus value, address: {address:08X}, value: {value}"),
         }
     }
 }
