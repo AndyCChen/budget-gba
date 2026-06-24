@@ -77,7 +77,7 @@ impl Ppu {
         scheduler.add(1007, GbaEvent::HBlank);
 
         match self.registers.lcd_control.bg_mode() {
-            BgMode::Mode0 => (),
+            BgMode::Mode0 => draw_mode0(self),
             BgMode::Mode1 => (),
             BgMode::Mode2 => (),
             BgMode::Mode3 => draw_mode3(self),

@@ -1,6 +1,8 @@
+use bitfield_struct::bitfield;
+
 use crate::ppu::Ppu;
 use crate::ppu::core::PaletteRam;
-use crate::ppu::registers::FrameSelect;
+use crate::ppu::registers::{BgControl, BgScroll, FrameSelect, PaletteType::*, ScreenSize};
 use crate::{DISPLAY_WIDTH, Rgb5};
 use std::ops::Range;
 
@@ -8,9 +10,45 @@ const PALETTE_REGION_SIZE: usize = 512;
 
 /// bg palette uses the first 512 bytes of palette ram
 const BG_PALETTE: Range<usize> = 0..PALETTE_REGION_SIZE;
-
 /// obj palette usees the second 512 bytes of palette ram
 const _OBJ_PALETTE: Range<usize> = 512..(PALETTE_REGION_SIZE * 2);
+
+const CHAR_BLOCK_SIZE: usize = 16 * 1024;
+const SCREEN_BLOCK_SIZE: usize = 2 * 1024;
+
+/// Size of tiles in 4bpp format, 32 bytes big
+const S_TILE_SIZE: usize = 32;
+/// Size of tiles in 8bpp format, 64 bytes big
+const D_TILE_SIZE: usize = 64;
+
+pub fn draw_mode0(ppu: &mut Ppu) {
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    let Some(BackGround {
+        bg_control,
+        scroll_x,
+        scroll_y,
+    }) = select_background(&ppu)
+    else {
+        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        return;
+    };
+
+    let char_base = usize::from(bg_control.char_base_block()) * CHAR_BLOCK_SIZE;
+    let screen_base = usize::from(bg_control.screen_base_block()) * SCREEN_BLOCK_SIZE;
+    let layout = bg_control.screen_size();
+    let palette_type = bg_control.palettes();
+
+    let screen_blocks =
+        &ppu.mem.vram[screen_base..screen_base + (SCREEN_BLOCK_SIZE * layout.get_block_count())];
+
+    let (screen_blocks, remainder) = screen_blocks.as_chunks::<SCREEN_BLOCK_SIZE>();
+    debug_assert!(matches!(screen_blocks.len(), 1 | 2 | 4));
+    debug_assert!(remainder.is_empty());
+
+    let tile_y = ppu.registers.v_counter.scanline_count();
+    let mut tile_x = 0;
+}
 
 pub fn draw_mode3(ppu: &mut Ppu) {
     if !ppu.registers.lcd_control.bg2_enable() {
@@ -128,4 +166,45 @@ fn bg_color0(palette: &PaletteRam) -> Rgb5 {
     let color_0 = palette.first_chunk::<2>().unwrap();
     let color_u16 = u16::from_le_bytes(*color_0);
     Rgb5::from_u16(color_u16)
+}
+
+struct BackGround {
+    bg_control: BgControl,
+    scroll_x: BgScroll,
+    scroll_y: BgScroll,
+}
+
+/// Retrieve the enabled background with the highest priority.
+/// Returns None if no backgrounds are enabled.
+fn select_background(ppu: &Ppu) -> Option<BackGround> {
+    #[rustfmt::skip]
+    let bg_controls = [
+        (ppu.registers.lcd_control.bg0_enable(), ppu.registers.bg0_control, ppu.registers.bg0_scroll_x, ppu.registers.bg0_scroll_y),
+        (ppu.registers.lcd_control.bg1_enable(), ppu.registers.bg1_control, ppu.registers.bg1_scroll_x, ppu.registers.bg1_scroll_y),
+        (ppu.registers.lcd_control.bg2_enable(), ppu.registers.bg2_control, ppu.registers.bg2_scroll_x, ppu.registers.bg2_scroll_y),
+        (ppu.registers.lcd_control.bg3_enable(), ppu.registers.bg3_control, ppu.registers.bg3_scroll_x, ppu.registers.bg3_scroll_y),
+    ];
+
+    bg_controls
+        .into_iter()
+        .filter_map(|(enabled, bg_control, scroll_x, scroll_y)| {
+            enabled.then(|| BackGround {
+                bg_control,
+                scroll_x,
+                scroll_y,
+            })
+        })
+        .min_by_key(|BackGround { bg_control, .. }| bg_control.bg_priority())
+}
+
+#[bitfield(u16)]
+struct TextScreenEntry {
+    #[bits(10)]
+    tile_number: usize,
+
+    horizontal_flip: bool,
+    verical_flip: bool,
+
+    #[bits(4)]
+    palette_number: u8,
 }

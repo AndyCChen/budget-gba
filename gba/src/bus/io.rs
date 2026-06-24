@@ -17,8 +17,17 @@ impl Bus {
             VCOUNT_0 => self.ppu.registers.v_counter.read(HalfwordIo::B0),
             VCOUNT_1 => self.ppu.registers.v_counter.read(HalfwordIo::B1),
 
-            BG0CNT_0 => self.ppu.registers.bg_control_0.read(HalfwordIo::B0),
-            BG0CNT_1 => self.ppu.registers.bg_control_0.read(HalfwordIo::B1),
+            BG0CNT_0 => self.ppu.registers.bg0_control.read(HalfwordIo::B0),
+            BG0CNT_1 => self.ppu.registers.bg0_control.read(HalfwordIo::B1),
+
+            BG1CNT_0 => self.ppu.registers.bg1_control.read(HalfwordIo::B0),
+            BG1CNT_1 => self.ppu.registers.bg1_control.read(HalfwordIo::B1),
+
+            BG2CNT_0 => self.ppu.registers.bg2_control.read(HalfwordIo::B0),
+            BG2CNT_1 => self.ppu.registers.bg2_control.read(HalfwordIo::B1),
+
+            BG3CNT_0 => self.ppu.registers.bg3_control.read(HalfwordIo::B0),
+            BG3CNT_1 => self.ppu.registers.bg3_control.read(HalfwordIo::B1),
 
             // APU
 
@@ -33,12 +42,16 @@ impl Bus {
             KEYCNT_1 => self.keypad.interrupt_control.read(HalfwordIo::B1),
 
             // Interrupt, Waitstate, and Power-Down Control
+            // 
             IE_0 => self.interrupt.interrupt_enable.read(HalfwordIo::B0),
             IE_1 => self.interrupt.interrupt_enable.read(HalfwordIo::B1),
+
             IF_0 => self.interrupt.interrupt_flags.read(HalfwordIo::B0),
             IF_1 => self.interrupt.interrupt_flags.read(HalfwordIo::B1),
+
             WAITCNT_0 => self.gamepak.registers.waitstate_control.read(HalfwordIo::B0),
             WAITCNT_1 => self.gamepak.registers.waitstate_control.read(HalfwordIo::B1),
+
             IME_0 => self.interrupt.master_interrupt.read(HalfwordIo::B0),
             IME_1 => self.interrupt.master_interrupt.read(HalfwordIo::B1),
 
@@ -57,8 +70,37 @@ impl Bus {
             DISPSTAT_0 => self.ppu.registers.lcd_status.write(value, HalfwordIo::B0),
             DISPSTAT_1 => self.ppu.registers.lcd_status.write(value, HalfwordIo::B1),
 
-            BG0CNT_0 => self.ppu.registers.bg_control_0.write(value, HalfwordIo::B0),
-            BG0CNT_1 => self.ppu.registers.bg_control_0.write(value, HalfwordIo::B1),
+            BG0CNT_0 => self.ppu.registers.bg0_control.write(value, HalfwordIo::B0),
+            BG0CNT_1 => self.ppu.registers.bg0_control.write(value, HalfwordIo::B1),
+
+            BG1CNT_0 => self.ppu.registers.bg1_control.write(value, HalfwordIo::B0),
+            BG1CNT_1 => self.ppu.registers.bg1_control.write(value, HalfwordIo::B1),
+
+            BG2CNT_0 => self.ppu.registers.bg2_control.write(value, HalfwordIo::B0),
+            BG2CNT_1 => self.ppu.registers.bg2_control.write(value, HalfwordIo::B1),
+
+            BG3CNT_0 => self.ppu.registers.bg3_control.write(value, HalfwordIo::B0),
+            BG3CNT_1 => self.ppu.registers.bg3_control.write(value, HalfwordIo::B1),
+
+            BG0HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
+            BG0HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
+            BG0VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
+            BG0VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
+
+            BG1HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
+            BG1HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
+            BG1VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
+            BG1VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
+
+            BG2HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
+            BG2HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
+            BG2VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
+            BG2VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
+
+            BG3HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
+            BG3HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
+            BG3VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
+            BG3VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
 
             // APU
 
@@ -71,6 +113,7 @@ impl Bus {
             KEYCNT_1 => self.keypad.interrupt_control.write(value, HalfwordIo::B1),
 
             // Interrupt, Waitstate, and Power-Down Control
+
             IE_0 => self.interrupt.interrupt_enable.write(value, HalfwordIo::B0),
             IE_1 => self.interrupt.interrupt_enable.write(value, HalfwordIo::B1),
 
