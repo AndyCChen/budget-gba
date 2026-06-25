@@ -141,12 +141,13 @@ impl<'a> Iterator for Fetcher4BppIter<'a> {
 }
 
 pub fn draw_mode3(ppu: &mut Ppu) {
-    if !ppu.registers.lcd_control.bg2_enable() {
-        return;
-    }
-
     const PIXEL_ROW_BYTE_SIZE: usize = DISPLAY_WIDTH * size_of::<u16>();
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    if !ppu.registers.lcd_control.bg2_enable() {
+        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        return;
+    }
 
     let vram_row = ppu
         .mem
@@ -174,17 +175,17 @@ const PAGE_SIZE: usize = 40 * 1024;
 
 /// Page 0 is the first 40k of vram
 const PAGE_0: Range<usize> = 0..PAGE_SIZE;
-
 /// Page 1 is the second 40k of vram
 const PAGE_1: Range<usize> = PAGE_SIZE..(PAGE_SIZE * 2);
 
 pub fn draw_mode4(ppu: &mut Ppu) {
-    if !ppu.registers.lcd_control.bg2_enable() {
-        return;
-    }
-
     const PIXEL_ROW_BYTE_SIZE: usize = DISPLAY_WIDTH * size_of::<u8>();
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    if !ppu.registers.lcd_control.bg2_enable() {
+        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        return;
+    }
 
     let vram = match ppu.registers.lcd_control.display_frame_select() {
         FrameSelect::Page0 => &ppu.mem.vram[PAGE_0],
@@ -211,14 +212,15 @@ pub fn draw_mode4(ppu: &mut Ppu) {
 }
 
 pub fn draw_mode5(ppu: &mut Ppu) {
-    if !ppu.registers.lcd_control.bg2_enable() {
-        return;
-    }
-
     const MODE5_WIDTH: usize = 160;
     const PIXEL_ROW_BYTE_SIZE: usize = MODE5_WIDTH * size_of::<u16>();
 
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    if !ppu.registers.lcd_control.bg2_enable() {
+        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        return;
+    }
 
     let vram = match ppu.registers.lcd_control.display_frame_select() {
         FrameSelect::Page0 => &ppu.mem.vram[PAGE_0],
