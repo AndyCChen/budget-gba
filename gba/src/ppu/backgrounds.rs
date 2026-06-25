@@ -4,6 +4,7 @@ use crate::ppu::Ppu;
 use crate::ppu::core::PaletteRam;
 use crate::ppu::registers::{BgControl, BgScroll, FrameSelect};
 use crate::{DISPLAY_WIDTH, Rgb5};
+use std::array;
 use std::ops::Range;
 
 const PALETTE_REGION_SIZE: usize = 512;
@@ -73,9 +74,22 @@ pub fn draw_mode0(ppu: &mut Ppu) {
         let hi = screen_blocks[screen_block_index][inner_screen_block_index * 2 + 1];
         let screen_entry = TextScreenEntry::from_bits(u16::from_le_bytes([lo, hi]));
         let (char_entry, _) = char_block[screen_entry.tile_number()].as_chunks::<4>();
-        let fine_y = scanline_y % 8;
 
-        for (left_pixel, right_pixel) in char_entry[fine_y]
+        let fine_y = if screen_entry.vertical_flip() {
+            7 - (scanline_y % 8)
+        } else {
+            scanline_y % 8
+        };
+
+        let char_row = if screen_entry.horizontal_flip() {
+            let mut flipped = char_entry[fine_y];
+            flipped.reverse();
+            flipped
+        } else {
+            char_entry[fine_y]
+        };
+
+        for (left_pixel, right_pixel) in char_row
             .iter()
             .map(|byte| usize::from(*byte))
             .map(|byte| (byte & 0xF, (byte >> 4) & 0xF))
@@ -242,7 +256,7 @@ struct TextScreenEntry {
     tile_number: usize,
 
     horizontal_flip: bool,
-    verical_flip: bool,
+    vertical_flip: bool,
 
     #[bits(4)]
     palette_number: usize,
