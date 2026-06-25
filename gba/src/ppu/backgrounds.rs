@@ -2,7 +2,7 @@ use bitfield_struct::bitfield;
 
 use crate::ppu::Ppu;
 use crate::ppu::core::PaletteRam;
-use crate::ppu::registers::{BgControl, BgScroll, FrameSelect, PaletteType::*, ScreenSize};
+use crate::ppu::registers::{BgControl, BgScroll, FrameSelect};
 use crate::{DISPLAY_WIDTH, Rgb5};
 use std::ops::Range;
 
@@ -19,15 +19,19 @@ const SCREEN_BLOCK_SIZE: usize = 2 * 1024;
 /// Size of tiles in 4bpp format, 32 bytes big
 const S_TILE_SIZE: usize = 32;
 /// Size of tiles in 8bpp format, 64 bytes big
-const D_TILE_SIZE: usize = 64;
+const _D_TILE_SIZE: usize = 64;
+
+// screen block dimensions in tiles
+const SCREEN_BLOCK_WIDTH: usize = 32;
+const SCREEN_BLOCK_HEIGHT: usize = 32;
 
 pub fn draw_mode0(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     let Some(BackGround {
         bg_control,
-        scroll_x,
-        scroll_y,
+        scroll_x: _scroll_x,
+        scroll_y: _scroll_y,
     }) = select_background(&ppu)
     else {
         ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
@@ -37,17 +41,52 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     let char_base = usize::from(bg_control.char_base_block()) * CHAR_BLOCK_SIZE;
     let screen_base = usize::from(bg_control.screen_base_block()) * SCREEN_BLOCK_SIZE;
     let layout = bg_control.screen_size();
-    let palette_type = bg_control.palettes();
+    let _palette_type = bg_control.palettes();
 
-    let screen_blocks =
-        &ppu.mem.vram[screen_base..screen_base + (SCREEN_BLOCK_SIZE * layout.get_block_count())];
-
-    let (screen_blocks, remainder) = screen_blocks.as_chunks::<SCREEN_BLOCK_SIZE>();
-    debug_assert!(matches!(screen_blocks.len(), 1 | 2 | 4));
+    let (palettes, remainder) = ppu.mem.palette_ram[BG_PALETTE].as_chunks::<32>();
+    debug_assert_eq!(palettes.len(), 16);
     debug_assert!(remainder.is_empty());
 
-    let tile_y = ppu.registers.v_counter.scanline_count();
-    let mut tile_x = 0;
+    // TODO: handle 64 byte format
+    let (char_block, _) = ppu.mem.vram[char_base..].as_chunks::<S_TILE_SIZE>();
+
+    let (screen_blocks, remainder) = ppu.mem.vram
+        [screen_base..screen_base + (SCREEN_BLOCK_SIZE * layout.get_block_count())]
+        .as_chunks::<SCREEN_BLOCK_SIZE>();
+
+    debug_assert!(matches!(screen_blocks.len(), 1 | 2 | 4)); // block count must be 1, 2, or 4.
+    debug_assert!(remainder.is_empty());
+
+    let mut display_buffer_row = ppu.display_buffer[scanline_y].iter_mut();
+    let (layout_width, _) = layout.layout_tile_size();
+    let tile_y = scanline_y / 8;
+
+    for tile_x in 0..30 {
+        let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
+            * (layout_width / SCREEN_BLOCK_WIDTH)
+            + (tile_x / SCREEN_BLOCK_HEIGHT);
+
+        let inner_screen_block_index =
+            (tile_y % SCREEN_BLOCK_WIDTH) * SCREEN_BLOCK_WIDTH + (tile_x % SCREEN_BLOCK_HEIGHT);
+
+        let lo = screen_blocks[screen_block_index][inner_screen_block_index * 2];
+        let hi = screen_blocks[screen_block_index][inner_screen_block_index * 2 + 1];
+        let screen_entry = TextScreenEntry::from_bits(u16::from_le_bytes([lo, hi]));
+        let (char_entry, _) = char_block[screen_entry.tile_number()].as_chunks::<4>();
+        let fine_y = scanline_y % 8;
+
+        for (left_pixel, right_pixel) in char_entry[fine_y]
+            .iter()
+            .map(|byte| usize::from(*byte))
+            .map(|byte| (byte & 0xF, (byte >> 4) & 0xF))
+        {
+            let (color_palette, _) = palettes[screen_entry.palette_number()].as_chunks::<2>();
+            let left_color = Rgb5::from_u16(u16::from_le_bytes(color_palette[left_pixel]));
+            let right_color = Rgb5::from_u16(u16::from_le_bytes(color_palette[right_pixel]));
+            *display_buffer_row.next().unwrap() = left_color;
+            *display_buffer_row.next().unwrap() = right_color;
+        }
+    }
 }
 
 pub fn draw_mode3(ppu: &mut Ppu) {
@@ -107,7 +146,7 @@ pub fn draw_mode4(ppu: &mut Ppu) {
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
     debug_assert_eq!(display_buffer_row.len(), vram_row.len());
 
-    let (palettes, remainder) = &ppu.mem.palette_ram[BG_PALETTE].as_chunks::<2>();
+    let (palettes, remainder) = ppu.mem.palette_ram[BG_PALETTE].as_chunks::<2>();
     debug_assert_eq!(palettes.len(), 256);
     debug_assert!(remainder.is_empty());
 
@@ -206,5 +245,5 @@ struct TextScreenEntry {
     verical_flip: bool,
 
     #[bits(4)]
-    palette_number: u8,
+    palette_number: usize,
 }

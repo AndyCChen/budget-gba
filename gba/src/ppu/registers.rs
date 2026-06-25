@@ -192,16 +192,17 @@ impl ScreenSize {
         }
     }
 
-    /// Screen size dimmensions in (x, y) format for text mode.
-    pub fn get_text_mode_size(&self) -> (usize, usize) {
+    /// Screen tile dimmensions in (x, y) format for text mode.
+    pub fn layout_tile_size(&self) -> (usize, usize) {
         match self {
-            ScreenSize::Layout0 => (256, 256),
-            ScreenSize::Layout1 => (512, 256),
-            ScreenSize::Layout2 => (256, 512),
-            ScreenSize::Layout3 => (512, 512),
+            ScreenSize::Layout0 => (32, 32),
+            ScreenSize::Layout1 => (64, 32),
+            ScreenSize::Layout2 => (32, 64),
+            ScreenSize::Layout3 => (64, 64),
         }
     }
 
+    /// Get number of screen blocks for the specified screen layout
     pub fn get_block_count(&self) -> usize {
         match self {
             ScreenSize::Layout0 => 1,
