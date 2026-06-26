@@ -44,7 +44,7 @@ pub fn draw_mode0(ppu: &mut Ppu) {
 
 /// Fetcher iterator for tiles in 4bpp format.
 struct Fetcher4BppIter<'a> {
-    scanline_y: usize,
+    screen_y: usize,
     tile_x: usize,
     palettes: &'a [[u8; 32]],
     screen_blocks: &'a [[u8; SCREEN_BLOCK_SIZE]],
@@ -52,7 +52,7 @@ struct Fetcher4BppIter<'a> {
     char_tiles: &'a [[u8; S_TILE_SIZE]],
     pixel_shifter: Shifter4Bpp,
     palette_shifter: Shifter4Bpp,
-    pixel_x_counter: u32,
+    pixel_x_counter: u8,
     background: BackGround,
 }
 
@@ -83,7 +83,7 @@ impl<'a> Fetcher4BppIter<'a> {
         let (char_tiles, _) = mem.vram[char_base..].as_chunks::<S_TILE_SIZE>();
 
         let mut out = Self {
-            scanline_y,
+            screen_y: scanline_y + background.scroll_y.offset(),
             tile_x: scroll_x.offset() / 8,
             palettes,
             screen_blocks,
@@ -106,8 +106,7 @@ impl<'a> Fetcher4BppIter<'a> {
         let (layout_width, layout_height) =
             self.background.bg_control.screen_size().layout_tile_size();
 
-        let screen_y = self.scanline_y + self.background.scroll_y.offset();
-        let tile_y = (screen_y / 8) % layout_height;
+        let tile_y = (self.screen_y / 8) % layout_height;
 
         let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
             * (layout_width / SCREEN_BLOCK_WIDTH)
@@ -125,9 +124,9 @@ impl<'a> Fetcher4BppIter<'a> {
         let (char_entry, _) = self.char_tiles[screen_entry.tile_number()].as_chunks::<4>();
 
         let fine_y = if screen_entry.vertical_flip() {
-            7 - (screen_y % 8)
+            7 - (self.screen_y % 8)
         } else {
-            screen_y % 8
+            self.screen_y % 8
         };
 
         let mut char_row = if screen_entry.horizontal_flip() {
