@@ -105,8 +105,9 @@ impl<'a> Fetcher4BppIter<'a> {
     fn fetch_tile(&mut self) {
         let (layout_width, layout_height) =
             self.background.bg_control.screen_size().layout_tile_size();
-        let tile_y_offset = self.background.scroll_y.offset() / 8;
-        let tile_y = ((tile_y_offset) + (self.scanline_y / 8)) % layout_height;
+
+        let screen_y = self.scanline_y + self.background.scroll_y.offset();
+        let tile_y = (screen_y / 8) % layout_height;
 
         let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
             * (layout_width / SCREEN_BLOCK_WIDTH)
@@ -123,7 +124,6 @@ impl<'a> Fetcher4BppIter<'a> {
 
         let (char_entry, _) = self.char_tiles[screen_entry.tile_number()].as_chunks::<4>();
 
-        let screen_y = self.scanline_y + self.background.scroll_y.offset();
         let fine_y = if screen_entry.vertical_flip() {
             7 - (screen_y % 8)
         } else {
@@ -173,21 +173,6 @@ impl<'a> Iterator for Fetcher4BppIter<'a> {
         let (color_palette, _) = self.palettes[palette_number as usize].as_chunks::<2>();
         let color_bytes = u16::from_le_bytes(color_palette[pixel_color as usize]);
         Some(Rgb5::from_u16(color_bytes))
-
-        // let mut output_row = [Rgb5::new(); 8];
-
-        // for ((left_pixel, right_pixel), dst) in char_row
-        //     .into_iter()
-        //     .map(|byte| usize::from(byte))
-        //     .map(|byte| (byte & 0xF, (byte >> 4) & 0xF))
-        //     .zip(output_row.as_chunks_mut::<2>().0)
-        // {
-        //     let (color_palette, _) = self.palettes[screen_entry.palette_number()].as_chunks::<2>();
-        //     dst[0] = Rgb5::from_u16(u16::from_le_bytes(color_palette[left_pixel]));
-        //     dst[1] = Rgb5::from_u16(u16::from_le_bytes(color_palette[right_pixel]));
-        // }
-
-        // Some(output_row)
     }
 }
 

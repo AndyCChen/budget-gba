@@ -87,20 +87,20 @@ impl Bus {
             BG0VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
             BG0VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
 
-            BG1HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
-            BG1HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
-            BG1VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
-            BG1VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
+            BG1HOFS_0 => self.ppu.registers.bg1_scroll_x.write(value, HalfwordIo::B0),
+            BG1HOFS_1 => self.ppu.registers.bg1_scroll_x.write(value, HalfwordIo::B1),
+            BG1VOFS_0 => self.ppu.registers.bg1_scroll_y.write(value, HalfwordIo::B0),
+            BG1VOFS_1 => self.ppu.registers.bg1_scroll_y.write(value, HalfwordIo::B1),
 
-            BG2HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
-            BG2HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
-            BG2VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
-            BG2VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
+            BG2HOFS_0 => self.ppu.registers.bg2_scroll_x.write(value, HalfwordIo::B0),
+            BG2HOFS_1 => self.ppu.registers.bg2_scroll_x.write(value, HalfwordIo::B1),
+            BG2VOFS_0 => self.ppu.registers.bg2_scroll_y.write(value, HalfwordIo::B0),
+            BG2VOFS_1 => self.ppu.registers.bg2_scroll_y.write(value, HalfwordIo::B1),
 
-            BG3HOFS_0 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B0),
-            BG3HOFS_1 => self.ppu.registers.bg0_scroll_x.write(value, HalfwordIo::B1),
-            BG3VOFS_0 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B0),
-            BG3VOFS_1 => self.ppu.registers.bg0_scroll_y.write(value, HalfwordIo::B1),
+            BG3HOFS_0 => self.ppu.registers.bg3_scroll_x.write(value, HalfwordIo::B0),
+            BG3HOFS_1 => self.ppu.registers.bg3_scroll_x.write(value, HalfwordIo::B1),
+            BG3VOFS_0 => self.ppu.registers.bg3_scroll_y.write(value, HalfwordIo::B0),
+            BG3VOFS_1 => self.ppu.registers.bg3_scroll_y.write(value, HalfwordIo::B1),
 
             // APU
 
