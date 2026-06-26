@@ -1,4 +1,5 @@
 use bitfield_struct::bitfield;
+use std::array;
 use std::ops::Range;
 
 use crate::ppu::Ppu;
@@ -35,33 +36,37 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     };
 
     let fetcher_4bpp_iter = Fetcher4BppIter::new(&ppu.mem, background, scanline_y);
-    let (display_buffer_row, _) = ppu.display_buffer[scanline_y].as_chunks_mut::<8>(); // 8 pixels for row
 
-    for (src, dst) in fetcher_4bpp_iter.zip(display_buffer_row) {
-        dst.copy_from_slice(&src);
+    for (src, dst) in fetcher_4bpp_iter.zip(ppu.display_buffer[scanline_y].iter_mut()) {
+        *dst = src;
     }
 }
 
 /// Fetcher iterator for tiles in 4bpp format.
 struct Fetcher4BppIter<'a> {
+    scanline_y: usize,
     tile_x: usize,
-    tile_y: usize,
     palettes: &'a [[u8; 32]],
     screen_blocks: &'a [[u8; SCREEN_BLOCK_SIZE]],
     // slice of 32 byte tiles -> 4 bytes per 8 pixel row -> 1 byte per 2 pixels, 4 bits per pixel
     char_tiles: &'a [[u8; S_TILE_SIZE]],
-    layout_width: usize,
-    fine_y: usize,
+    pixel_shifter: Shifter4Bpp,
+    palette_shifter: Shifter4Bpp,
+    pixel_x_counter: u32,
+    background: BackGround,
 }
 
 impl<'a> Fetcher4BppIter<'a> {
     fn new(mem: &'a Memory, background: BackGround, scanline_y: usize) -> Self {
-        let BackGround { bg_control, .. } = background;
+        let BackGround {
+            bg_control,
+            scroll_x,
+            ..
+        } = background;
 
         let char_base = usize::from(bg_control.char_base_block()) * CHAR_BLOCK_SIZE;
         let screen_base = usize::from(bg_control.screen_base_block()) * SCREEN_BLOCK_SIZE;
         let layout = bg_control.screen_size();
-        let (layout_width, _) = layout.layout_tile_size();
 
         let (palettes, remainder) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
 
@@ -77,45 +82,55 @@ impl<'a> Fetcher4BppIter<'a> {
 
         let (char_tiles, _) = mem.vram[char_base..].as_chunks::<S_TILE_SIZE>();
 
-        let fine_y = scanline_y % 8;
-
-        Self {
-            tile_x: 0,
-            tile_y: scanline_y / 8,
+        let mut out = Self {
+            scanline_y,
+            tile_x: scroll_x.offset() / 8,
             palettes,
             screen_blocks,
             char_tiles,
-            layout_width,
-            fine_y,
-        }
-    }
-}
-
-impl<'a> Iterator for Fetcher4BppIter<'a> {
-    type Item = [Rgb5; 8];
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let screen_block_index = (self.tile_y / SCREEN_BLOCK_WIDTH)
-            * (self.layout_width / SCREEN_BLOCK_WIDTH)
-            + (self.tile_x / SCREEN_BLOCK_HEIGHT);
-
-        let inner_screen_block_index = (self.tile_y % SCREEN_BLOCK_WIDTH) * SCREEN_BLOCK_WIDTH
-            + (self.tile_x % SCREEN_BLOCK_HEIGHT);
-
-        self.tile_x += 1;
-
-        let lo = self.screen_blocks[screen_block_index][inner_screen_block_index * 2];
-        let hi = self.screen_blocks[screen_block_index][inner_screen_block_index * 2 + 1];
-        let screen_entry = TextScreenEntry::from_bits(u16::from_le_bytes([lo, hi]));
-        let (char_entry, _) = self.char_tiles[screen_entry.tile_number()].as_chunks::<4>();
-
-        let fine_y = if screen_entry.vertical_flip() {
-            7 - self.fine_y
-        } else {
-            self.fine_y
+            background,
+            pixel_shifter: Shifter4Bpp::default(),
+            palette_shifter: Shifter4Bpp::default(),
+            pixel_x_counter: 0,
         };
 
-        let char_row = if screen_entry.horizontal_flip() {
+        // call next 8 times to fill in output shift register with 8 pixels
+        for _ in 0..8 {
+            out.next();
+        }
+
+        out
+    }
+
+    fn fetch_tile(&mut self) {
+        let (layout_width, layout_height) =
+            self.background.bg_control.screen_size().layout_tile_size();
+        let tile_y_offset = self.background.scroll_y.offset() / 8;
+        let tile_y = ((tile_y_offset) + (self.scanline_y / 8)) % layout_height;
+
+        let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
+            * (layout_width / SCREEN_BLOCK_WIDTH)
+            + (self.tile_x / SCREEN_BLOCK_HEIGHT);
+
+        let inner_screen_block_index = (tile_y % SCREEN_BLOCK_WIDTH) * SCREEN_BLOCK_WIDTH
+            + (self.tile_x % SCREEN_BLOCK_HEIGHT);
+
+        self.tile_x = (self.tile_x + 1) % layout_width;
+
+        let (screen_block, _) = self.screen_blocks[screen_block_index].as_chunks::<2>();
+        let screen_entry_bytes = u16::from_le_bytes(screen_block[inner_screen_block_index]);
+        let screen_entry = TextScreenEntry::from_bits(screen_entry_bytes);
+
+        let (char_entry, _) = self.char_tiles[screen_entry.tile_number()].as_chunks::<4>();
+
+        let screen_y = self.scanline_y + self.background.scroll_y.offset();
+        let fine_y = if screen_entry.vertical_flip() {
+            7 - (screen_y % 8)
+        } else {
+            screen_y % 8
+        };
+
+        let mut char_row = if screen_entry.horizontal_flip() {
             let mut flipped = char_entry[fine_y];
             flipped.reverse();
             flipped
@@ -123,21 +138,63 @@ impl<'a> Iterator for Fetcher4BppIter<'a> {
             char_entry[fine_y]
         };
 
-        let mut output_row = [Rgb5::new(); 8];
-
-        for ((left_pixel, right_pixel), dst) in char_row
-            .into_iter()
-            .map(|byte| usize::from(byte))
-            .map(|byte| (byte & 0xF, (byte >> 4) & 0xF))
-            .zip(output_row.as_chunks_mut::<2>().0)
-        {
-            let (color_palette, _) = self.palettes[screen_entry.palette_number()].as_chunks::<2>();
-            dst[0] = Rgb5::from_u16(u16::from_le_bytes(color_palette[left_pixel]));
-            dst[1] = Rgb5::from_u16(u16::from_le_bytes(color_palette[right_pixel]));
+        // lo nibble is the left pixel while the hi nibble is the right pixel,
+        // this complicates things when outputing pixels so we swap the nibbles via left rotate.
+        for byte in char_row.iter_mut() {
+            *byte = byte.rotate_left(4);
         }
 
-        Some(output_row)
+        let palette_number = screen_entry.palette_number() as u8;
+        let palette = array::from_fn(|_| (palette_number << 4) as u8 | palette_number as u8);
+        self.palette_shifter.set_input(u32::from_be_bytes(palette));
+        self.pixel_shifter.set_input(u32::from_be_bytes(char_row));
     }
+}
+
+impl<'a> Iterator for Fetcher4BppIter<'a> {
+    type Item = Rgb5;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.pixel_x_counter % 8 == 0 {
+            self.fetch_tile();
+        }
+
+        self.pixel_x_counter += 1;
+
+        let fine_x = self.background.scroll_x.offset() & 7;
+        let pixel_select = 4 * (7 - fine_x);
+
+        let pixel_color = (self.pixel_shifter.output() >> pixel_select) & 0xF;
+        let palette_number = (self.palette_shifter.output() >> pixel_select) & 0xF;
+
+        self.pixel_shifter = Shifter4Bpp::from_bits(self.pixel_shifter.into_bits() << 4);
+        self.palette_shifter = Shifter4Bpp::from_bits(self.palette_shifter.into_bits() << 4);
+
+        let (color_palette, _) = self.palettes[palette_number as usize].as_chunks::<2>();
+        let color_bytes = u16::from_le_bytes(color_palette[pixel_color as usize]);
+        Some(Rgb5::from_u16(color_bytes))
+
+        // let mut output_row = [Rgb5::new(); 8];
+
+        // for ((left_pixel, right_pixel), dst) in char_row
+        //     .into_iter()
+        //     .map(|byte| usize::from(byte))
+        //     .map(|byte| (byte & 0xF, (byte >> 4) & 0xF))
+        //     .zip(output_row.as_chunks_mut::<2>().0)
+        // {
+        //     let (color_palette, _) = self.palettes[screen_entry.palette_number()].as_chunks::<2>();
+        //     dst[0] = Rgb5::from_u16(u16::from_le_bytes(color_palette[left_pixel]));
+        //     dst[1] = Rgb5::from_u16(u16::from_le_bytes(color_palette[right_pixel]));
+        // }
+
+        // Some(output_row)
+    }
+}
+
+#[bitfield(u64)]
+struct Shifter4Bpp {
+    input: u32,
+    output: u32,
 }
 
 pub fn draw_mode3(ppu: &mut Ppu) {

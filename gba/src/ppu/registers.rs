@@ -215,7 +215,7 @@ impl ScreenSize {
 #[gba_register(u16)]
 pub struct BgScroll {
     #[bits(9)]
-    offset: u16,
+    pub offset: usize,
 
     #[bits(7)]
     __: u8,
