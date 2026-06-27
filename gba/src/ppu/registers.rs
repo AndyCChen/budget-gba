@@ -193,7 +193,7 @@ impl ScreenSize {
     }
 
     /// Screen tile dimmensions in (x, y) format for text mode.
-    pub fn layout_tile_size(&self) -> (usize, usize) {
+    pub fn layout_tile_size(&self) -> (u8, u8) {
         match self {
             ScreenSize::Layout0 => (32, 32),
             ScreenSize::Layout1 => (64, 32),

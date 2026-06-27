@@ -1,4 +1,6 @@
 mod core;
+mod fetcher;
+mod common;
 mod registers;
 mod backgrounds;
 
