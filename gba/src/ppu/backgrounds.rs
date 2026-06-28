@@ -4,20 +4,81 @@ use crate::ppu::Ppu;
 use crate::ppu::common::*;
 use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
-use crate::ppu::registers::FrameSelect;
+use crate::ppu::registers::{FrameSelect, PaletteType};
 use crate::{DISPLAY_WIDTH, Rgb5};
+
+/// Returns a collects of backgrounds ordered by descending priority.
+/// Returns None if no backgrounds are enabled.
+fn select_backgrounds(ppu: &Ppu) -> Option<Vec<FetchType>> {
+    #[rustfmt::skip]
+    let bg_controls = [
+        (ppu.registers.lcd_control.bg0_enable(), ppu.registers.bg0_control, ppu.registers.bg0_scroll_x, ppu.registers.bg0_scroll_y),
+        (ppu.registers.lcd_control.bg1_enable(), ppu.registers.bg1_control, ppu.registers.bg1_scroll_x, ppu.registers.bg1_scroll_y),
+        (ppu.registers.lcd_control.bg2_enable(), ppu.registers.bg2_control, ppu.registers.bg2_scroll_x, ppu.registers.bg2_scroll_y),
+        (ppu.registers.lcd_control.bg3_enable(), ppu.registers.bg3_control, ppu.registers.bg3_scroll_x, ppu.registers.bg3_scroll_y),
+    ];
+
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    let mut bgs: Vec<FetchType> = bg_controls
+        .into_iter()
+        .filter_map(|(enabled, bg_control, scroll_x, scroll_y)| {
+            enabled.then(|| Background {
+                bg_control,
+                scroll_x,
+                scroll_y,
+            })
+        })
+        .map(|background| match background.bg_control.palettes() {
+            PaletteType::ColorDepth4Bit => {
+                FetchType::Fetch4bpp(BackGround4bpp::new(&ppu.mem, background, scanline_y))
+            }
+            PaletteType::ColorDepth8Bit => {
+                FetchType::Fetch8bpp(BackGround8bpp::new(&ppu.mem, background, scanline_y))
+            }
+        })
+        .collect();
+
+    bgs.sort();
+
+    if bgs.is_empty() { None } else { Some(bgs) }
+}
+
+fn merge_bg_colors(pixel_types: &[PixelType]) -> Rgb5 {
+    let mut final_color = Rgb5::default();
+    let mut is_opaque = false;
+
+    for pixel_type in pixel_types.iter().rev() {
+        match pixel_type {
+            PixelType::Opaque(rgb5) => {
+                final_color = *rgb5;
+                is_opaque = true;
+            }
+            PixelType::Transparent(rgb5) => {
+                if !is_opaque {
+                    final_color = *rgb5;
+                }
+            }
+        }
+    }
+
+    final_color
+}
 
 pub fn draw_mode0(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
-    let Some(background) = select_background(&ppu) else {
+
+    let Some(mut backgrounds) = select_backgrounds(ppu) else {
         ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
         return;
     };
 
-    let mut bg = FetchType::Fetch4bpp(BackGround4bpp::new(&ppu.mem, background, scanline_y));
+    let mut colors: Vec<PixelType> = Vec::with_capacity(4);
 
     for dst in ppu.display_buffer[scanline_y].iter_mut() {
-        *dst = fetch_pixel(&ppu.mem, &mut bg)
+        colors.extend(backgrounds.iter_mut().map(|bg| fetch_pixel(&ppu.mem, bg)));
+        *dst = merge_bg_colors(&colors);
+        colors.clear();
     }
 }
 
@@ -139,27 +200,4 @@ fn bg_color0(palette: &PaletteRam) -> Rgb5 {
     let color_0 = palette.first_chunk::<2>().unwrap();
     let color_u16 = u16::from_le_bytes(*color_0);
     Rgb5::from_u16(color_u16)
-}
-
-/// Retrieve the enabled background with the highest priority.
-/// Returns None if no backgrounds are enabled.
-fn select_background(ppu: &Ppu) -> Option<Background> {
-    #[rustfmt::skip]
-    let bg_controls = [
-        (ppu.registers.lcd_control.bg0_enable(), ppu.registers.bg0_control, ppu.registers.bg0_scroll_x, ppu.registers.bg0_scroll_y),
-        (ppu.registers.lcd_control.bg1_enable(), ppu.registers.bg1_control, ppu.registers.bg1_scroll_x, ppu.registers.bg1_scroll_y),
-        (ppu.registers.lcd_control.bg2_enable(), ppu.registers.bg2_control, ppu.registers.bg2_scroll_x, ppu.registers.bg2_scroll_y),
-        (ppu.registers.lcd_control.bg3_enable(), ppu.registers.bg3_control, ppu.registers.bg3_scroll_x, ppu.registers.bg3_scroll_y),
-    ];
-
-    bg_controls
-        .into_iter()
-        .filter_map(|(enabled, bg_control, scroll_x, scroll_y)| {
-            enabled.then(|| Background {
-                bg_control,
-                scroll_x,
-                scroll_y,
-            })
-        })
-        .min_by_key(|Background { bg_control, .. }| bg_control.bg_priority())
 }

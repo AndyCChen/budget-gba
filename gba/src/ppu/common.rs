@@ -15,8 +15,12 @@ pub const SCREEN_BLOCK_SIZE: usize = 2 * 1024;
 /// Size of tiles in 4bpp format, 32 bytes big
 pub const S_TILE_SIZE: usize = 32;
 /// Size of tiles in 8bpp format, 64 bytes big
-pub const _D_TILE_SIZE: usize = 64;
+pub const D_TILE_SIZE: usize = 64;
+
+pub const S_TILE_ROW_SIZE: usize = 4;
+pub const D_TILE_ROW_SIZE: usize = 8;
 
 // screen block dimensions in tiles
 pub const SCREEN_BLOCK_WIDTH: usize = 32;
 pub const SCREEN_BLOCK_HEIGHT: usize = 32;
+pub const SCREEN_ENTRY_SIZE: usize = 2;
