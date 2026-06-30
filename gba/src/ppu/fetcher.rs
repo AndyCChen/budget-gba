@@ -6,56 +6,6 @@ use crate::ppu::common::*;
 use crate::ppu::core::Memory;
 use crate::ppu::registers::{BgControl, BgScroll};
 
-pub enum PixelType {
-    Opaque(Rgb5),
-    Transparent(Rgb5),
-}
-
-pub enum FetchType {
-    Fetch4bpp(BackGround4bpp),
-    Fetch8bpp(BackGround8bpp),
-}
-
-impl Ord for FetchType {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let self_priority = match self {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        let other_priority = match other {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        self_priority.cmp(&other_priority)
-    }
-}
-
-impl PartialOrd for FetchType {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for FetchType {
-    fn eq(&self, other: &Self) -> bool {
-        let self_priority = match self {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        let other_priority = match other {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        self_priority == other_priority
-    }
-}
-
-impl Eq for FetchType {}
-
 pub fn fetch_pixel(mem: &Memory, fetch_type: &mut FetchType) -> PixelType {
     match fetch_type {
         FetchType::Fetch4bpp(background_4bpp) => fetch_pixel_4bpp(background_4bpp, mem),
@@ -119,11 +69,11 @@ fn fetch_tile_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) {
 
     bg_4bpp.tile_x += 1;
 
-    let (screen_block, _) = screen_blocks[screen_block_index].as_chunks::<SCREEN_ENTRY_SIZE>(); // screen entry is 2 bytes
+    let (screen_block, _) = screen_blocks[screen_block_index].as_chunks::<SCREEN_ENTRY_SIZE>();
     let screen_entry_bits = u16::from_le_bytes(screen_block[inner_screen_block_index]);
     let screen_entry = TextScreenEntry::from_bits(screen_entry_bits);
 
-    let (char_entry, _) = char_tiles[screen_entry.tile_number()].as_chunks::<S_TILE_ROW_SIZE>(); // each pixel row is 4 bytes
+    let (char_entry, _) = char_tiles[screen_entry.tile_number()].as_chunks::<S_TILE_ROW_SIZE>();
 
     let fine_y = usize::from(if screen_entry.vertical_flip() {
         7 - (bg_4bpp.screen_y % 8)
@@ -209,11 +159,11 @@ fn fetch_tile_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) {
 
     bg_8bpp.tile_x += 1;
 
-    let (screen_block, _) = screen_blocks[screen_block_index].as_chunks::<SCREEN_ENTRY_SIZE>(); // screen entry is 2 bytes
+    let (screen_block, _) = screen_blocks[screen_block_index].as_chunks::<SCREEN_ENTRY_SIZE>();
     let screen_entry_bits = u16::from_le_bytes(screen_block[inner_screen_block_index]);
     let screen_entry = TextScreenEntry::from_bits(screen_entry_bits);
 
-    let (char_entry, _) = char_tiles[screen_entry.tile_number()].as_chunks::<D_TILE_ROW_SIZE>(); // each pixel row is 8 bytes
+    let (char_entry, _) = char_tiles[screen_entry.tile_number()].as_chunks::<D_TILE_ROW_SIZE>();
 
     let fine_y = usize::from(if screen_entry.vertical_flip() {
         7 - (bg_8bpp.screen_y % 8)
@@ -233,6 +183,12 @@ fn fetch_tile_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) {
     bg_8bpp
         .pixel_shifter
         .set_input(u64::from_be_bytes(pixel_row));
+}
+
+pub struct Background {
+    pub bg_control: BgControl,
+    pub scroll_x: BgScroll,
+    pub scroll_y: BgScroll,
 }
 
 pub struct BackGround4bpp {
@@ -289,12 +245,6 @@ impl BackGround8bpp {
     }
 }
 
-pub struct Background {
-    pub bg_control: BgControl,
-    pub scroll_x: BgScroll,
-    pub scroll_y: BgScroll,
-}
-
 #[bitfield(u64)]
 struct Shifter4Bpp {
     input: u32,
@@ -318,3 +268,53 @@ struct TextScreenEntry {
     #[bits(4)]
     palette_number: usize,
 }
+
+pub enum PixelType {
+    Opaque(Rgb5),
+    Transparent(Rgb5),
+}
+
+pub enum FetchType {
+    Fetch4bpp(BackGround4bpp),
+    Fetch8bpp(BackGround8bpp),
+}
+
+impl Ord for FetchType {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let self_priority = match self {
+            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
+            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
+        };
+
+        let other_priority = match other {
+            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
+            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
+        };
+
+        self_priority.cmp(&other_priority)
+    }
+}
+
+impl PartialOrd for FetchType {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for FetchType {
+    fn eq(&self, other: &Self) -> bool {
+        let self_priority = match self {
+            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
+            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
+        };
+
+        let other_priority = match other {
+            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
+            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
+        };
+
+        self_priority == other_priority
+    }
+}
+
+impl Eq for FetchType {}
