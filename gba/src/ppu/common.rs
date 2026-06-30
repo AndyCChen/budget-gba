@@ -1,4 +1,5 @@
 use std::ops::Range;
+use bitfield_struct::bitenum;
 
 /// Size in bytes for a single color palette for 4bpp tiles.
 pub const PALETTE_SIZE_4BPP: usize = 32;
@@ -24,3 +25,14 @@ pub const D_TILE_ROW_SIZE: usize = 8;
 pub const SCREEN_BLOCK_WIDTH: usize = 32;
 pub const SCREEN_BLOCK_HEIGHT: usize = 32;
 pub const SCREEN_ENTRY_SIZE: usize = 2;
+
+#[bitenum]
+#[repr(u8)]
+#[derive(Debug)]
+pub enum PaletteType {
+    /// 16 colors / 16 palettes
+    #[fallback]
+    ColorDepth4Bit = 0,
+    /// 256 colors / 1 palette
+    ColorDepth8Bit,
+}

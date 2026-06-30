@@ -1,8 +1,9 @@
+mod backgrounds;
+mod common;
 mod core;
 mod fetcher;
-mod common;
+mod objects;
 mod registers;
-mod backgrounds;
 
 pub use core::Ppu;
 pub use registers::Registers;

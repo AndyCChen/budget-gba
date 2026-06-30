@@ -5,7 +5,7 @@ use crate::ppu::Ppu;
 use crate::ppu::common::*;
 use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
-use crate::ppu::registers::{FrameSelect, PaletteType};
+use crate::ppu::registers::FrameSelect;
 use crate::{DISPLAY_WIDTH, Rgb5};
 
 pub fn draw_mode0(ppu: &mut Ppu) {

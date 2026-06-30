@@ -1,6 +1,8 @@
 use bitfield_struct::bitenum;
 use register_macros::gba_register;
 
+use crate::ppu::common::PaletteType;
+
 pub struct Registers {
     pub lcd_control: LcdControl,
     pub lcd_status: LcdStatus,
@@ -152,17 +154,6 @@ pub struct BgControl {
 
     #[bits(2, default = ScreenSize::Layout0, from = ScreenSize::from_bits)]
     pub screen_size: ScreenSize,
-}
-
-#[bitenum]
-#[repr(u8)]
-#[derive(Debug)]
-pub enum PaletteType {
-    /// 16 colors / 16 palettes
-    #[fallback]
-    ColorDepth4Bit = 0,
-    /// 256 colors / 1 palette
-    ColorDepth8Bit,
 }
 
 #[derive(Debug)]
