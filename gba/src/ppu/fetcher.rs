@@ -37,11 +37,12 @@ fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> PixelType {
     let color_bytes = u16::from_le_bytes(color_palette[color_index as usize]);
 
     let color = Rgb5::from_u16(color_bytes);
+    let priority = bg_4bpp.bg.bg_control.bg_priority();
 
     if color_index == 0 {
-        PixelType::Transparent(color)
+        PixelType::Transparent { color, priority }
     } else {
-        PixelType::Opaque(color)
+        PixelType::Opaque { color, priority }
     }
 }
 
@@ -127,11 +128,12 @@ fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> PixelType {
     let color_bytes = u16::from_le_bytes(palette[color_index as usize]);
 
     let color = Rgb5::from_u16(color_bytes);
+    let priority = bg_8bpp.bg.bg_control.bg_priority();
 
     if color_index == 0 {
-        PixelType::Transparent(color)
+        PixelType::Transparent { color, priority }
     } else {
-        PixelType::Opaque(color)
+        PixelType::Opaque { color, priority }
     }
 }
 
@@ -272,13 +274,16 @@ struct TextScreenEntry {
 }
 
 pub enum PixelType {
-    Opaque(Rgb5),
-    Transparent(Rgb5),
+    Opaque { color: Rgb5, priority: u8 },
+    Transparent { color: Rgb5, priority: u8 },
 }
 
 impl Default for PixelType {
     fn default() -> Self {
-        Self::Opaque(Rgb5::default())
+        Self::Opaque {
+            color: Rgb5::default(),
+            priority: 0,
+        }
     }
 }
 

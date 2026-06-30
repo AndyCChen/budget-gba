@@ -11,17 +11,21 @@ use crate::{DISPLAY_WIDTH, Rgb5};
 pub fn draw_mode0(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
-    let Some(mut backgrounds) = select_backgrounds(ppu) else {
+    let mut backgrounds = select_backgrounds(ppu);
+
+    if backgrounds.is_empty() {
         ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
         return;
     };
 
-    let mut colors = ArrayVec::<[PixelType; 4]>::new();
-
     for dst in ppu.display_buffer[scanline_y].iter_mut() {
-        colors.extend(backgrounds.iter_mut().map(|bg| fetch_pixel(&ppu.mem, bg)));
-        *dst = merge_bg_colors(&colors);
-        colors.clear();
+        let colors: ArrayVec<[PixelType; 4]> = backgrounds
+            .iter_mut()
+            .map(|bg| fetch_pixel(&ppu.mem, bg))
+            .collect();
+
+        let (bg_color, _priority) = merge_bg_colors(&colors);
+        *dst = bg_color;
     }
 }
 
@@ -145,9 +149,9 @@ fn bg_color0(palette: &PaletteRam) -> Rgb5 {
     Rgb5::from_u16(color_u16)
 }
 
-/// Returns a collects of backgrounds ordered by descending priority.
-/// Returns None if no backgrounds are enabled.
-fn select_backgrounds(ppu: &Ppu) -> Option<ArrayVec<[FetchType; 4]>> {
+/// Returns a ArrayVec of backgrounds ordered by descending priority.
+/// ArrayVec will be empty if no backgrounds are enabled.
+fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
     #[rustfmt::skip]
     let bg_controls = [
         (ppu.registers.lcd_control.bg0_enable(), ppu.registers.bg0_control, ppu.registers.bg0_scroll_x, ppu.registers.bg0_scroll_y),
@@ -175,26 +179,24 @@ fn select_backgrounds(ppu: &Ppu) -> Option<ArrayVec<[FetchType; 4]>> {
             }
         });
 
-    let mut bgs = ArrayVec::<[FetchType; 4]>::new();
-    bgs.extend(bg_controls_iter);
+    let mut bgs: ArrayVec<[FetchType; 4]> = bg_controls_iter.collect();
     bgs.sort();
-
-    if bgs.is_empty() { None } else { Some(bgs) }
+    bgs
 }
 
-fn merge_bg_colors(pixel_types: &[PixelType]) -> Rgb5 {
-    let mut final_color = Rgb5::default();
+fn merge_bg_colors(pixel_types: &[PixelType]) -> (Rgb5, u8) {
+    let mut final_color = (Rgb5::default(), 0);
     let mut is_opaque = false;
 
     for pixel_type in pixel_types.iter().rev() {
-        match pixel_type {
-            PixelType::Opaque(rgb5) => {
-                final_color = *rgb5;
+        match *pixel_type {
+            PixelType::Opaque { color, priority } => {
+                final_color = (color, priority);
                 is_opaque = true;
             }
-            PixelType::Transparent(rgb5) => {
+            PixelType::Transparent { color, priority } => {
                 if !is_opaque {
-                    final_color = *rgb5;
+                    final_color = (color, priority);
                 }
             }
         }
