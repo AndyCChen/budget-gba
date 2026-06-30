@@ -2626,6 +2626,7 @@ dependencies = [
  "register_macros",
  "serde",
  "serde_json",
+ "tinyvec",
 ]
 
 [[package]]

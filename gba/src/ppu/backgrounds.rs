@@ -1,4 +1,5 @@
 use std::ops::Range;
+use tinyvec::ArrayVec;
 
 use crate::ppu::Ppu;
 use crate::ppu::common::*;
@@ -15,7 +16,7 @@ pub fn draw_mode0(ppu: &mut Ppu) {
         return;
     };
 
-    let mut colors: Vec<PixelType> = Vec::with_capacity(4);
+    let mut colors = ArrayVec::<[PixelType; 4]>::new();
 
     for dst in ppu.display_buffer[scanline_y].iter_mut() {
         colors.extend(backgrounds.iter_mut().map(|bg| fetch_pixel(&ppu.mem, bg)));
@@ -146,7 +147,7 @@ fn bg_color0(palette: &PaletteRam) -> Rgb5 {
 
 /// Returns a collects of backgrounds ordered by descending priority.
 /// Returns None if no backgrounds are enabled.
-fn select_backgrounds(ppu: &Ppu) -> Option<Vec<FetchType>> {
+fn select_backgrounds(ppu: &Ppu) -> Option<ArrayVec<[FetchType; 4]>> {
     #[rustfmt::skip]
     let bg_controls = [
         (ppu.registers.lcd_control.bg0_enable(), ppu.registers.bg0_control, ppu.registers.bg0_scroll_x, ppu.registers.bg0_scroll_y),
@@ -156,8 +157,7 @@ fn select_backgrounds(ppu: &Ppu) -> Option<Vec<FetchType>> {
     ];
 
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
-
-    let mut bgs: Vec<FetchType> = bg_controls
+    let bg_controls_iter = bg_controls
         .into_iter()
         .filter_map(|(enabled, bg_control, scroll_x, scroll_y)| {
             enabled.then(|| Background {
@@ -173,9 +173,10 @@ fn select_backgrounds(ppu: &Ppu) -> Option<Vec<FetchType>> {
             PaletteType::ColorDepth8Bit => {
                 FetchType::Fetch8bpp(BackGround8bpp::new(&ppu.mem, background, scanline_y))
             }
-        })
-        .collect();
+        });
 
+    let mut bgs = ArrayVec::<[FetchType; 4]>::new();
+    bgs.extend(bg_controls_iter);
     bgs.sort();
 
     if bgs.is_empty() { None } else { Some(bgs) }

@@ -11,3 +11,4 @@ serde_json = "1.0"
 register_macros = { path = "register_macros"  }
 paste = "1.0.15"
 bitflags = "2.13.0"
+tinyvec = "1.11.0"

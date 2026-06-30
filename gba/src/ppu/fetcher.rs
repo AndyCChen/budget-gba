@@ -185,12 +185,14 @@ fn fetch_tile_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) {
         .set_input(u64::from_be_bytes(pixel_row));
 }
 
+#[derive(Default)]
 pub struct Background {
     pub bg_control: BgControl,
     pub scroll_x: BgScroll,
     pub scroll_y: BgScroll,
 }
 
+#[derive(Default)]
 pub struct BackGround4bpp {
     tile_x: u8,
     screen_y: u16,
@@ -274,9 +276,21 @@ pub enum PixelType {
     Transparent(Rgb5),
 }
 
+impl Default for PixelType {
+    fn default() -> Self {
+        Self::Opaque(Rgb5::default())
+    }
+}
+
 pub enum FetchType {
     Fetch4bpp(BackGround4bpp),
     Fetch8bpp(BackGround8bpp),
+}
+
+impl Default for FetchType {
+    fn default() -> Self {
+        Self::Fetch4bpp(BackGround4bpp::default())
+    }
 }
 
 impl Ord for FetchType {
