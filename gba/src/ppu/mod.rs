@@ -2,7 +2,7 @@ mod backgrounds;
 mod common;
 mod core;
 mod fetcher;
-mod objects;
+mod sprites;
 mod registers;
 
 pub use core::Ppu;
