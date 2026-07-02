@@ -38,14 +38,8 @@ pub fn draw_mode3(ppu: &mut Ppu) {
         return;
     }
 
-    let vram_row = ppu
-        .mem
-        .vram
-        .chunks(PIXEL_ROW_BYTE_SIZE)
-        .nth(scanline_y)
-        .unwrap();
-
-    let (vram_row, remainder) = vram_row.as_chunks::<2>();
+    let (vram_rows, _) = ppu.mem.vram.as_chunks::<PIXEL_ROW_BYTE_SIZE>();
+    let (vram_row, remainder) = vram_rows[scanline_y].as_chunks::<2>();
     debug_assert_eq!(vram_row.len(), DISPLAY_WIDTH);
     debug_assert!(remainder.is_empty());
 
@@ -81,15 +75,10 @@ pub fn draw_mode4(ppu: &mut Ppu) {
         FrameSelect::Page1 => &ppu.mem.vram[PAGE_1],
     };
 
-    let vram_row = vram.chunks(PIXEL_ROW_BYTE_SIZE).nth(scanline_y).unwrap();
-    debug_assert_eq!(vram_row.len(), PIXEL_ROW_BYTE_SIZE);
-
+    let vram_row = vram.as_chunks::<PIXEL_ROW_BYTE_SIZE>().0[scanline_y];
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
-    debug_assert_eq!(display_buffer_row.len(), vram_row.len());
 
-    let (palettes, remainder) = ppu.mem.palette_ram[BG_PALETTE].as_chunks::<2>();
-    debug_assert_eq!(palettes.len(), 256);
-    debug_assert!(remainder.is_empty());
+    let (palettes, _) = ppu.mem.palette_ram[BG_PALETTE].as_chunks::<2>();
 
     for (src, dst) in vram_row
         .iter()
@@ -119,14 +108,12 @@ pub fn draw_mode5(ppu: &mut Ppu) {
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
 
     // Mode 5 is only 128 scanlines in height, remaining scanlines filled in with color0 of bg from palette ram.
-    let Some(vram_row) = vram.chunks(PIXEL_ROW_BYTE_SIZE).nth(scanline_y) else {
+    let Some(vram_row) = vram.as_chunks::<PIXEL_ROW_BYTE_SIZE>().0.get(scanline_y) else {
         display_buffer_row.fill(bg_color0(&ppu.mem.palette_ram));
         return;
     };
 
-    let (vram_row, remainder) = vram_row.as_chunks::<2>();
-    debug_assert_eq!(vram_row.len(), MODE5_WIDTH);
-    debug_assert!(remainder.is_empty());
+    let (vram_row, _) = vram_row.as_chunks::<2>();
 
     for (src, dst) in vram_row
         .iter()
