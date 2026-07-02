@@ -1,4 +1,5 @@
 use bitfield_struct::bitenum;
+use crate::Rgb5;
 use std::ops::Range;
 
 /// Colors are 16 bit rgb values (2 bytes)
