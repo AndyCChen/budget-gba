@@ -53,7 +53,10 @@ pub struct LcdControl {
     pub display_frame_select: FrameSelect,
 
     pub hblank_interval_free: bool,
-    pub obj_vram_mapping: bool,
+
+    #[bits(1, default = ObjectMapType::D2)]
+    pub obj_vram_mapping: ObjectMapType,
+
     pub forced_blank: bool,
     pub bg0_enable: bool,
     pub bg1_enable: bool,
@@ -63,6 +66,17 @@ pub struct LcdControl {
     pub window0_enable: bool,
     pub window1_enable: bool,
     pub obj_window_enable: bool,
+}
+
+#[bitenum]
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum ObjectMapType {
+    #[fallback]
+    /// two dimensional mapping in memory
+    D2 = 0,
+    /// one dimensional mapping in memory
+    D1,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

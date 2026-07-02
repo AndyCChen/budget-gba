@@ -273,20 +273,6 @@ struct TextScreenEntry {
     palette_number: usize,
 }
 
-pub enum PixelType {
-    Opaque { color: Rgb5, priority: u8 },
-    Transparent { color: Rgb5, priority: u8 },
-}
-
-impl Default for PixelType {
-    fn default() -> Self {
-        Self::Opaque {
-            color: Rgb5::default(),
-            priority: 0,
-        }
-    }
-}
-
 pub enum FetchType {
     Fetch4bpp(BackGround4bpp),
     Fetch8bpp(BackGround8bpp),
