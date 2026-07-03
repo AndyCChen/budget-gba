@@ -102,7 +102,7 @@ fn pixel_fetch_s_tile(
     let priority = oam_entry.attribute2.priority();
 
     if color_index == 0 {
-        PixelType::Transparent { color, priority }
+        PixelType::Transparent
     } else {
         PixelType::Opaque { color, priority }
     }

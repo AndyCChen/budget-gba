@@ -3,28 +3,29 @@ use tinyvec::ArrayVec;
 
 use crate::ppu::Ppu;
 use crate::ppu::common::*;
+use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
 use crate::ppu::registers::FrameSelect;
 use crate::{DISPLAY_WIDTH, Rgb5};
 
 pub fn draw_mode0(ppu: &mut Ppu) {
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
-    let mut backgrounds = select_backgrounds(ppu);
-
-    if backgrounds.is_empty() {
-        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
+    let mut background_fetchers = select_backgrounds(ppu);
+    if background_fetchers.is_empty() {
+        ppu.display_buffer[scanline_y].fill(backdrop_color);
         return;
     };
 
     for dst in ppu.display_buffer[scanline_y].iter_mut() {
-        let colors: ArrayVec<[PixelType; 4]> = backgrounds
+        let bg_color_layers: ArrayVec<[PixelType; 4]> = background_fetchers
             .iter_mut()
             .map(|bg| fetch_pixel(&ppu.mem, bg))
             .collect();
 
-        let (bg_color, _priority) = merge_bg_colors(&colors);
-        *dst = bg_color;
+        let color = merge_colors(&bg_color_layers, backdrop_color);
+        *dst = color;
     }
 }
 
@@ -130,6 +131,8 @@ pub fn draw_mode5(ppu: &mut Ppu) {
 }
 
 /// Returns a ArrayVec of backgrounds ordered by descending priority.
+/// For backgrounds with equal priority, the priority goes as follows from
+/// highest to lowest: bg0 - bg3.
 /// ArrayVec will be empty if no backgrounds are enabled.
 fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
     #[rustfmt::skip]
@@ -160,27 +163,28 @@ fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
         });
 
     let mut bgs: ArrayVec<[FetchType; 4]> = bg_controls_iter.collect();
+    // This must be stable sort!
     bgs.sort();
     bgs
 }
 
-fn merge_bg_colors(pixel_types: &[PixelType]) -> (Rgb5, u8) {
-    let mut final_color = (Rgb5::default(), 0);
-    let mut is_opaque = false;
-
-    for pixel_type in pixel_types.iter().rev() {
-        match *pixel_type {
-            PixelType::Opaque { color, priority } => {
-                final_color = (color, priority);
-                is_opaque = true;
-            }
-            PixelType::Transparent { color, priority } => {
-                if !is_opaque {
-                    final_color = (color, priority);
-                }
-            }
-        }
+fn merge_colors(bg_color_layers: &[PixelType], backdrop_color: Rgb5) -> Rgb5 {
+    if let Some(opaque_color) =
+        bg_color_layers
+            .iter()
+            .copied()
+            .find_map(|pixel_type| match pixel_type {
+                PixelType::Opaque { color, .. } => Some(color),
+                PixelType::Transparent => None,
+            })
+    {
+        opaque_color
+    } else {
+        backdrop_color
     }
+}
 
-    final_color
+fn backdrop_color(palette: &PaletteRam) -> Rgb5 {
+    let color_0 = u16::from_le_bytes([palette[0], palette[1]]);
+    Rgb5::from_u16(color_0)
 }

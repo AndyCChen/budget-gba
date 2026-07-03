@@ -34,10 +34,7 @@ fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> PixelType {
     let priority = bg_4bpp.bg.bg_control.bg_priority();
 
     if color_index == 0 {
-        PixelType::Transparent {
-            color: backdrop_color(&mem.palette_ram),
-            priority,
-        }
+        PixelType::Transparent
     } else {
         let (palettes, _) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
         let (color_palette, _) = palettes[palette_selection as usize].as_chunks::<RGB5_SIZE>();
@@ -130,10 +127,7 @@ fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> PixelType {
     let priority = bg_8bpp.bg.bg_control.bg_priority();
 
     if color_index == 0 {
-        PixelType::Transparent {
-            color: backdrop_color(&mem.palette_ram),
-            priority,
-        }
+        PixelType::Transparent
     } else {
         // palette for 8bpp mode is one big palette with 256 colors
         let (palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>();
