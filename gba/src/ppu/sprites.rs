@@ -138,7 +138,7 @@ impl SpriteFetcher {
         let (oam, _) = ppu.mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
         let y_coord = ppu.registers.v_counter.scanline_count();
 
-        for (oam_number, oam_entry) in oam.iter().map(|entry| OamEntry::new(entry)).enumerate() {
+        for (oam_number, oam_entry) in oam.iter().map(OamEntry::new).enumerate() {
             let (_, height) = get_sprite_size(&oam_entry);
             let y_start = oam_entry.attribute0.y_coord();
 

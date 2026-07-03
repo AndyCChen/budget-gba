@@ -14,7 +14,7 @@ pub fn fetch_pixel(mem: &Memory, fetch_type: &mut FetchType) -> PixelType {
 }
 
 fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> PixelType {
-    if bg_4bpp.pixel_x_counter % 8 == 0 {
+    if bg_4bpp.pixel_x_counter.is_multiple_of(8) {
         fetch_tile_4bpp(bg_4bpp, mem);
     }
 
@@ -99,7 +99,7 @@ fn fetch_tile_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) {
     }
 
     let palette_number = screen_entry.palette_number() as u8;
-    let palette = array::from_fn(|_| (palette_number << 4) as u8 | palette_number as u8);
+    let palette = array::from_fn(|_| (palette_number << 4) | palette_number);
 
     bg_4bpp
         .palette_shifter
@@ -110,7 +110,7 @@ fn fetch_tile_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) {
 }
 
 fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> PixelType {
-    if bg_8bpp.pixel_x_counter % 8 == 0 {
+    if bg_8bpp.pixel_x_counter.is_multiple_of(8) {
         fetch_tile_8bpp(bg_8bpp, mem);
     }
 

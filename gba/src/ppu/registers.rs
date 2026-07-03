@@ -7,18 +7,9 @@ pub struct Registers {
     pub lcd_control: LcdControl,
     pub lcd_status: LcdStatus,
     pub v_counter: VerticalCounter,
-    pub bg0_control: BgControl,
-    pub bg1_control: BgControl,
-    pub bg2_control: BgControl,
-    pub bg3_control: BgControl,
-    pub bg0_scroll_x: BgScroll,
-    pub bg0_scroll_y: BgScroll,
-    pub bg1_scroll_x: BgScroll,
-    pub bg1_scroll_y: BgScroll,
-    pub bg2_scroll_x: BgScroll,
-    pub bg2_scroll_y: BgScroll,
-    pub bg3_scroll_x: BgScroll,
-    pub bg3_scroll_y: BgScroll,
+    pub bg_controls: [BgControl; 4],
+    pub bg_scrolls_x: [BgScroll; 4],
+    pub bg_scrolls_y: [BgScroll; 4],
 }
 
 impl Registers {
@@ -27,18 +18,9 @@ impl Registers {
             lcd_control: LcdControl::default(),
             lcd_status: LcdStatus::default(),
             v_counter: VerticalCounter::default(),
-            bg0_control: BgControl::default(),
-            bg1_control: BgControl::default(),
-            bg2_control: BgControl::default(),
-            bg3_control: BgControl::default(),
-            bg0_scroll_x: BgScroll::default(),
-            bg0_scroll_y: BgScroll::default(),
-            bg1_scroll_x: BgScroll::default(),
-            bg1_scroll_y: BgScroll::default(),
-            bg2_scroll_x: BgScroll::default(),
-            bg2_scroll_y: BgScroll::default(),
-            bg3_scroll_x: BgScroll::default(),
-            bg3_scroll_y: BgScroll::default(),
+            bg_controls: [BgControl::default(); 4],
+            bg_scrolls_x: [BgScroll::default(); 4],
+            bg_scrolls_y: [BgScroll::default(); 4],
         }
     }
 }

@@ -1,3 +1,4 @@
+use std::array;
 use std::ops::Range;
 use tinyvec::ArrayVec;
 
@@ -5,6 +6,8 @@ use crate::ppu::Ppu;
 use crate::ppu::common::*;
 use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
+use crate::ppu::registers::BgControl;
+use crate::ppu::registers::BgScroll;
 use crate::ppu::registers::FrameSelect;
 use crate::ppu::sprites::*;
 use crate::{DISPLAY_WIDTH, Rgb5};
@@ -139,23 +142,42 @@ pub fn draw_mode5(ppu: &mut Ppu) {
 /// highest to lowest: bg0 - bg3.
 /// ArrayVec will be empty if no backgrounds are enabled.
 fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
-    #[rustfmt::skip]
-    let bg_controls = [
-        (ppu.registers.lcd_control.bg0_enable(), ppu.registers.bg0_control, ppu.registers.bg0_scroll_x, ppu.registers.bg0_scroll_y),
-        (ppu.registers.lcd_control.bg1_enable(), ppu.registers.bg1_control, ppu.registers.bg1_scroll_x, ppu.registers.bg1_scroll_y),
-        (ppu.registers.lcd_control.bg2_enable(), ppu.registers.bg2_control, ppu.registers.bg2_scroll_x, ppu.registers.bg2_scroll_y),
-        (ppu.registers.lcd_control.bg3_enable(), ppu.registers.bg3_control, ppu.registers.bg3_scroll_x, ppu.registers.bg3_scroll_y),
+    struct Bundle {
+        enabled: bool,
+        bg_control: BgControl,
+        scroll_x: BgScroll,
+        scroll_y: BgScroll,
+    }
+
+    let enabled_backgrounds = [
+        ppu.registers.lcd_control.bg0_enable(),
+        ppu.registers.lcd_control.bg1_enable(),
+        ppu.registers.lcd_control.bg2_enable(),
+        ppu.registers.lcd_control.bg3_enable(),
     ];
+
+    let bg_controls: [Bundle; 4] = array::from_fn(|i| {
+        let enabled = enabled_backgrounds[i];
+        let bg_control = ppu.registers.bg_controls[i];
+        let scroll_x = ppu.registers.bg_scrolls_x[i];
+        let scroll_y = ppu.registers.bg_scrolls_y[i];
+
+        Bundle {
+            enabled,
+            bg_control,
+            scroll_x,
+            scroll_y,
+        }
+    });
 
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
     let bg_controls_iter = bg_controls
         .into_iter()
-        .filter_map(|(enabled, bg_control, scroll_x, scroll_y)| {
-            enabled.then(|| Background {
-                bg_control,
-                scroll_x,
-                scroll_y,
-            })
+        .filter(|bg| bg.enabled)
+        .map(|bundle| Background {
+            bg_control: bundle.bg_control,
+            scroll_x: bundle.scroll_x,
+            scroll_y: bundle.scroll_y,
         })
         .map(|background| match background.bg_control.palettes() {
             PaletteType::ColorDepth4Bit => {
