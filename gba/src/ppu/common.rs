@@ -1,9 +1,9 @@
 use bitfield_struct::bitenum;
-use crate::Rgb5;
+use crate::{Rgb5, ppu::core::PaletteRam};
 use std::ops::Range;
 
 /// Colors are 16 bit rgb values (2 bytes)
-pub const COLOR_SIZE: usize = 2;
+pub const RGB5_SIZE: usize = 2;
 
 /// Size in bytes for a single color palette for 4bpp tiles.
 pub const PALETTE_SIZE_4BPP: usize = 32;
@@ -68,4 +68,10 @@ impl Default for PixelType {
             priority: 0,
         }
     }
+}
+
+pub fn backdrop_color(palette: &PaletteRam) -> Rgb5 {
+    let color_0 = palette.first_chunk::<2>().unwrap();
+    let color_u16 = u16::from_le_bytes(*color_0);
+    Rgb5::from_u16(color_u16)
 }

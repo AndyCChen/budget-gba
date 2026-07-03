@@ -3,7 +3,6 @@ use tinyvec::ArrayVec;
 
 use crate::ppu::Ppu;
 use crate::ppu::common::*;
-use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
 use crate::ppu::registers::FrameSelect;
 use crate::{DISPLAY_WIDTH, Rgb5};
@@ -14,7 +13,7 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     let mut backgrounds = select_backgrounds(ppu);
 
     if backgrounds.is_empty() {
-        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
         return;
     };
 
@@ -34,7 +33,7 @@ pub fn draw_mode3(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     if !ppu.registers.lcd_control.bg2_enable() {
-        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
         return;
     }
 
@@ -66,7 +65,7 @@ pub fn draw_mode4(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     if !ppu.registers.lcd_control.bg2_enable() {
-        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
         return;
     }
 
@@ -96,7 +95,7 @@ pub fn draw_mode5(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     if !ppu.registers.lcd_control.bg2_enable() {
-        ppu.display_buffer[scanline_y].fill(bg_color0(&ppu.mem.palette_ram));
+        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
         return;
     }
 
@@ -109,7 +108,7 @@ pub fn draw_mode5(ppu: &mut Ppu) {
 
     // Mode 5 is only 128 scanlines in height, remaining scanlines filled in with color0 of bg from palette ram.
     let Some(vram_row) = vram.as_chunks::<PIXEL_ROW_BYTE_SIZE>().0.get(scanline_y) else {
-        display_buffer_row.fill(bg_color0(&ppu.mem.palette_ram));
+        display_buffer_row.fill(backdrop_color(&ppu.mem.palette_ram));
         return;
     };
 
@@ -127,13 +126,7 @@ pub fn draw_mode5(ppu: &mut Ppu) {
     // of bg from palette ram.
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
     let remaining = &mut display_buffer_row[MODE5_WIDTH..];
-    remaining.fill(bg_color0(&ppu.mem.palette_ram));
-}
-
-fn bg_color0(palette: &PaletteRam) -> Rgb5 {
-    let color_0 = palette.first_chunk::<2>().unwrap();
-    let color_u16 = u16::from_le_bytes(*color_0);
-    Rgb5::from_u16(color_u16)
+    remaining.fill(backdrop_color(&ppu.mem.palette_ram));
 }
 
 /// Returns a ArrayVec of backgrounds ordered by descending priority.

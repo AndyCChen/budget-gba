@@ -92,7 +92,7 @@ fn pixel_fetch_s_tile(
 
     let palette_index = oam_entry.attribute2.palette_number();
     let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
-    let (color_palette, _) = palettes[palette_index].as_chunks::<COLOR_SIZE>();
+    let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
 
     let pixel_pair = pixel_row[fine_x / 2];
     let color_index = usize::from(pixel_pair & (0xF << (fine_x & 1)));

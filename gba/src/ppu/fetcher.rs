@@ -31,18 +31,22 @@ fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> PixelType {
     bg_4bpp.pixel_shifter = Shifter4Bpp::from_bits(bg_4bpp.pixel_shifter.into_bits() << 4);
     bg_4bpp.palette_shifter = Shifter4Bpp::from_bits(bg_4bpp.palette_shifter.into_bits() << 4);
 
-    let (palettes, _) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
-
-    let (color_palette, _) = palettes[palette_selection as usize].as_chunks::<2>();
-    let color_bytes = u16::from_le_bytes(color_palette[color_index as usize]);
-
-    let color = Rgb5::from_u16(color_bytes);
     let priority = bg_4bpp.bg.bg_control.bg_priority();
 
     if color_index == 0 {
-        PixelType::Transparent { color, priority }
+        PixelType::Transparent {
+            color: backdrop_color(&mem.palette_ram),
+            priority,
+        }
     } else {
-        PixelType::Opaque { color, priority }
+        let (palettes, _) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
+        let (color_palette, _) = palettes[palette_selection as usize].as_chunks::<RGB5_SIZE>();
+        let color_bytes = u16::from_le_bytes(color_palette[color_index as usize]);
+
+        PixelType::Opaque {
+            color: Rgb5::from_u16(color_bytes),
+            priority,
+        }
     }
 }
 
@@ -123,17 +127,22 @@ fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> PixelType {
 
     bg_8bpp.pixel_shifter = Shifter8Bpp::from_bits(bg_8bpp.pixel_shifter.into_bits() << 8);
 
-    // palette for 8bpp mode is one big palette with 256 colors
-    let (palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<2>();
-    let color_bytes = u16::from_le_bytes(palette[color_index as usize]);
-
-    let color = Rgb5::from_u16(color_bytes);
     let priority = bg_8bpp.bg.bg_control.bg_priority();
 
     if color_index == 0 {
-        PixelType::Transparent { color, priority }
+        PixelType::Transparent {
+            color: backdrop_color(&mem.palette_ram),
+            priority,
+        }
     } else {
-        PixelType::Opaque { color, priority }
+        // palette for 8bpp mode is one big palette with 256 colors
+        let (palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>();
+        let color_bytes = u16::from_le_bytes(palette[color_index as usize]);
+
+        PixelType::Opaque {
+            color: Rgb5::from_u16(color_bytes),
+            priority,
+        }
     }
 }
 
