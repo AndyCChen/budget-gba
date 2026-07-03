@@ -6,17 +6,20 @@ use crate::ppu::common::*;
 use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
 use crate::ppu::registers::FrameSelect;
+use crate::ppu::sprites::*;
 use crate::{DISPLAY_WIDTH, Rgb5};
 
 pub fn draw_mode0(ppu: &mut Ppu) {
-    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
-    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
-
     let mut background_fetchers = select_backgrounds(ppu);
+    let mut sprite_fetcher = SpriteFetcher::new(ppu);
+
     if background_fetchers.is_empty() {
-        ppu.display_buffer[scanline_y].fill(backdrop_color);
+        disabled_draw(ppu, sprite_fetcher);
         return;
     };
+
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     for dst in ppu.display_buffer[scanline_y].iter_mut() {
         let bg_color_layers: ArrayVec<[PixelType; 4]> = background_fetchers
@@ -24,7 +27,8 @@ pub fn draw_mode0(ppu: &mut Ppu) {
             .map(|bg| fetch_pixel(&ppu.mem, bg))
             .collect();
 
-        let color = merge_colors(&bg_color_layers, backdrop_color);
+        let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+        let color = merge_colors(sprite_color, &bg_color_layers, backdrop_color);
         *dst = color;
     }
 }
@@ -168,23 +172,62 @@ fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
     bgs
 }
 
-fn merge_colors(bg_color_layers: &[PixelType], backdrop_color: Rgb5) -> Rgb5 {
-    if let Some(opaque_color) =
-        bg_color_layers
-            .iter()
-            .copied()
-            .find_map(|pixel_type| match pixel_type {
-                PixelType::Opaque { color, .. } => Some(color),
-                PixelType::Transparent => None,
-            })
-    {
-        opaque_color
-    } else {
-        backdrop_color
+fn merge_colors(
+    sprite_color: PixelType,
+    bg_color_layers: &[PixelType],
+    backdrop_color: Rgb5,
+) -> Rgb5 {
+    let bg_color = bg_color_layers
+        .iter()
+        .copied()
+        .find(|pixel_type| matches!(pixel_type, PixelType::Opaque { .. }))
+        .unwrap_or(PixelType::Transparent);
+
+    match (sprite_color, bg_color) {
+        (PixelType::Transparent, PixelType::Opaque { color, .. }) => color,
+        (PixelType::Transparent, PixelType::Transparent) => backdrop_color,
+        (PixelType::Opaque { color, .. }, PixelType::Transparent) => color,
+        (
+            PixelType::Opaque {
+                color: sp_color,
+                priority: sp_priority,
+            },
+            PixelType::Opaque {
+                color: bg_color,
+                priority: bg_priority,
+            },
+        ) => {
+            if sp_priority <= bg_priority {
+                sp_color
+            } else {
+                bg_color
+            }
+        }
     }
 }
 
+/// Get color 0 of palette 0 in background palette which is used for
+/// all transparent pixels.
 fn backdrop_color(palette: &PaletteRam) -> Rgb5 {
     let color_0 = u16::from_le_bytes([palette[0], palette[1]]);
     Rgb5::from_u16(color_0)
+}
+
+/// When layer is disabled, just fill with backdrop color and render sprites if they
+/// are enabled.
+fn disabled_draw(ppu: &mut Ppu, mut sprite_fetcher: SpriteFetcher) {
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    if !ppu.registers.lcd_control.obj_enable() {
+        ppu.display_buffer[scanline_y].fill(backdrop_color);
+        return;
+    }
+
+    for dst in &mut ppu.display_buffer[scanline_y] {
+        *dst = match fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem) {
+            PixelType::Opaque { color, .. } => color,
+            PixelType::Transparent => backdrop_color,
+        };
+    }
 }

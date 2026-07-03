@@ -10,22 +10,26 @@ use crate::ppu::common::*;
 use crate::ppu::core::Memory;
 use crate::ppu::registers::ObjectMapType;
 
+/// sprites tiles occupy the last 32kb of vram
 const SPRITE_VRAM_CHUNK: Range<usize> = 0x0001_0000..0x0001_8000;
+/// each oam is 8 bytes in size
 const OAM_ENTRY_SIZE: usize = 8;
 
-pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, ppu: &Ppu) -> Option<PixelType> {
-    let (oam, _) = ppu.mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
+/// Fetches sprite pixel. If no sprite is present then a transparent pixel type is returned instead.
+pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> PixelType {
+    let (oam, _) = mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
     let x_coord = sprite_fetcher.pixel_counter_x;
-    let y_coord = ppu.registers.v_counter.scanline_count();
-    let dimension = ppu.registers.lcd_control.obj_vram_mapping();
+    let y_coord = sprite_fetcher.y_coord;
+    let dimension = sprite_fetcher.dimension;
+
     sprite_fetcher.pixel_counter_x += 1;
 
-    let mut oam_iter = sprite_fetcher
+    let pixel_type = sprite_fetcher
         .sprite_buffer
         .iter()
         .copied()
-        .filter_map(|sprite_number| {
-            let oam_entry = OamEntry::new(&oam[usize::from(sprite_number)]);
+        .filter_map(|sprite_index| {
+            let oam_entry = OamEntry::new(&oam[usize::from(sprite_index)]);
 
             let x_start = oam_entry.attribute1.x_coord();
             let (width, _) = get_sprite_size(&oam_entry);
@@ -39,12 +43,13 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, ppu: &Ppu) -> Opti
                 None
             }
         })
-        .map(|oam_entry| pixel_fetch_s_tile(&oam_entry, &ppu.mem, x_coord, y_coord, dimension));
+        .map(|oam_entry| fetch_4bpp_pixel(&oam_entry, mem, x_coord, y_coord, dimension))
+        .find(|pixel_type| matches!(pixel_type, PixelType::Opaque { .. }));
 
-    oam_iter.next()
+    pixel_type.unwrap_or(PixelType::Transparent)
 }
 
-fn pixel_fetch_s_tile(
+fn fetch_4bpp_pixel(
     oam_entry: &OamEntry,
     mem: &Memory,
     x_coord: u8,
@@ -72,7 +77,7 @@ fn pixel_fetch_s_tile(
     };
 
     let (tiles, _) = mem.vram[SPRITE_VRAM_CHUNK].as_chunks::<S_TILE_SIZE>();
-    let (s_tile, _) = tiles[tile_index].as_chunks::<S_TILE_ROW_SIZE>();
+    let (s_tile, _) = tiles[tile_index % tiles.len()].as_chunks::<S_TILE_ROW_SIZE>();
 
     // x and y coordinate within a 8x8 tile
     let fine_x = usize::from(sprite_fine_x % 8);
@@ -95,7 +100,8 @@ fn pixel_fetch_s_tile(
     let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
 
     let pixel_pair = pixel_row[fine_x / 2];
-    let color_index = usize::from(pixel_pair & (0xF << (fine_x & 1)));
+    let shift = 4 * (fine_x & 1);
+    let color_index = usize::from(pixel_pair & (0xF << shift)) >> shift;
     let color_bytes = u16::from_le_bytes(color_palette[color_index]);
 
     let color = Rgb5::from_bits(color_bytes);
@@ -110,10 +116,14 @@ fn pixel_fetch_s_tile(
 
 pub struct SpriteFetcher {
     /// Holds sprites that are enabled
-    /// and vertically intersect with current scanline
-    /// being rendered.
+    /// and vertically intersecting with current scanline.
+    /// Sprites are stored sorted
+    /// based on their priority while respecting the original relative
+    /// order for sprites with equal priority.
     sprite_buffer: ArrayVec<[u8; MAX_SPRITES]>,
     pixel_counter_x: u8,
+    y_coord: u8,
+    dimension: ObjectMapType,
 }
 
 impl SpriteFetcher {
@@ -121,6 +131,8 @@ impl SpriteFetcher {
         let mut sprite_fetcher = Self {
             sprite_buffer: ArrayVec::new(),
             pixel_counter_x: 0,
+            y_coord: ppu.registers.v_counter.scanline_count(),
+            dimension: ppu.registers.lcd_control.obj_vram_mapping(),
         };
 
         let (oam, _) = ppu.mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
@@ -139,6 +151,11 @@ impl SpriteFetcher {
             }
         }
 
+        sprite_fetcher.sprite_buffer.sort_by_key(|sprite_index| {
+            let oam_entry = OamEntry::new(&oam[usize::from(*sprite_index)]);
+            oam_entry.attribute2.priority()
+        });
+
         sprite_fetcher
     }
 }
@@ -147,6 +164,7 @@ struct OamEntry {
     attribute0: Attribute0,
     attribute1: Attribute1,
     attribute2: Attribute2,
+    #[allow(unused)]
     padding: u16,
 }
 
@@ -285,15 +303,15 @@ fn get_sprite_tile_size(oam_entry: &OamEntry) -> (u8, u8) {
     (width / TILE_PIXEL_SIZE, height / TILE_PIXEL_SIZE)
 }
 
-fn checked_add_512(op1: u16, op2: u16) -> Option<u16> {
-    let sum = op1 + op2;
-    if sum < 512 { Some(sum) } else { None }
-}
+// fn checked_add_512(op1: u16, op2: u16) -> Option<u16> {
+//     let sum = op1 + op2;
+//     if sum < 512 { Some(sum) } else { None }
+// }
 
-fn wrapping_add_512(op1: u16, op2: u16) -> u16 {
-    let sum = op1 + op2;
-    sum % 512
-}
+// fn wrapping_add_512(op1: u16, op2: u16) -> u16 {
+//     let sum = op1 + op2;
+//     sum % 512
+// }
 
 fn wrapping_sub_512(op1: u16, op2: u16) -> u16 {
     let diff = op1.wrapping_sub(op2);
