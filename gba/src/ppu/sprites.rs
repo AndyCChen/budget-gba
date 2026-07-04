@@ -61,28 +61,27 @@ fn fetch_4bpp_pixel(
     let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
 
     // x and y pixel coordinates within a sprite
-
     let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
-        width_pixel - wrapping_sub_512(u16::from(x_coord), x_start) as u8
+        u16::from(width_pixel) - wrapping_sub_512(u16::from(x_coord), x_start)
     } else {
-        wrapping_sub_512(u16::from(x_coord), x_start) as u8
+        wrapping_sub_512(u16::from(x_coord), x_start)
     };
 
-    let sprite_fine_y = if oam_entry.attribute1.vertical_flip() {
+    let sprite_fine_y = u16::from(if oam_entry.attribute1.vertical_flip() {
         height_pixel - y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
     } else {
         y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
-    };
+    });
 
     // x and y coordinate within a 8x8 tile
     let fine_x = usize::from(sprite_fine_x % 8);
     let fine_y = sprite_fine_y % 8;
 
     // x and y tile coord inside sprite
-    let tile_x = sprite_fine_x / TILE_PIXEL_SIZE;
-    let tile_y = sprite_fine_y / TILE_PIXEL_SIZE;
+    let tile_x = sprite_fine_x / u16::from(TILE_PIXEL_SIZE);
+    let tile_y = sprite_fine_y / u16::from(TILE_PIXEL_SIZE);
 
-    let (width_tiles, _) = get_sprite_tile_size(oam_entry);
+    let width_tiles = u16::from(get_sprite_tile_size(oam_entry).0);
     let tile_index_base = oam_entry.attribute2.tile_index();
     let tile_index = match dimension {
         // treats tiles as if they are arranged in a 32 by 32 tile matrix
