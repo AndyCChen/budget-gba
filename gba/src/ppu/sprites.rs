@@ -58,58 +58,57 @@ fn fetch_4bpp_pixel(
 ) -> PixelType {
     let x_start = oam_entry.attribute1.x_coord();
 
-    // x and y pixel coordinates within a sprite
-    let sprite_fine_x = wrapping_sub_512(u16::from(x_coord), x_start) as u8;
-    let sprite_fine_y = y_coord.wrapping_sub(oam_entry.attribute0.y_coord());
+    let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
 
-    let (width, _) = get_sprite_tile_size(oam_entry);
+    // x and y pixel coordinates within a sprite
+
+    let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
+        width_pixel - wrapping_sub_512(u16::from(x_coord), x_start) as u8
+    } else {
+        wrapping_sub_512(u16::from(x_coord), x_start) as u8
+    };
+
+    let sprite_fine_y = if oam_entry.attribute1.vertical_flip() {
+        height_pixel - y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
+    } else {
+        y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
+    };
+
+    // x and y coordinate within a 8x8 tile
+    let fine_x = usize::from(sprite_fine_x % 8);
+    let fine_y = sprite_fine_y % 8;
 
     // x and y tile coord inside sprite
     let tile_x = sprite_fine_x / TILE_PIXEL_SIZE;
     let tile_y = sprite_fine_y / TILE_PIXEL_SIZE;
 
+    let (width_tiles, _) = get_sprite_tile_size(oam_entry);
     let tile_index_base = oam_entry.attribute2.tile_index();
-
     let tile_index = match dimension {
         // treats tiles as if they are arranged in a 32 by 32 tile matrix
         ObjectMapType::D2 => tile_index_base + usize::from(tile_y * 32 + tile_x),
-        ObjectMapType::D1 => tile_index_base + usize::from(tile_y * width + tile_x),
+        ObjectMapType::D1 => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
     };
 
     let (tiles, _) = mem.vram[SPRITE_VRAM_CHUNK].as_chunks::<S_TILE_SIZE>();
     let (s_tile, _) = tiles[tile_index % tiles.len()].as_chunks::<S_TILE_ROW_SIZE>();
 
-    // x and y coordinate within a 8x8 tile
-    let fine_x = usize::from(sprite_fine_x % 8);
-    let fine_y = usize::from(if oam_entry.attribute1.vertical_flip() {
-        7 - (sprite_fine_y % 8)
-    } else {
-        sprite_fine_y % 8
-    });
-
-    let pixel_row = if oam_entry.attribute1.horizontal_flip() {
-        let mut flipped = s_tile[fine_y];
-        flipped.reverse();
-        flipped
-    } else {
-        s_tile[fine_y]
-    };
-
-    let palette_index = oam_entry.attribute2.palette_number();
-    let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
-    let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
-
+    let pixel_row = s_tile[usize::from(fine_y)];
     let pixel_pair = pixel_row[fine_x / 2];
     let shift = 4 * (fine_x & 1);
     let color_index = usize::from(pixel_pair & (0xF << shift)) >> shift;
-    let color_bytes = u16::from_le_bytes(color_palette[color_index]);
-
-    let color = Rgb5::from_bits(color_bytes);
-    let priority = oam_entry.attribute2.priority();
 
     if color_index == 0 {
         PixelType::Transparent
     } else {
+        let palette_index = oam_entry.attribute2.palette_number();
+        let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
+        let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
+
+        let color_bytes = u16::from_le_bytes(color_palette[color_index]);
+        let color = Rgb5::from_bits(color_bytes);
+        let priority = oam_entry.attribute2.priority();
+
         PixelType::Opaque { color, priority }
     }
 }
@@ -302,16 +301,6 @@ fn get_sprite_tile_size(oam_entry: &OamEntry) -> (u8, u8) {
     let (width, height) = get_sprite_size(oam_entry);
     (width / TILE_PIXEL_SIZE, height / TILE_PIXEL_SIZE)
 }
-
-// fn checked_add_512(op1: u16, op2: u16) -> Option<u16> {
-//     let sum = op1 + op2;
-//     if sum < 512 { Some(sum) } else { None }
-// }
-
-// fn wrapping_add_512(op1: u16, op2: u16) -> u16 {
-//     let sum = op1 + op2;
-//     sum % 512
-// }
 
 fn wrapping_sub_512(op1: u16, op2: u16) -> u16 {
     let diff = op1.wrapping_sub(op2);
