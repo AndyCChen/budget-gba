@@ -24,24 +24,25 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
-    for dst in ppu.display_buffer[scanline_y].iter_mut() {
+    ppu.display_buffer[scanline_y].fill_with(|| {
         let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_fetchers
             .iter_mut()
             .map(|bg| fetch_pixel(&ppu.mem, bg))
             .collect();
 
         let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
-        let color = merge_colors(sprite_color, &bg_color_layers, backdrop_color);
-        *dst = color;
-    }
+        merge_colors(sprite_color, &bg_color_layers, backdrop_color)
+    });
 }
 
 pub fn draw_mode3(ppu: &mut Ppu) {
     const PIXEL_ROW_BYTE_SIZE: usize = DISPLAY_WIDTH * size_of::<u16>();
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
+    let mut sprite_fetcher = SpriteFetcher::new(ppu);
+
     if !ppu.registers.lcd_control.bg2_enable() {
-        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
+        disabled_draw(ppu, sprite_fetcher);
         return;
     }
 
@@ -51,13 +52,24 @@ pub fn draw_mode3(ppu: &mut Ppu) {
     debug_assert!(remainder.is_empty());
 
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
+    let priority = ppu.registers.bg_controls[2].bg_priority();
 
     for (src, dst) in vram_row
         .iter()
-        .map(|src| u16::from_le_bytes(*src))
+        .copied()
+        .map(|src| {
+            let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+            let bg_color = OutputPixel {
+                color: Rgb5::from(u16::from_le_bytes(src)),
+                priority,
+            };
+
+            merge_colors(sprite_color, &[Some(bg_color)], backdrop_color)
+        })
         .zip(display_buffer_row)
     {
-        *dst = Rgb5::from_u16(src);
+        *dst = src;
     }
 }
 
@@ -70,10 +82,10 @@ const PAGE_1: Range<usize> = PAGE_SIZE..(PAGE_SIZE * 2);
 
 pub fn draw_mode4(ppu: &mut Ppu) {
     const PIXEL_ROW_BYTE_SIZE: usize = DISPLAY_WIDTH * size_of::<u8>();
-    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+    let mut sprite_fetcher = SpriteFetcher::new(ppu);
 
     if !ppu.registers.lcd_control.bg2_enable() {
-        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
+        disabled_draw(ppu, sprite_fetcher);
         return;
     }
 
@@ -82,17 +94,29 @@ pub fn draw_mode4(ppu: &mut Ppu) {
         FrameSelect::Page1 => &ppu.mem.vram[PAGE_1],
     };
 
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
     let vram_row = vram.as_chunks::<PIXEL_ROW_BYTE_SIZE>().0[scanline_y];
     let display_buffer_row = &mut ppu.display_buffer[scanline_y];
-
+    let priority = ppu.registers.bg_controls[2].bg_priority();
     let (palettes, _) = ppu.mem.palette_ram[BG_PALETTE].as_chunks::<2>();
 
     for (src, dst) in vram_row
         .iter()
-        .map(|palette_index| u16::from_le_bytes(palettes[usize::from(*palette_index)]))
+        .copied()
+        .map(usize::from)
+        .map(|palette_index| {
+            let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+            let bg_color = OutputPixel {
+                color: Rgb5::from(u16::from_le_bytes(palettes[palette_index])),
+                priority,
+            };
+
+            merge_colors(sprite_color, &[Some(bg_color)], backdrop_color)
+        })
         .zip(display_buffer_row)
     {
-        *dst = Rgb5::from_u16(src);
+        *dst = src;
     }
 }
 
@@ -100,10 +124,9 @@ pub fn draw_mode5(ppu: &mut Ppu) {
     const MODE5_WIDTH: usize = 160;
     const PIXEL_ROW_BYTE_SIZE: usize = MODE5_WIDTH * size_of::<u16>();
 
-    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
-
+    let mut sprite_fetcher = SpriteFetcher::new(ppu);
     if !ppu.registers.lcd_control.bg2_enable() {
-        ppu.display_buffer[scanline_y].fill(backdrop_color(&ppu.mem.palette_ram));
+        disabled_draw(ppu, sprite_fetcher);
         return;
     }
 
@@ -112,29 +135,50 @@ pub fn draw_mode5(ppu: &mut Ppu) {
         FrameSelect::Page1 => &ppu.mem.vram[PAGE_1],
     };
 
-    let display_buffer_row = &mut ppu.display_buffer[scanline_y];
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    // Mode 5 is only 160 pixels in width, fill in remaining pixels on scanline with color0
+    // of bg from palette ram.
+    let (display_buffer_row, display_buffer_row_remaining) = {
+        let display_buffer = ppu.display_buffer[scanline_y].as_chunks_mut::<MODE5_WIDTH>();
+        (&mut display_buffer.0[0], display_buffer.1)
+    };
 
     // Mode 5 is only 128 scanlines in height, remaining scanlines filled in with color0 of bg from palette ram.
     let Some(vram_row) = vram.as_chunks::<PIXEL_ROW_BYTE_SIZE>().0.get(scanline_y) else {
-        display_buffer_row.fill(backdrop_color(&ppu.mem.palette_ram));
+        disabled_draw(ppu, sprite_fetcher);
         return;
     };
 
     let (vram_row, _) = vram_row.as_chunks::<2>();
+    let priority = ppu.registers.bg_controls[2].bg_priority();
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
 
+    // draw first 160 pixels
     for (src, dst) in vram_row
         .iter()
-        .map(|src| u16::from_le_bytes(*src))
+        .copied()
+        .map(|src| {
+            let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+            let bg_color = OutputPixel {
+                color: Rgb5::from(u16::from_le_bytes(src)),
+                priority,
+            };
+
+            merge_colors(sprite_color, &[Some(bg_color)], backdrop_color)
+        })
         .zip(display_buffer_row)
     {
-        *dst = Rgb5::from_u16(src);
+        *dst = src;
     }
 
-    // Mode 5 is only 160 pixels in width, fill in remaining pixels on scanline with color0
-    // of bg from palette ram.
-    let display_buffer_row = &mut ppu.display_buffer[scanline_y];
-    let remaining = &mut display_buffer_row[MODE5_WIDTH..];
-    remaining.fill(backdrop_color(&ppu.mem.palette_ram));
+    // fill remaining (240 - 160) pixels, with backdrop color or sprite pixel
+    display_buffer_row_remaining.fill_with(|| {
+        match fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem) {
+            Some(sp) => sp.color,
+            None => backdrop_color,
+        }
+    });
 }
 
 /// Returns a ArrayVec of backgrounds ordered by descending priority.
@@ -232,15 +276,10 @@ fn disabled_draw(ppu: &mut Ppu, mut sprite_fetcher: SpriteFetcher) {
     let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
-    if !ppu.registers.lcd_control.obj_enable() {
-        ppu.display_buffer[scanline_y].fill(backdrop_color);
-        return;
-    }
-
-    for dst in &mut ppu.display_buffer[scanline_y] {
-        *dst = match fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem) {
+    ppu.display_buffer[scanline_y].fill_with(|| {
+        match fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem) {
             Some(sp) => sp.color,
             None => backdrop_color,
-        };
-    }
+        }
+    });
 }

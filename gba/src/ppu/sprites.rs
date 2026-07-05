@@ -135,6 +135,10 @@ impl SpriteFetcher {
             dimension: ppu.registers.lcd_control.obj_vram_mapping(),
         };
 
+        if !ppu.registers.lcd_control.obj_enable() {
+            return sprite_fetcher;
+        }
+
         let (oam, _) = ppu.mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
         let y_coord = ppu.registers.v_counter.scanline_count();
 
