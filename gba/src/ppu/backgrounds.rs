@@ -234,7 +234,7 @@ fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
 
     let mut bgs: ArrayVec<[FetchType; 4]> = bg_controls_iter.collect();
     // This must be stable sort!
-    bgs.sort();
+    bgs.sort_by_key(|item| item.priority());
     bgs
 }
 

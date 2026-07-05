@@ -281,48 +281,17 @@ pub enum FetchType {
     Fetch8bpp(BackGround8bpp),
 }
 
+impl FetchType {
+    pub fn priority(&self) -> u8 {
+        match self {
+            FetchType::Fetch4bpp(background4bpp) => background4bpp.bg.bg_control.bg_priority(),
+            FetchType::Fetch8bpp(background8bpp) => background8bpp.bg.bg_control.bg_priority(),
+        }
+    }
+}
+
 impl Default for FetchType {
     fn default() -> Self {
         Self::Fetch4bpp(BackGround4bpp::default())
     }
 }
-
-impl Ord for FetchType {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let self_priority = match self {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        let other_priority = match other {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        self_priority.cmp(&other_priority)
-    }
-}
-
-impl PartialOrd for FetchType {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for FetchType {
-    fn eq(&self, other: &Self) -> bool {
-        let self_priority = match self {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        let other_priority = match other {
-            FetchType::Fetch4bpp(background_4bpp) => background_4bpp.bg.bg_control.bg_priority(),
-            FetchType::Fetch8bpp(background_8bpp) => background_8bpp.bg.bg_control.bg_priority(),
-        };
-
-        self_priority == other_priority
-    }
-}
-
-impl Eq for FetchType {}
