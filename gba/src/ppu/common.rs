@@ -56,17 +56,17 @@ pub enum PaletteType {
     ColorDepth8Bit,
 }
 
-#[derive(Clone, Copy)]
-pub enum PixelType {
-    Opaque { color: Rgb5, priority: u8 },
-    Transparent,
+#[derive(Default, Clone)]
+pub struct OutputPixel {
+    pub color: Rgb5,
+    pub priority: u8,
 }
 
-impl Default for PixelType {
-    fn default() -> Self {
-        Self::Opaque {
-            color: Rgb5::default(),
-            priority: 0,
-        }
-    }
-}
+// impl Default for OutputPixel {
+//     fn default() -> Self {
+//         Self::Opaque {
+//             color: Rgb5::default(),
+//             priority: 0,
+//         }
+//     }
+// }

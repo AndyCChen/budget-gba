@@ -6,14 +6,16 @@ use crate::ppu::common::*;
 use crate::ppu::core::Memory;
 use crate::ppu::registers::{BgControl, BgScroll};
 
-pub fn fetch_pixel(mem: &Memory, fetch_type: &mut FetchType) -> PixelType {
+/// Fetch pixel from background layer. If pixel is transparent, return None,
+/// else the opaque color is wrapped in Some.
+pub fn fetch_pixel(mem: &Memory, fetch_type: &mut FetchType) -> Option<OutputPixel> {
     match fetch_type {
         FetchType::Fetch4bpp(background_4bpp) => fetch_pixel_4bpp(background_4bpp, mem),
         FetchType::Fetch8bpp(background_8bpp) => fetch_pixel_8bpp(background_8bpp, mem),
     }
 }
 
-fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> PixelType {
+fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> Option<OutputPixel> {
     if bg_4bpp.pixel_x_counter.is_multiple_of(8) {
         fetch_tile_4bpp(bg_4bpp, mem);
     }
@@ -32,17 +34,17 @@ fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> PixelType {
     bg_4bpp.palette_shifter = Shifter4Bpp::from_bits(bg_4bpp.palette_shifter.into_bits() << 4);
 
     if color_index == 0 {
-        PixelType::Transparent
+        None
     } else {
         let (palettes, _) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
         let (color_palette, _) = palettes[palette_selection as usize].as_chunks::<RGB5_SIZE>();
         let color_bytes = u16::from_le_bytes(color_palette[color_index as usize]);
         let priority = bg_4bpp.bg.bg_control.bg_priority();
 
-        PixelType::Opaque {
+        Some(OutputPixel {
             color: Rgb5::from_u16(color_bytes),
             priority,
-        }
+        })
     }
 }
 
@@ -108,7 +110,7 @@ fn fetch_tile_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) {
         .set_input(u32::from_be_bytes(pixel_row));
 }
 
-fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> PixelType {
+fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> Option<OutputPixel> {
     if bg_8bpp.pixel_x_counter.is_multiple_of(8) {
         fetch_tile_8bpp(bg_8bpp, mem);
     }
@@ -124,17 +126,17 @@ fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> PixelType {
     bg_8bpp.pixel_shifter = Shifter8Bpp::from_bits(bg_8bpp.pixel_shifter.into_bits() << 8);
 
     if color_index == 0 {
-        PixelType::Transparent
+        None
     } else {
         // palette for 8bpp mode is one big palette with 256 colors
         let (palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>();
         let color_bytes = u16::from_le_bytes(palette[color_index as usize]);
         let priority = bg_8bpp.bg.bg_control.bg_priority();
 
-        PixelType::Opaque {
+        Some(OutputPixel {
             color: Rgb5::from_u16(color_bytes),
             priority,
-        }
+        })
     }
 }
 

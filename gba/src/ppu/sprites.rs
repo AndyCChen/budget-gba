@@ -16,7 +16,7 @@ const SPRITE_VRAM_CHUNK: Range<usize> = 0x0001_0000..0x0001_8000;
 const OAM_ENTRY_SIZE: usize = 8;
 
 /// Fetches sprite pixel. If no sprite is present then a transparent pixel type is returned instead.
-pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> PixelType {
+pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> Option<OutputPixel> {
     let (oam, _) = mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
     let x_coord = sprite_fetcher.pixel_counter_x;
     let y_coord = sprite_fetcher.y_coord;
@@ -24,7 +24,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> P
 
     sprite_fetcher.pixel_counter_x += 1;
 
-    let pixel_type = sprite_fetcher
+    sprite_fetcher
         .sprite_buffer
         .iter()
         .copied()
@@ -44,18 +44,20 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> P
             }
         })
         .map(|oam_entry| fetch_4bpp_pixel(&oam_entry, mem, x_coord, y_coord, dimension))
-        .find(|pixel_type| matches!(pixel_type, PixelType::Opaque { .. }));
-
-    pixel_type.unwrap_or(PixelType::Transparent)
+        .find(|pixel_type| pixel_type.is_some())
+        .flatten()
 }
 
+/// Fetches the pixel of corresponding sprite at provided x and y coord.
+/// If pixel is transparent, returns None, otherwise Some contains the output
+/// color.
 fn fetch_4bpp_pixel(
     oam_entry: &OamEntry,
     mem: &Memory,
     x_coord: u8,
     y_coord: u8,
     dimension: ObjectMapType,
-) -> PixelType {
+) -> Option<OutputPixel> {
     let x_start = oam_entry.attribute1.x_coord();
 
     let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
@@ -98,7 +100,7 @@ fn fetch_4bpp_pixel(
     let color_index = usize::from(pixel_pair & (0xF << shift)) >> shift;
 
     if color_index == 0 {
-        PixelType::Transparent
+        None
     } else {
         let palette_index = oam_entry.attribute2.palette_number();
         let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
@@ -108,7 +110,7 @@ fn fetch_4bpp_pixel(
         let color = Rgb5::from_bits(color_bytes);
         let priority = oam_entry.attribute2.priority();
 
-        PixelType::Opaque { color, priority }
+        Some(OutputPixel { color, priority })
     }
 }
 

@@ -25,7 +25,7 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     for dst in ppu.display_buffer[scanline_y].iter_mut() {
-        let bg_color_layers: ArrayVec<[PixelType; 4]> = background_fetchers
+        let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_fetchers
             .iter_mut()
             .map(|bg| fetch_pixel(&ppu.mem, bg))
             .collect();
@@ -195,34 +195,25 @@ fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
 }
 
 fn merge_colors(
-    sprite_color: PixelType,
-    bg_color_layers: &[PixelType],
+    sprite_color: Option<OutputPixel>,
+    bg_color_layers: &[Option<OutputPixel>],
     backdrop_color: Rgb5,
 ) -> Rgb5 {
     let bg_color = bg_color_layers
         .iter()
-        .copied()
-        .find(|pixel_type| matches!(pixel_type, PixelType::Opaque { .. }))
-        .unwrap_or(PixelType::Transparent);
+        .find(|pixel_type| pixel_type.is_some())
+        .cloned()
+        .flatten();
 
     match (sprite_color, bg_color) {
-        (PixelType::Transparent, PixelType::Opaque { color, .. }) => color,
-        (PixelType::Transparent, PixelType::Transparent) => backdrop_color,
-        (PixelType::Opaque { color, .. }, PixelType::Transparent) => color,
-        (
-            PixelType::Opaque {
-                color: sp_color,
-                priority: sp_priority,
-            },
-            PixelType::Opaque {
-                color: bg_color,
-                priority: bg_priority,
-            },
-        ) => {
-            if sp_priority <= bg_priority {
-                sp_color
+        (None, None) => backdrop_color,
+        (None, Some(bg)) => bg.color,
+        (Some(sp), None) => sp.color,
+        (Some(sp), Some(bg)) => {
+            if sp.priority <= bg.priority {
+                sp.color
             } else {
-                bg_color
+                bg.color
             }
         }
     }
@@ -248,8 +239,8 @@ fn disabled_draw(ppu: &mut Ppu, mut sprite_fetcher: SpriteFetcher) {
 
     for dst in &mut ppu.display_buffer[scanline_y] {
         *dst = match fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem) {
-            PixelType::Opaque { color, .. } => color,
-            PixelType::Transparent => backdrop_color,
+            Some(sp) => sp.color,
+            None => backdrop_color,
         };
     }
 }
