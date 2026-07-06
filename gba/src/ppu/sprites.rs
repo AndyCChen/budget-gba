@@ -151,9 +151,7 @@ fn fetch_pixel(
             let shift = 4 * (fine_x & 1);
             let color_index = usize::from(pixel_pair & (0xF << shift)) >> shift;
 
-            if color_index == 0 {
-                None
-            } else {
+            if color_index != 0 {
                 let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
                 let palette_index = oam_entry.attribute2.palette_number();
                 let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
@@ -163,6 +161,8 @@ fn fetch_pixel(
                     color: Rgb5::from_bits(color_bits),
                     priority: oam_entry.attribute2.priority(),
                 })
+            } else {
+                None
             }
         }
         ColorDepth8Bit => {
@@ -172,9 +172,7 @@ fn fetch_pixel(
             let sprite_row = d_tile[fine_y];
             let color_index = usize::from(sprite_row[fine_x]);
 
-            if color_index == 0 {
-                None
-            } else {
+            if color_index != 0 {
                 let (color_palette, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<RGB5_SIZE>();
                 let color_bits = u16::from_le_bytes(color_palette[color_index]);
 
@@ -182,6 +180,8 @@ fn fetch_pixel(
                     color: Rgb5::from_bits(color_bits),
                     priority: oam_entry.attribute2.priority(),
                 })
+            } else {
+                None
             }
         }
     }

@@ -141,7 +141,7 @@ pub struct BgControl {
     pub mosaic_enable: bool,
 
     #[bits(1, default = PaletteType::ColorDepth4Bit)]
-    pub palettes: PaletteType,
+    pub palette_type: PaletteType,
 
     #[bits(5)]
     pub screen_base_block: u8,

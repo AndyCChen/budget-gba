@@ -13,10 +13,10 @@ use crate::ppu::sprites::*;
 use crate::{DISPLAY_WIDTH, Rgb5};
 
 pub fn draw_mode0(ppu: &mut Ppu) {
-    let mut background_fetchers = select_backgrounds(ppu);
+    let mut background_layers = select_backgrounds(ppu);
     let mut sprite_fetcher = SpriteFetcher::new(ppu);
 
-    if background_fetchers.is_empty() {
+    if background_layers.is_empty() {
         disabled_draw(ppu, sprite_fetcher);
         return;
     };
@@ -25,12 +25,12 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
 
     ppu.display_buffer[scanline_y].fill_with(|| {
-        let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_fetchers
+        let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+        let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_layers
             .iter_mut()
-            .map(|bg| fetch_pixel(&ppu.mem, bg))
+            .map(|layer| fetch_normal_pixel(layer, &ppu.mem))
             .collect();
 
-        let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
         merge_colors(sprite_color, &bg_color_layers, backdrop_color)
     });
 }
@@ -185,7 +185,7 @@ pub fn draw_mode5(ppu: &mut Ppu) {
 /// For backgrounds with equal priority, the priority goes as follows from
 /// highest to lowest: bg0 - bg3.
 /// ArrayVec will be empty if no backgrounds are enabled.
-fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
+fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[BackgroundLayer; 4]> {
     struct Bundle {
         enabled: bool,
         bg_control: BgControl,
@@ -215,24 +215,16 @@ fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[FetchType; 4]> {
     });
 
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
-    let bg_controls_iter = bg_controls
-        .into_iter()
-        .filter(|bg| bg.enabled)
-        .map(|bundle| Background {
-            bg_control: bundle.bg_control,
-            scroll_x: bundle.scroll_x,
-            scroll_y: bundle.scroll_y,
-        })
-        .map(|background| match background.bg_control.palettes() {
-            PaletteType::ColorDepth4Bit => {
-                FetchType::Fetch4bpp(BackGround4bpp::new(&ppu.mem, background, scanline_y))
-            }
-            PaletteType::ColorDepth8Bit => {
-                FetchType::Fetch8bpp(BackGround8bpp::new(&ppu.mem, background, scanline_y))
-            }
-        });
+    let bg_controls_iter = bg_controls.into_iter().filter(|bg| bg.enabled).map(
+        |Bundle {
+             bg_control,
+             scroll_x,
+             scroll_y,
+             ..
+         }| BackgroundLayer::new(bg_control, scroll_x, scroll_y, &ppu.mem, scanline_y),
+    );
 
-    let mut bgs: ArrayVec<[FetchType; 4]> = bg_controls_iter.collect();
+    let mut bgs: ArrayVec<[BackgroundLayer; 4]> = bg_controls_iter.collect();
     // This must be stable sort!
     bgs.sort_by_key(|item| item.priority());
     bgs
