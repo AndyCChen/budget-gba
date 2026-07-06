@@ -9,110 +9,12 @@ use crate::ppu::Ppu;
 use crate::ppu::common::*;
 use crate::ppu::core::Memory;
 use crate::ppu::registers::ObjectMapType;
+use PaletteType::*;
 
 /// sprites tiles occupy the last 32kb of vram
 const SPRITE_VRAM_CHUNK: Range<usize> = 0x0001_0000..0x0001_8000;
 /// each oam is 8 bytes in size
 const OAM_ENTRY_SIZE: usize = 8;
-
-/// Fetches sprite pixel. If no sprite is present then a transparent pixel type is returned instead.
-pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> Option<OutputPixel> {
-    let (oam, _) = mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
-    let x_coord = sprite_fetcher.pixel_counter_x;
-    let y_coord = sprite_fetcher.y_coord;
-    let dimension = sprite_fetcher.dimension;
-
-    sprite_fetcher.pixel_counter_x += 1;
-
-    sprite_fetcher
-        .sprite_buffer
-        .iter()
-        .copied()
-        .filter_map(|sprite_index| {
-            let oam_entry = OamEntry::new(&oam[usize::from(sprite_index)]);
-
-            let x_start = oam_entry.attribute1.x_coord();
-            let (width, _) = get_sprite_size(&oam_entry);
-
-            let fine_x = wrapping_sub_512(u16::from(x_coord), x_start);
-            let sprite_present = fine_x < u16::from(width);
-
-            if sprite_present {
-                Some(oam_entry)
-            } else {
-                None
-            }
-        })
-        .map(|oam_entry| fetch_4bpp_pixel(&oam_entry, mem, x_coord, y_coord, dimension))
-        .find(|pixel_type| pixel_type.is_some())
-        .flatten()
-}
-
-/// Fetches the pixel of corresponding sprite at provided x and y coord.
-/// If pixel is transparent, returns None, otherwise Some contains the output
-/// color.
-fn fetch_4bpp_pixel(
-    oam_entry: &OamEntry,
-    mem: &Memory,
-    x_coord: u8,
-    y_coord: u8,
-    dimension: ObjectMapType,
-) -> Option<OutputPixel> {
-    let x_start = oam_entry.attribute1.x_coord();
-
-    let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
-
-    // x and y pixel coordinates within a sprite
-    let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
-        u16::from(width_pixel) - wrapping_sub_512(u16::from(x_coord), x_start)
-    } else {
-        wrapping_sub_512(u16::from(x_coord), x_start)
-    };
-
-    let sprite_fine_y = u16::from(if oam_entry.attribute1.vertical_flip() {
-        height_pixel - y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
-    } else {
-        y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
-    });
-
-    // x and y coordinate within a 8x8 tile
-    let fine_x = usize::from(sprite_fine_x % 8);
-    let fine_y = sprite_fine_y % 8;
-
-    // x and y tile coord inside sprite
-    let tile_x = sprite_fine_x / u16::from(TILE_PIXEL_SIZE);
-    let tile_y = sprite_fine_y / u16::from(TILE_PIXEL_SIZE);
-
-    let width_tiles = u16::from(get_sprite_tile_size(oam_entry).0);
-    let tile_index_base = oam_entry.attribute2.tile_index();
-    let tile_index = match dimension {
-        // treats tiles as if they are arranged in a 32 by 32 tile matrix
-        ObjectMapType::D2 => tile_index_base + usize::from(tile_y * 32 + tile_x),
-        ObjectMapType::D1 => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
-    };
-
-    let (tiles, _) = mem.vram[SPRITE_VRAM_CHUNK].as_chunks::<S_TILE_SIZE>();
-    let (s_tile, _) = tiles[tile_index % tiles.len()].as_chunks::<S_TILE_ROW_SIZE>();
-
-    let pixel_row = s_tile[usize::from(fine_y)];
-    let pixel_pair = pixel_row[fine_x / 2];
-    let shift = 4 * (fine_x & 1);
-    let color_index = usize::from(pixel_pair & (0xF << shift)) >> shift;
-
-    if color_index == 0 {
-        None
-    } else {
-        let palette_index = oam_entry.attribute2.palette_number();
-        let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
-        let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
-
-        let color_bytes = u16::from_le_bytes(color_palette[color_index]);
-        let color = Rgb5::from_bits(color_bytes);
-        let priority = oam_entry.attribute2.priority();
-
-        Some(OutputPixel { color, priority })
-    }
-}
 
 pub struct SpriteFetcher {
     /// Holds sprites that are enabled
@@ -161,6 +63,127 @@ impl SpriteFetcher {
         });
 
         sprite_fetcher
+    }
+}
+
+/// Fetches sprite pixel. If no sprite is present then a transparent pixel type is returned instead.
+pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> Option<OutputPixel> {
+    let (oam, _) = mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
+    let x_coord = sprite_fetcher.pixel_counter_x;
+    let y_coord = sprite_fetcher.y_coord;
+    let dimension = sprite_fetcher.dimension;
+
+    sprite_fetcher.pixel_counter_x += 1;
+
+    sprite_fetcher
+        .sprite_buffer
+        .iter()
+        .copied()
+        .filter_map(|sprite_index| {
+            let oam_entry = OamEntry::new(&oam[usize::from(sprite_index)]);
+
+            let x_start = oam_entry.attribute1.x_coord();
+            let (width, _) = get_sprite_size(&oam_entry);
+
+            let fine_x = wrapping_sub_512(u16::from(x_coord), x_start);
+            let sprite_present = fine_x < u16::from(width);
+
+            if sprite_present {
+                Some(oam_entry)
+            } else {
+                None
+            }
+        })
+        .map(|oam_entry| fetch_pixel(&oam_entry, mem, x_coord, y_coord, dimension))
+        .find(|pixel_type| pixel_type.is_some())
+        .flatten()
+}
+
+/// Fetches the pixel of corresponding sprite at provided x and y coord.
+/// If pixel is transparent, returns None, otherwise Some contains the output
+/// color.
+fn fetch_pixel(
+    oam_entry: &OamEntry,
+    mem: &Memory,
+    x_coord: u8,
+    y_coord: u8,
+    dimension: ObjectMapType,
+) -> Option<OutputPixel> {
+    let x_start = oam_entry.attribute1.x_coord();
+    let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
+
+    // x and y pixel coordinates within a sprite
+    let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
+        u16::from(width_pixel) - wrapping_sub_512(u16::from(x_coord), x_start)
+    } else {
+        wrapping_sub_512(u16::from(x_coord), x_start)
+    };
+
+    let sprite_fine_y = u16::from(if oam_entry.attribute1.vertical_flip() {
+        height_pixel - y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
+    } else {
+        y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
+    });
+
+    // x and y coordinate within a 8x8 tile
+    let fine_x = usize::from(sprite_fine_x % 8);
+    let fine_y = usize::from(sprite_fine_y % 8);
+
+    // x and y tile coord inside sprite
+    let tile_x = sprite_fine_x / u16::from(TILE_PIXEL_SIZE);
+    let tile_y = sprite_fine_y / u16::from(TILE_PIXEL_SIZE);
+
+    let width_tiles = u16::from(get_sprite_tile_size(oam_entry).0);
+    let tile_index_base = oam_entry.attribute2.tile_index();
+    let tile_index = match dimension {
+        // treats tiles as if they are arranged in a 32 by 32 tile matrix
+        ObjectMapType::D2 => tile_index_base + usize::from(tile_y * 32 + tile_x),
+        ObjectMapType::D1 => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
+    };
+
+    match oam_entry.attribute0.palette_type() {
+        ColorDepth4Bit => {
+            let (tiles, _) = mem.vram[SPRITE_VRAM_CHUNK].as_chunks::<S_TILE_SIZE>();
+            let (s_tile, _) = tiles[tile_index % tiles.len()].as_chunks::<S_TILE_ROW_SIZE>();
+
+            let sprite_row = s_tile[fine_y];
+            let pixel_pair = sprite_row[fine_x / 2];
+            let shift = 4 * (fine_x & 1);
+            let color_index = usize::from(pixel_pair & (0xF << shift)) >> shift;
+
+            if color_index == 0 {
+                None
+            } else {
+                let (palettes, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
+                let palette_index = oam_entry.attribute2.palette_number();
+                let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
+                let color_bits = u16::from_le_bytes(color_palette[color_index]);
+
+                Some(OutputPixel {
+                    color: Rgb5::from_bits(color_bits),
+                    priority: oam_entry.attribute2.priority(),
+                })
+            }
+        }
+        ColorDepth8Bit => {
+            let (tiles, _) = mem.vram[SPRITE_VRAM_CHUNK].as_chunks::<D_TILE_SIZE>();
+            let (d_tile, _) = tiles[tile_index % tiles.len()].as_chunks::<D_TILE_ROW_SIZE>();
+
+            let sprite_row = d_tile[fine_y];
+            let color_index = usize::from(sprite_row[fine_x]);
+
+            if color_index == 0 {
+                None
+            } else {
+                let (color_palette, _) = mem.palette_ram[OBJ_PALETTE].as_chunks::<RGB5_SIZE>();
+                let color_bits = u16::from_le_bytes(color_palette[color_index]);
+
+                Some(OutputPixel {
+                    color: Rgb5::from_bits(color_bits),
+                    priority: oam_entry.attribute2.priority(),
+                })
+            }
+        }
     }
 }
 

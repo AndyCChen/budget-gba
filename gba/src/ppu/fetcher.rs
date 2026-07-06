@@ -38,12 +38,11 @@ fn fetch_pixel_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) -> Option<Output
     } else {
         let (palettes, _) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
         let (color_palette, _) = palettes[palette_selection as usize].as_chunks::<RGB5_SIZE>();
-        let color_bytes = u16::from_le_bytes(color_palette[color_index as usize]);
-        let priority = bg_4bpp.bg.bg_control.bg_priority();
+        let color_bits = u16::from_le_bytes(color_palette[color_index as usize]);
 
         Some(OutputPixel {
-            color: Rgb5::from_u16(color_bytes),
-            priority,
+            color: Rgb5::from_u16(color_bits),
+            priority: bg_4bpp.bg.bg_control.bg_priority(),
         })
     }
 }
@@ -58,13 +57,13 @@ fn fetch_tile_4bpp(bg_4bpp: &mut BackGround4bpp, mem: &Memory) {
         .as_chunks::<SCREEN_BLOCK_SIZE>();
 
     let (char_tiles, _) = mem.vram[char_base..].as_chunks::<S_TILE_SIZE>();
-    let (layout_width, layout_height) = layout.layout_tile_size();
+    let (layout_width_tiles, layout_height_tiles) = layout.layout_tile_size();
 
-    let tile_x = usize::from(bg_4bpp.tile_x) % usize::from(layout_width);
-    let tile_y = usize::from((bg_4bpp.screen_y / 8) % u16::from(layout_height));
+    let tile_x = usize::from(bg_4bpp.tile_x) % usize::from(layout_width_tiles);
+    let tile_y = usize::from((bg_4bpp.screen_y / 8) % u16::from(layout_height_tiles));
 
     let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
-        * (usize::from(layout_width) / SCREEN_BLOCK_WIDTH)
+        * (usize::from(layout_width_tiles) / SCREEN_BLOCK_WIDTH)
         + (tile_x / SCREEN_BLOCK_HEIGHT);
 
     let inner_screen_block_index =
@@ -130,12 +129,11 @@ fn fetch_pixel_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) -> Option<Output
     } else {
         // palette for 8bpp mode is one big palette with 256 colors
         let (palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>();
-        let color_bytes = u16::from_le_bytes(palette[color_index as usize]);
-        let priority = bg_8bpp.bg.bg_control.bg_priority();
+        let color_bits = u16::from_le_bytes(palette[color_index as usize]);
 
         Some(OutputPixel {
-            color: Rgb5::from_u16(color_bytes),
-            priority,
+            color: Rgb5::from_u16(color_bits),
+            priority: bg_8bpp.bg.bg_control.bg_priority(),
         })
     }
 }
@@ -150,13 +148,13 @@ fn fetch_tile_8bpp(bg_8bpp: &mut BackGround8bpp, mem: &Memory) {
         .as_chunks::<SCREEN_BLOCK_SIZE>();
 
     let (char_tiles, _) = mem.vram[char_base..].as_chunks::<D_TILE_SIZE>();
-    let (layout_width, layout_height) = layout.layout_tile_size();
+    let (layout_width_tiles, layout_height_tiles) = layout.layout_tile_size();
 
-    let tile_x = usize::from(bg_8bpp.tile_x) % usize::from(layout_width);
-    let tile_y = usize::from((bg_8bpp.screen_y / 8) % u16::from(layout_height));
+    let tile_x = usize::from(bg_8bpp.tile_x) % usize::from(layout_width_tiles);
+    let tile_y = usize::from((bg_8bpp.screen_y / 8) % u16::from(layout_height_tiles));
 
     let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
-        * (usize::from(layout_width) / SCREEN_BLOCK_WIDTH)
+        * (usize::from(layout_width_tiles) / SCREEN_BLOCK_WIDTH)
         + (tile_x / SCREEN_BLOCK_HEIGHT);
 
     let inner_screen_block_index =
