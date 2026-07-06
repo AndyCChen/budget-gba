@@ -72,14 +72,14 @@ pub fn fetch_normal_pixel(layer: &mut BackgroundLayer, mem: &Memory) -> Option<O
             // index within a 16 color palette
             let color_index = ((pixel_shifter.output() >> pixel_select) & 0xF) as usize;
             // index to select one of the 16 palettes
-            let palette_selection = ((palette_shifter.output() >> pixel_select) & 0xF) as usize;
+            let palette_index = ((palette_shifter.output() >> pixel_select) & 0xF) as usize;
 
             *pixel_shifter = Shifter4Bpp::from_bits(pixel_shifter.into_bits() << 4);
             *palette_shifter = Shifter4Bpp::from_bits(palette_shifter.into_bits() << 4);
 
             if color_index != 0 {
                 let (palettes, _) = mem.palette_ram[BG_PALETTE].as_chunks::<PALETTE_SIZE_4BPP>();
-                let (color_palette, _) = palettes[palette_selection].as_chunks::<RGB5_SIZE>();
+                let (color_palette, _) = palettes[palette_index].as_chunks::<RGB5_SIZE>();
                 let color_bits = u16::from_le_bytes(color_palette[color_index]);
 
                 Some(OutputPixel {
@@ -99,8 +99,8 @@ pub fn fetch_normal_pixel(layer: &mut BackgroundLayer, mem: &Memory) -> Option<O
 
             if color_index != 0 {
                 // palette for 8bpp mode is one big palette with 256 colors
-                let (palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>();
-                let color_bits = u16::from_le_bytes(palette[color_index]);
+                let (color_palette, _) = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>();
+                let color_bits = u16::from_le_bytes(color_palette[color_index]);
 
                 Some(OutputPixel {
                     color: Rgb5::from_u16(color_bits),
@@ -214,9 +214,9 @@ fn fetch_normal_tile(layer: &mut BackgroundLayer, mem: &Memory) {
                 .for_each(|byte| *byte = byte.rotate_right(4));
 
             let palette_number = screen_entry.palette_number() as u8;
-            let palette = array::from_fn(|_| (palette_number << 4) | palette_number);
+            let palette_numbers = array::from_fn(|_| (palette_number << 4) | palette_number);
 
-            palette_shifter.set_input(u32::from_be_bytes(palette));
+            palette_shifter.set_input(u32::from_be_bytes(palette_numbers));
             pixel_shifter.set_input(u32::from_be_bytes(pixel_row));
         }
         ShifterType8bpp(pixel_shifter) => {
