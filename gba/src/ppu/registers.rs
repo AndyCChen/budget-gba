@@ -61,7 +61,7 @@ pub enum ObjectMapType {
     D1,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BgMode {
     Mode0 = 0,
     Mode1,
@@ -86,6 +86,10 @@ impl BgMode {
             5 => BgMode::Mode5,
             _ => panic!("Invalid BgMode!"),
         }
+    }
+
+    pub fn is_bitmap(&self) -> bool {
+        matches!(self, Self::Mode3 | Self::Mode4 | Self::Mode5)
     }
 }
 

@@ -8,6 +8,7 @@ use crate::Rgb5;
 use crate::ppu::Ppu;
 use crate::ppu::common::*;
 use crate::ppu::core::Memory;
+use crate::ppu::registers::BgMode;
 use crate::ppu::registers::ObjectMapType;
 use PaletteType::*;
 
@@ -26,6 +27,7 @@ pub struct SpriteFetcher {
     pixel_counter_x: u8,
     y_coord: u8,
     dimension: ObjectMapType,
+    background_mode: BgMode,
 }
 
 impl SpriteFetcher {
@@ -35,6 +37,7 @@ impl SpriteFetcher {
             pixel_counter_x: 0,
             y_coord: ppu.registers.v_counter.scanline_count(),
             dimension: ppu.registers.lcd_control.obj_vram_mapping(),
+            background_mode: ppu.registers.lcd_control.bg_mode(),
         };
 
         if !ppu.registers.lcd_control.obj_enable() {
@@ -72,6 +75,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
     let x_coord = sprite_fetcher.pixel_counter_x;
     let y_coord = sprite_fetcher.y_coord;
     let dimension = sprite_fetcher.dimension;
+    let bg_mode = sprite_fetcher.background_mode;
 
     sprite_fetcher.pixel_counter_x += 1;
 
@@ -94,7 +98,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
                 None
             }
         })
-        .map(|oam_entry| fetch_pixel(&oam_entry, mem, x_coord, y_coord, dimension))
+        .map(|oam_entry| fetch_pixel(&oam_entry, mem, x_coord, y_coord, dimension, bg_mode))
         .find(|pixel_type| pixel_type.is_some())
         .flatten()
 }
@@ -108,6 +112,7 @@ fn fetch_pixel(
     x_coord: u8,
     y_coord: u8,
     dimension: ObjectMapType,
+    bg_mode: BgMode,
 ) -> Option<OutputPixel> {
     let x_start = oam_entry.attribute1.x_coord();
     let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
@@ -140,6 +145,13 @@ fn fetch_pixel(
         ObjectMapType::D2 => tile_index_base + usize::from(tile_y * 32 + tile_x),
         ObjectMapType::D1 => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
     };
+
+    // The first 512 tiles cannot be displayed when rendering bitmap backgrounds.
+    // This is because bitmaps use more than 64kb of memory and will partially ocuppy
+    // the first 16kb portion of vram dedicated to sprites.
+    if bg_mode.is_bitmap() && tile_index < 512 {
+        return None;
+    }
 
     match oam_entry.attribute0.palette_type() {
         ColorDepth4Bit => {
