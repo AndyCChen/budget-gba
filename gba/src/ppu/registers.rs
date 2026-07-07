@@ -216,6 +216,7 @@ pub struct BgScroll {
     __: u8,
 }
 
+#[derive(Default)]
 pub struct AffineParameters {
     pub reference_x: ReferencePoint,
     pub reference_y: ReferencePoint,
@@ -223,19 +224,6 @@ pub struct AffineParameters {
     pub dmx: InternalReferencePoint,
     pub dy: InternalReferencePoint,
     pub dmy: InternalReferencePoint,
-}
-
-impl Default for AffineParameters {
-     fn default() -> Self {
-        Self {
-            reference_x: ReferencePoint::default(),
-            reference_y: ReferencePoint::default(),
-            dx: InternalReferencePoint::default(),
-            dmx: InternalReferencePoint::default(),
-            dy: InternalReferencePoint::default(),
-            dmy: InternalReferencePoint::default(),
-        }
-    }
 }
 
 #[gba_register(u32)]
