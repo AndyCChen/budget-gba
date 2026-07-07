@@ -10,6 +10,8 @@ pub struct Registers {
     pub bg_controls: [BgControl; 4],
     pub bg_scrolls_x: [BgScroll; 4],
     pub bg_scrolls_y: [BgScroll; 4],
+    pub bg2_affine: AffineParameters,
+    pub bg3_affine: AffineParameters,
 }
 
 impl Registers {
@@ -21,6 +23,8 @@ impl Registers {
             bg_controls: [BgControl::default(); 4],
             bg_scrolls_x: [BgScroll::default(); 4],
             bg_scrolls_y: [BgScroll::default(); 4],
+            bg2_affine: AffineParameters::default(),
+            bg3_affine: AffineParameters::default(),
         }
     }
 }
@@ -210,4 +214,49 @@ pub struct BgScroll {
 
     #[bits(7)]
     __: u8,
+}
+
+pub struct AffineParameters {
+    pub reference_x: ReferencePoint,
+    pub reference_y: ReferencePoint,
+    pub dx: InternalReferencePoint,
+    pub dmx: InternalReferencePoint,
+    pub dy: InternalReferencePoint,
+    pub dmy: InternalReferencePoint,
+}
+
+impl Default for AffineParameters {
+     fn default() -> Self {
+        Self {
+            reference_x: ReferencePoint::default(),
+            reference_y: ReferencePoint::default(),
+            dx: InternalReferencePoint::default(),
+            dmx: InternalReferencePoint::default(),
+            dy: InternalReferencePoint::default(),
+            dmy: InternalReferencePoint::default(),
+        }
+    }
+}
+
+#[gba_register(u32)]
+pub struct ReferencePoint {
+    pub fraction: u8,
+
+    #[bits(19)]
+    pub integer: u32,
+
+    pub sign: bool,
+
+    #[bits(4)]
+    __: u8,
+}
+
+#[gba_register(u16)]
+pub struct InternalReferencePoint {
+    pub fraction: u8,
+
+    #[bits(7)]
+    pub integer: u8,
+
+    pub sign: bool,
 }

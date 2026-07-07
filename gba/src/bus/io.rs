@@ -102,6 +102,50 @@ impl Bus {
             BG3VOFS_0 => self.ppu.registers.bg_scrolls_y[3].write(value, HalfwordIo::B0),
             BG3VOFS_1 => self.ppu.registers.bg_scrolls_y[3].write(value, HalfwordIo::B1),
 
+            BG2PA_0 => self.ppu.registers.bg2_affine.dx.write(value, HalfwordIo::B0),
+            BG2PA_1 => self.ppu.registers.bg2_affine.dx.write(value, HalfwordIo::B1),
+
+            BG2PB_0 => self.ppu.registers.bg2_affine.dmx.write(value, HalfwordIo::B0),
+            BG2PB_1 => self.ppu.registers.bg2_affine.dmx.write(value, HalfwordIo::B1),
+
+            BG2PC_0 => self.ppu.registers.bg2_affine.dy.write(value, HalfwordIo::B0),
+            BG2PC_1 => self.ppu.registers.bg2_affine.dy.write(value, HalfwordIo::B1),
+
+            BG2PD_0 => self.ppu.registers.bg2_affine.dmy.write(value, HalfwordIo::B0),
+            BG2PD_1 => self.ppu.registers.bg2_affine.dmy.write(value, HalfwordIo::B1),
+
+            BG2X_0 => self.ppu.registers.bg2_affine.reference_x.write(value, WordIo::B0),
+            BG2X_1 => self.ppu.registers.bg2_affine.reference_x.write(value, WordIo::B1),
+            BG2X_2 => self.ppu.registers.bg2_affine.reference_x.write(value, WordIo::B2),
+            BG2X_3 => self.ppu.registers.bg2_affine.reference_x.write(value, WordIo::B3),
+
+            BG2Y_0 => self.ppu.registers.bg2_affine.reference_y.write(value, WordIo::B0),
+            BG2Y_1 => self.ppu.registers.bg2_affine.reference_y.write(value, WordIo::B1),
+            BG2Y_2 => self.ppu.registers.bg2_affine.reference_y.write(value, WordIo::B2),
+            BG2Y_3 => self.ppu.registers.bg2_affine.reference_y.write(value, WordIo::B3),
+
+            BG3PA_0 => self.ppu.registers.bg3_affine.dx.write(value, HalfwordIo::B0),
+            BG3PA_1 => self.ppu.registers.bg3_affine.dx.write(value, HalfwordIo::B1),
+
+            BG3PB_0 => self.ppu.registers.bg3_affine.dmx.write(value, HalfwordIo::B0),
+            BG3PB_1 => self.ppu.registers.bg3_affine.dmx.write(value, HalfwordIo::B1),
+
+            BG3PC_0 => self.ppu.registers.bg3_affine.dy.write(value, HalfwordIo::B0),
+            BG3PC_1 => self.ppu.registers.bg3_affine.dy.write(value, HalfwordIo::B1),
+
+            BG3PD_0 => self.ppu.registers.bg3_affine.dmy.write(value, HalfwordIo::B0),
+            BG3PD_1 => self.ppu.registers.bg3_affine.dmy.write(value, HalfwordIo::B1),
+
+            BG3X_0 => self.ppu.registers.bg3_affine.reference_x.write(value, WordIo::B0),
+            BG3X_1 => self.ppu.registers.bg3_affine.reference_x.write(value, WordIo::B1),
+            BG3X_2 => self.ppu.registers.bg3_affine.reference_x.write(value, WordIo::B2),
+            BG3X_3 => self.ppu.registers.bg3_affine.reference_x.write(value, WordIo::B3),
+
+            BG3Y_0 => self.ppu.registers.bg3_affine.reference_y.write(value, WordIo::B0),
+            BG3Y_1 => self.ppu.registers.bg3_affine.reference_y.write(value, WordIo::B1),
+            BG3Y_2 => self.ppu.registers.bg3_affine.reference_y.write(value, WordIo::B2),
+            BG3Y_3 => self.ppu.registers.bg3_affine.reference_y.write(value, WordIo::B3),
+
             // APU
 
             SOUNDBIAS_0 => self.apu.registers.sound_bias.write(value, HalfwordIo::B0),
