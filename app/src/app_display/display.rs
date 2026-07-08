@@ -82,7 +82,7 @@ pub fn display_update(
     sprite: Single<&Sprite, With<DisplaySprite>>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let display_texture = images
+    let mut display_texture = images
         .get_mut(&sprite.image)
         .expect("Failed to retrieve display texture!");
 
