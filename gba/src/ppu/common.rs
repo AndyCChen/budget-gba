@@ -1,5 +1,6 @@
 use crate::Rgb5;
 use bitfield_struct::bitenum;
+use num_traits::PrimInt;
 use std::ops::Range;
 
 /// Colors are 16 bit rgb values (2 bytes)
@@ -62,11 +63,37 @@ pub struct OutputPixel {
     pub priority: u8,
 }
 
-// impl Default for OutputPixel {
-//     fn default() -> Self {
-//         Self::Opaque {
-//             color: Rgb5::default(),
-//             priority: 0,
-//         }
-//     }
-// }
+#[derive(Copy, Clone)]
+pub struct Vector2<T: PrimInt> {
+    pub x: T,
+    pub y: T,
+}
+
+impl<T: PrimInt> Vector2<T> {
+    pub fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+
+    pub fn sub(self, rhs: Vector2<T>) -> Self {
+        Self {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
+
+    pub fn add(self, rhs: Vector2<T>) -> Self {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+
+impl<T: PrimInt> From<(T, T)> for Vector2<T> {
+    fn from(value: (T, T)) -> Self {
+        Self {
+            x: value.0,
+            y: value.1,
+        }
+    }
+}

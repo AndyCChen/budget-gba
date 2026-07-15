@@ -16,6 +16,8 @@ use PaletteType::*;
 const SPRITE_VRAM_CHUNK: Range<usize> = 0x0001_0000..0x0001_8000;
 /// each oam is 8 bytes in size
 const OAM_ENTRY_SIZE: usize = 8;
+/// each matrix is located in a 32 byte chunk in oam
+const AFFINE_MATRIX_SIZE: usize = 32;
 
 pub struct SpriteFetcher {
     /// Holds sprites that are enabled
@@ -48,7 +50,7 @@ impl SpriteFetcher {
         let y_coord = ppu.registers.v_counter.scanline_count();
 
         for (oam_number, oam_entry) in oam.iter().map(OamEntry::new).enumerate() {
-            let (_, height) = get_sprite_size(&oam_entry);
+            let Vector2 { y: height, .. } = get_sprite_size(&oam_entry);
             let y_start = oam_entry.attribute0.y_coord();
 
             let fine_y = y_coord.wrapping_sub(y_start);
@@ -74,6 +76,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
     let (oam, _) = mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
     let x_coord = sprite_fetcher.pixel_counter_x;
     let y_coord = sprite_fetcher.y_coord;
+    let pixel_coords = Vector2::new(x_coord, y_coord);
     let dimension = sprite_fetcher.dimension;
     let bg_mode = sprite_fetcher.background_mode;
 
@@ -87,7 +90,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
             let oam_entry = OamEntry::new(&oam[usize::from(sprite_index)]);
 
             let x_start = oam_entry.attribute1.x_coord();
-            let (width, _) = get_sprite_size(&oam_entry);
+            let Vector2 { x: width, .. } = get_sprite_size(&oam_entry);
 
             let fine_x = wrapping_sub_512(u16::from(x_coord), x_start);
             let sprite_present = fine_x < u16::from(width);
@@ -98,47 +101,96 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
                 None
             }
         })
-        .map(|oam_entry| fetch_pixel(&oam_entry, mem, x_coord, y_coord, dimension, bg_mode))
+        .map(|oam_entry| fetch_pixel(&oam_entry, mem, pixel_coords, dimension, bg_mode))
         .find(|pixel_type| pixel_type.is_some())
         .flatten()
 }
 
-/// Fetches the pixel of corresponding sprite at provided x and y coord.
+/// Calculate coordinates to fetch pixel from in texture space (xy coordinated within a sprite).
+/// Returns None for affine sprites where transformation causes pixel to fall outside of the sprite bounds.
+/// # Arguments
+/// * `oam_entry` - attributes of the sprite
+/// * `q` - vector pointing to pixel to fetch in screen space
+/// * `mem` - memory components to fetch from
+fn get_pixel_coord(oam_entry: &OamEntry, q: Vector2<u8>, mem: &Memory) -> Option<Vector2<u16>> {
+    let x_start = oam_entry.attribute1.x_coord();
+    let y_start = oam_entry.attribute0.y_coord();
+    let sprite_size = get_sprite_size(oam_entry);
+    let is_affine = oam_entry.attribute0.is_affine();
+
+    if !is_affine {
+        // x and y pixel coordinates within a sprite
+        let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
+            u16::from(sprite_size.x) - wrapping_sub_512(u16::from(q.x), x_start)
+        } else {
+            wrapping_sub_512(u16::from(q.x), x_start)
+        };
+
+        let sprite_fine_y = if oam_entry.attribute1.vertical_flip() {
+            u16::from(sprite_size.y - q.y.wrapping_sub(y_start))
+        } else {
+            u16::from(q.y.wrapping_sub(y_start))
+        };
+
+        return Some(Vector2::new(sprite_fine_x, sprite_fine_y));
+    }
+
+    let (matrices, _) = mem.oam.as_chunks::<AFFINE_MATRIX_SIZE>();
+    let AffineEntry { pa, pb, pc, pd } =
+        AffineEntry::new(&matrices[oam_entry.attribute1.affine_index()]);
+
+    // vector pointing to center of sprite (origin) in texture space
+    let origin = Vector2::new(i32::from(sprite_size.x) / 2, i32::from(sprite_size.y) / 2);
+
+    // vector pointing to pixel to fetch in texture space
+    let pixel = {
+        let x = wrapping_sub_512(u16::from(q.x), x_start);
+        let y = u16::from(q.y.wrapping_sub(y_start));
+        Vector2::new(x as i32, y as i32)
+    };
+
+    // Vector pointing from origin to the pixel to fetch in texture space
+    let origin_to_pixel = pixel.sub(origin);
+
+    let rotated_origin_to_pixel = Vector2 {
+        x: (pa * origin_to_pixel.x + pb * origin_to_pixel.y) >> 8,
+        y: (pc * origin_to_pixel.x + pd * origin_to_pixel.y) >> 8,
+    };
+
+    let pixel_coords = origin.add(rotated_origin_to_pixel);
+
+    if pixel_coords.x.is_negative()
+        || pixel_coords.y.is_negative()
+        || pixel_coords.x >= i32::from(sprite_size.x)
+        || pixel_coords.y >= i32::from(sprite_size.y)
+    {
+        None
+    } else {
+        Some(Vector2::new(pixel_coords.x as u16, pixel_coords.y as u16))
+    }
+}
+
+/// Fetches the pixel of corresponding sprite at pixel coords in screen space.
 /// If pixel is transparent, returns None, otherwise Some contains the output
 /// color.
 fn fetch_pixel(
     oam_entry: &OamEntry,
     mem: &Memory,
-    x_coord: u8,
-    y_coord: u8,
+    pixel_coords: Vector2<u8>,
     dimension: ObjectMapType,
     bg_mode: BgMode,
 ) -> Option<OutputPixel> {
-    let x_start = oam_entry.attribute1.x_coord();
-    let (width_pixel, height_pixel) = get_sprite_size(oam_entry);
-
-    // x and y pixel coordinates within a sprite
-    let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
-        u16::from(width_pixel) - wrapping_sub_512(u16::from(x_coord), x_start)
-    } else {
-        wrapping_sub_512(u16::from(x_coord), x_start)
-    };
-
-    let sprite_fine_y = u16::from(if oam_entry.attribute1.vertical_flip() {
-        height_pixel - y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
-    } else {
-        y_coord.wrapping_sub(oam_entry.attribute0.y_coord())
-    });
+    let sprite_fine = get_pixel_coord(&oam_entry, pixel_coords, mem)?;
 
     // x and y coordinate within a 8x8 tile
-    let fine_x = usize::from(sprite_fine_x % 8);
-    let fine_y = usize::from(sprite_fine_y % 8);
+    let fine_x = usize::from(sprite_fine.x % 8);
+    let fine_y = usize::from(sprite_fine.y % 8);
 
     // x and y tile coord inside sprite
-    let tile_x = sprite_fine_x / u16::from(TILE_PIXEL_SIZE);
-    let tile_y = sprite_fine_y / u16::from(TILE_PIXEL_SIZE);
+    let tile_x = sprite_fine.x / u16::from(TILE_PIXEL_SIZE);
+    let tile_y = sprite_fine.y / u16::from(TILE_PIXEL_SIZE);
 
-    let width_tiles = u16::from(get_sprite_tile_size(oam_entry).0);
+    let width_tiles = u16::from(get_sprite_tile_size(oam_entry).x);
     let tile_index_base = oam_entry.attribute2.tile_index();
     let tile_index = match dimension {
         // treats tiles as if they are arranged in a 32 by 32 tile matrix
@@ -203,8 +255,6 @@ struct OamEntry {
     attribute0: Attribute0,
     attribute1: Attribute1,
     attribute2: Attribute2,
-    #[allow(unused)]
-    padding: u16,
 }
 
 impl OamEntry {
@@ -212,14 +262,35 @@ impl OamEntry {
         let attribute0 = Attribute0::from_bits(u16::from_le_bytes([entry[0], entry[1]]));
         let attribute1 = Attribute1::from_bits(u16::from_le_bytes([entry[2], entry[3]]));
         let attribute2 = Attribute2::from_bits(u16::from_le_bytes([entry[4], entry[5]]));
-        let padding = u16::from_le_bytes([entry[6], entry[7]]);
 
         Self {
             attribute0,
             attribute1,
             attribute2,
-            padding,
         }
+    }
+}
+
+/// Affine transformation matrix.
+/// |pa, pb|
+/// |pc, pd|
+struct AffineEntry {
+    pa: i32,
+    pb: i32,
+    pc: i32,
+    pd: i32,
+}
+
+impl AffineEntry {
+    fn new(entry: &[u8; 32]) -> Self {
+        const SHORT: usize = size_of::<u16>();
+
+        let pa = i16::from_le_bytes([entry[SHORT * 3], entry[SHORT * 3 + 1]]).into();
+        let pb = i16::from_le_bytes([entry[SHORT * 7], entry[SHORT * 7 + 1]]).into();
+        let pc = i16::from_le_bytes([entry[SHORT * 11], entry[SHORT * 11 + 1]]).into();
+        let pd = i16::from_le_bytes([entry[SHORT * 15], entry[SHORT * 15 + 1]]).into();
+
+        Self { pa, pb, pc, pd }
     }
 }
 
@@ -244,7 +315,7 @@ struct Attribute0 {
 
 impl Attribute0 {
     #[rustfmt::skip]
-    fn _is_affine(&self) -> bool {
+    fn is_affine(&self) -> bool {
         matches!(self.object_mode(), ObjectMode::Affine | ObjectMode::AffineDouble)
     }
 }
@@ -262,14 +333,16 @@ struct Attribute1 {
 }
 
 impl Attribute1 {
-    fn _affine_index(&self) -> u8 {
-        self.affine_index_or_flip()
+    fn affine_index(&self) -> usize {
+        usize::from(self.affine_index_or_flip())
     }
 
+    /// ignored when sprite is affine
     fn horizontal_flip(&self) -> bool {
         (self.affine_index_or_flip() >> 3) & 1 == 1
     }
 
+    /// ignored when sprite is affine
     fn vertical_flip(&self) -> bool {
         (self.affine_index_or_flip() >> 4) & 1 == 1
     }
@@ -325,21 +398,29 @@ static SPRITE_SIZE_TABLE: [[(u8, u8); 4]; 3] = [
     [(8, 16), (8, 32), (16, 32), (32, 64)],
 ];
 
-/// Retrive pixel dimensions of the sprite as a tuple (width, height)
-fn get_sprite_size(oam_entry: &OamEntry) -> (u8, u8) {
+fn get_sprite_size(oam_entry: &OamEntry) -> Vector2<u8> {
     let size = oam_entry.attribute1.sprite_size();
-    // TODO account for double sized affine sprites
-    match oam_entry.attribute0.shape() {
+    let is_double = matches!(oam_entry.attribute0.object_mode(), ObjectMode::AffineDouble);
+
+    let mut sprite_size = match oam_entry.attribute0.shape() {
         Shape::Square => SPRITE_SIZE_TABLE[0][size],
         Shape::Wide => SPRITE_SIZE_TABLE[1][size],
         Shape::Tall => SPRITE_SIZE_TABLE[2][size],
+    };
+
+    if is_double {
+        sprite_size.0 *= 2;
+        sprite_size.1 *= 2;
     }
+
+    Vector2::from(sprite_size)
 }
 
-/// Retrive tile dimensions of the sprite as a tuple (width, height)
-fn get_sprite_tile_size(oam_entry: &OamEntry) -> (u8, u8) {
-    let (width, height) = get_sprite_size(oam_entry);
-    (width / TILE_PIXEL_SIZE, height / TILE_PIXEL_SIZE)
+fn get_sprite_tile_size(oam_entry: &OamEntry) -> Vector2<u8> {
+    let mut sprite_size = get_sprite_size(oam_entry);
+    sprite_size.x /= TILE_PIXEL_SIZE;
+    sprite_size.y /= TILE_PIXEL_SIZE;
+    sprite_size
 }
 
 fn wrapping_sub_512(op1: u16, op2: u16) -> u16 {
