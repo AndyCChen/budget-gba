@@ -156,12 +156,13 @@ fn get_pixel_coord(oam_entry: &OamEntry, q: Vector2<u8>, mem: &Memory) -> Option
         y: (pc * origin_to_pixel.x + pd * origin_to_pixel.y) >> 8,
     };
 
-    let sprite_size = get_sprite_size(&oam_entry);
+    let sprite_size = get_sprite_size(oam_entry);
 
     let pixel_coords = if matches!(oam_entry.attribute0.object_mode(), ObjectMode::AffineDouble) {
+        // true position of the sprite inside the doubled size bounding box
         let top_left = Vector2::new(i32::from(sprite_size.x / 2), i32::from(sprite_size.y / 2));
-        let inner_origin = origin.sub(top_left);
-        inner_origin.add(rotated_origin_to_pixel)
+        let top_left_to_origin = origin.sub(top_left);
+        top_left_to_origin.add(rotated_origin_to_pixel)
     } else {
         origin.add(rotated_origin_to_pixel)
     };
@@ -418,7 +419,7 @@ fn get_sprite_rect(oam_entry: &OamEntry) -> Vector2<u8> {
         sprite_size.y *= 2;
     }
 
-    Vector2::from(sprite_size)
+    sprite_size
 }
 
 fn get_sprite_size(oam_entry: &OamEntry) -> Vector2<u8> {
