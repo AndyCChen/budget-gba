@@ -1,4 +1,3 @@
-use std::array;
 use std::ops::Range;
 use tinyvec::ArrayVec;
 
@@ -6,14 +5,21 @@ use crate::ppu::Ppu;
 use crate::ppu::common::*;
 use crate::ppu::core::PaletteRam;
 use crate::ppu::fetcher::*;
-use crate::ppu::registers::BgControl;
-use crate::ppu::registers::BgScroll;
 use crate::ppu::registers::FrameSelect;
 use crate::ppu::sprites::*;
 use crate::{DISPLAY_WIDTH, Rgb5};
 
+use BackgroundLayerType::*;
+
 pub fn draw_mode0(ppu: &mut Ppu) {
-    let mut background_layers = select_backgrounds(ppu);
+    let enabled_backgrounds = [
+        Background::new(0, ppu.registers.lcd_control.bg0_enable(), BgType::NormalBg),
+        Background::new(1, ppu.registers.lcd_control.bg1_enable(), BgType::NormalBg),
+        Background::new(2, ppu.registers.lcd_control.bg2_enable(), BgType::NormalBg),
+        Background::new(3, ppu.registers.lcd_control.bg3_enable(), BgType::NormalBg),
+    ];
+
+    let mut background_layers = select_tiled_backgrounds(ppu, &enabled_backgrounds);
     let mut sprite_fetcher = SpriteFetcher::new(ppu);
 
     if background_layers.is_empty() {
@@ -28,12 +34,43 @@ pub fn draw_mode0(ppu: &mut Ppu) {
         let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
         let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_layers
             .iter_mut()
-            .map(|layer| fetch_normal_pixel(layer, &ppu.mem))
+            .map(|layer| layer.fetch_pixel(&ppu.mem))
             .collect();
 
         merge_colors(sprite_color, &bg_color_layers, backdrop_color)
     });
 }
+
+pub fn _draw_mode1(ppu: &mut Ppu) {
+    let enabled_backgrounds = [
+        Background::new(0, ppu.registers.lcd_control.bg0_enable(), BgType::NormalBg),
+        Background::new(1, ppu.registers.lcd_control.bg1_enable(), BgType::NormalBg),
+        Background::new(2, ppu.registers.lcd_control.bg2_enable(), BgType::AffineBg),
+    ];
+
+    let mut background_layers = select_tiled_backgrounds(ppu, &enabled_backgrounds);
+    let mut sprite_fetcher = SpriteFetcher::new(ppu);
+
+    if background_layers.is_empty() {
+        disabled_draw(ppu, sprite_fetcher);
+        return;
+    };
+
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    ppu.display_buffer[scanline_y].fill_with(|| {
+        let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+        let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_layers
+            .iter_mut()
+            .map(|layer| layer.fetch_pixel(&ppu.mem))
+            .collect();
+
+        merge_colors(sprite_color, &bg_color_layers, backdrop_color)
+    });
+}
+
+// pub fn draw_mode2(ppu: &mut Ppu) {}
 
 pub fn draw_mode3(ppu: &mut Ppu) {
     const PIXEL_ROW_BYTE_SIZE: usize = DISPLAY_WIDTH * size_of::<u16>();
@@ -181,50 +218,69 @@ pub fn draw_mode5(ppu: &mut Ppu) {
     });
 }
 
+#[derive(Copy, Default, Clone)]
+enum BgType {
+    #[default]
+    NormalBg,
+    AffineBg,
+}
+
+#[derive(Copy, Default, Clone)]
+struct Background {
+    bg_number: u8,
+    enabled: bool,
+    bg_type: BgType,
+}
+
+impl Background {
+    pub fn new(bg_number: u8, enabled: bool, bg_type: BgType) -> Self {
+        Self {
+            bg_number,
+            enabled,
+            bg_type,
+        }
+    }
+}
+
 /// Returns a ArrayVec of backgrounds ordered by descending priority.
 /// For backgrounds with equal priority, the priority goes as follows from
 /// highest to lowest: bg0 - bg3.
 /// ArrayVec will be empty if no backgrounds are enabled.
-fn select_backgrounds(ppu: &Ppu) -> ArrayVec<[BackgroundLayer; 4]> {
-    struct Bundle {
-        enabled: bool,
-        bg_control: BgControl,
-        scroll_x: BgScroll,
-        scroll_y: BgScroll,
-    }
-
-    let enabled_backgrounds = [
-        ppu.registers.lcd_control.bg0_enable(),
-        ppu.registers.lcd_control.bg1_enable(),
-        ppu.registers.lcd_control.bg2_enable(),
-        ppu.registers.lcd_control.bg3_enable(),
-    ];
-
-    let bg_controls: [Bundle; 4] = array::from_fn(|i| {
-        let enabled = enabled_backgrounds[i];
-        let bg_control = ppu.registers.bg_controls[i];
-        let scroll_x = ppu.registers.bg_scrolls_x[i];
-        let scroll_y = ppu.registers.bg_scrolls_y[i];
-
-        Bundle {
-            enabled,
-            bg_control,
-            scroll_x,
-            scroll_y,
-        }
-    });
-
+/// Panics if enabled backgrounds has len() > 4.
+fn select_tiled_backgrounds(
+    ppu: &Ppu,
+    enabled_backgrounds: &[Background],
+) -> ArrayVec<[BackgroundLayerType; 4]> {
     let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
-    let bg_controls_iter = bg_controls.into_iter().filter(|bg| bg.enabled).map(
-        |Bundle {
-             bg_control,
-             scroll_x,
-             scroll_y,
-             ..
-         }| BackgroundLayer::new(bg_control, scroll_x, scroll_y, &ppu.mem, scanline_y),
+    let bg_controls_iter = enabled_backgrounds.iter().copied().filter_map(
+        |Background {
+             bg_number,
+             enabled,
+             bg_type,
+         }| {
+            let bg_number = usize::from(bg_number);
+            let bg_control = ppu.registers.bg_controls[bg_number];
+
+            match (enabled, bg_type) {
+                (true, BgType::NormalBg) => {
+                    let bg_scroll_x = ppu.registers.bg_scrolls_x[bg_number];
+                    let bg_scroll_y = ppu.registers.bg_scrolls_y[bg_number];
+
+                    Some(Normal(BackgroundLayer::new(
+                        bg_control,
+                        bg_scroll_x,
+                        bg_scroll_y,
+                        &ppu.mem,
+                        scanline_y,
+                    )))
+                }
+                (true, BgType::AffineBg) => Some(Affine(AffineBackgroundLayer::new(bg_control))),
+                _ => None,
+            }
+        },
     );
 
-    let mut bgs: ArrayVec<[BackgroundLayer; 4]> = bg_controls_iter.collect();
+    let mut bgs: ArrayVec<[BackgroundLayerType; 4]> = bg_controls_iter.collect();
     // This must be stable sort!
     bgs.sort_by_key(|item| item.priority());
     bgs

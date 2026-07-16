@@ -6,6 +6,50 @@ use crate::ppu::common::*;
 use crate::ppu::core::Memory;
 use crate::ppu::registers::{BgControl, BgScroll};
 
+use BackgroundLayerType::*;
+
+pub enum BackgroundLayerType {
+    Normal(BackgroundLayer),
+    Affine(AffineBackgroundLayer),
+}
+
+impl BackgroundLayerType {
+    pub fn priority(&self) -> u8 {
+        match self {
+            Normal(normal_layer) => normal_layer.bg_control.bg_priority(),
+            Affine(affine_layer) => affine_layer.bg_control.bg_priority(),
+        }
+    }
+
+    pub fn fetch_pixel(&mut self, mem: &Memory) -> Option<OutputPixel> {
+        match self {
+            Normal(layer) => fetch_normal_pixel(layer, mem),
+            Affine(layer) => fetch_affine_pixel(layer, mem),
+        }
+    }
+}
+
+impl Default for BackgroundLayerType {
+    fn default() -> Self {
+        Self::Normal(BackgroundLayer::default())
+    }
+}
+
+pub struct AffineBackgroundLayer {
+    bg_control: BgControl,
+    pixel_counter_x: u8,
+}
+
+impl AffineBackgroundLayer {
+    pub fn new(bg_control: BgControl) -> Self {
+        Self {
+            bg_control,
+            pixel_counter_x: 0,
+        }
+    }
+}
+
+/// Normal backgroundlayer (non-affine)
 #[derive(Default)]
 pub struct BackgroundLayer {
     bg_control: BgControl,
@@ -39,22 +83,23 @@ impl BackgroundLayer {
             },
         };
 
+        // 8 initial fetches to fill in the shift registers will pixel data
         for _ in 0..8 {
             fetch_normal_pixel(&mut layer, mem);
         }
 
         layer
     }
+}
 
-    pub fn priority(&self) -> u8 {
-        self.bg_control.bg_priority()
-    }
+pub fn fetch_affine_pixel(layer: &mut AffineBackgroundLayer, mem: &Memory) -> Option<OutputPixel> {
+    todo!()
 }
 
 /// Fetch pixel from normal mode background layers (non-affine).
 /// If pixel is transparent, return None,
 /// else the opaque color is wrapped in Some.
-pub fn fetch_normal_pixel(layer: &mut BackgroundLayer, mem: &Memory) -> Option<OutputPixel> {
+fn fetch_normal_pixel(layer: &mut BackgroundLayer, mem: &Memory) -> Option<OutputPixel> {
     if layer.pixel_counter_x.is_multiple_of(8) {
         fetch_normal_tile(layer, mem);
     }

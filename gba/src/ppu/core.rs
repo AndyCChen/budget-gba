@@ -78,8 +78,8 @@ impl Ppu {
 
         match self.registers.lcd_control.bg_mode() {
             BgMode::Mode0 => draw_mode0(self),
-            BgMode::Mode1 => (),
-            BgMode::Mode2 => (),
+            BgMode::Mode1 => (), //draw_mode1(self),
+            BgMode::Mode2 => (), //draw_mode2(self),
             BgMode::Mode3 => draw_mode3(self),
             BgMode::Mode4 => draw_mode4(self),
             BgMode::Mode5 => draw_mode5(self),
