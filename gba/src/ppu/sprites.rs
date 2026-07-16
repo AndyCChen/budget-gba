@@ -50,7 +50,7 @@ impl SpriteFetcher {
         let y_coord = ppu.registers.v_counter.scanline_count();
 
         for (oam_number, oam_entry) in oam.iter().map(OamEntry::new).enumerate() {
-            let Vector2 { y: height, .. } = get_sprite_size(&oam_entry);
+            let Vector2 { y: height, .. } = get_sprite_rect(&oam_entry);
             let y_start = oam_entry.attribute0.y_coord();
 
             let fine_y = y_coord.wrapping_sub(y_start);
@@ -90,7 +90,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
             let oam_entry = OamEntry::new(&oam[usize::from(sprite_index)]);
 
             let x_start = oam_entry.attribute1.x_coord();
-            let Vector2 { x: width, .. } = get_sprite_size(&oam_entry);
+            let Vector2 { x: width, .. } = get_sprite_rect(&oam_entry);
 
             let fine_x = wrapping_sub_512(u16::from(x_coord), x_start);
             let sprite_present = fine_x < u16::from(width);
@@ -115,19 +115,18 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
 fn get_pixel_coord(oam_entry: &OamEntry, q: Vector2<u8>, mem: &Memory) -> Option<Vector2<u16>> {
     let x_start = oam_entry.attribute1.x_coord();
     let y_start = oam_entry.attribute0.y_coord();
-    let sprite_size = get_sprite_size(oam_entry);
-    let is_affine = oam_entry.attribute0.is_affine();
+    let sprite_rect = get_sprite_rect(oam_entry);
 
-    if !is_affine {
+    if !oam_entry.attribute0.is_affine() {
         // x and y pixel coordinates within a sprite
         let sprite_fine_x = if oam_entry.attribute1.horizontal_flip() {
-            u16::from(sprite_size.x) - wrapping_sub_512(u16::from(q.x), x_start)
+            u16::from(sprite_rect.x) - wrapping_sub_512(u16::from(q.x), x_start)
         } else {
             wrapping_sub_512(u16::from(q.x), x_start)
         };
 
         let sprite_fine_y = if oam_entry.attribute1.vertical_flip() {
-            u16::from(sprite_size.y - q.y.wrapping_sub(y_start))
+            u16::from(sprite_rect.y - q.y.wrapping_sub(y_start))
         } else {
             u16::from(q.y.wrapping_sub(y_start))
         };
@@ -140,24 +139,32 @@ fn get_pixel_coord(oam_entry: &OamEntry, q: Vector2<u8>, mem: &Memory) -> Option
         AffineEntry::new(&matrices[oam_entry.attribute1.affine_index()]);
 
     // vector pointing to center of sprite (origin) in texture space
-    let origin = Vector2::new(i32::from(sprite_size.x) / 2, i32::from(sprite_size.y) / 2);
+    let origin = Vector2::new(i32::from(sprite_rect.x) / 2, i32::from(sprite_rect.y) / 2);
 
     // vector pointing to pixel to fetch in texture space
-    let pixel = {
+    let pixel_to_fetch = {
         let x = wrapping_sub_512(u16::from(q.x), x_start);
         let y = u16::from(q.y.wrapping_sub(y_start));
         Vector2::new(x as i32, y as i32)
     };
 
     // Vector pointing from origin to the pixel to fetch in texture space
-    let origin_to_pixel = pixel.sub(origin);
+    let origin_to_pixel = pixel_to_fetch.sub(origin);
 
     let rotated_origin_to_pixel = Vector2 {
         x: (pa * origin_to_pixel.x + pb * origin_to_pixel.y) >> 8,
         y: (pc * origin_to_pixel.x + pd * origin_to_pixel.y) >> 8,
     };
 
-    let pixel_coords = origin.add(rotated_origin_to_pixel);
+    let sprite_size = get_sprite_size(&oam_entry);
+
+    let pixel_coords = if matches!(oam_entry.attribute0.object_mode(), ObjectMode::AffineDouble) {
+        let top_left = Vector2::new(i32::from(sprite_size.x / 2), i32::from(sprite_size.y / 2));
+        let inner_origin = origin.sub(top_left);
+        inner_origin.add(rotated_origin_to_pixel)
+    } else {
+        origin.add(rotated_origin_to_pixel)
+    };
 
     if pixel_coords.x.is_negative()
         || pixel_coords.y.is_negative()
@@ -180,7 +187,7 @@ fn fetch_pixel(
     dimension: ObjectMapType,
     bg_mode: BgMode,
 ) -> Option<OutputPixel> {
-    let sprite_fine = get_pixel_coord(&oam_entry, pixel_coords, mem)?;
+    let sprite_fine = get_pixel_coord(oam_entry, pixel_coords, mem)?;
 
     // x and y coordinate within a 8x8 tile
     let fine_x = usize::from(sprite_fine.x % 8);
@@ -398,24 +405,34 @@ static SPRITE_SIZE_TABLE: [[(u8, u8); 4]; 3] = [
     [(8, 16), (8, 32), (16, 32), (32, 64)],
 ];
 
-fn get_sprite_size(oam_entry: &OamEntry) -> Vector2<u8> {
-    let size = oam_entry.attribute1.sprite_size();
+/// Bounding box size of sprite. For normal sprites this function
+/// and `get_sprite_size()` do the same thing. For affine double sprites however,
+/// the returned size is the sprite size but doubled. Example: a 64x64 sprite in doule mode
+/// has a bounding box of size 128x128, but the true sprite size is still 64x64.
+fn get_sprite_rect(oam_entry: &OamEntry) -> Vector2<u8> {
+    let mut sprite_size = get_sprite_size(oam_entry);
     let is_double = matches!(oam_entry.attribute0.object_mode(), ObjectMode::AffineDouble);
 
-    let mut sprite_size = match oam_entry.attribute0.shape() {
-        Shape::Square => SPRITE_SIZE_TABLE[0][size],
-        Shape::Wide => SPRITE_SIZE_TABLE[1][size],
-        Shape::Tall => SPRITE_SIZE_TABLE[2][size],
-    };
-
     if is_double {
-        sprite_size.0 *= 2;
-        sprite_size.1 *= 2;
+        sprite_size.x *= 2;
+        sprite_size.y *= 2;
     }
 
     Vector2::from(sprite_size)
 }
 
+fn get_sprite_size(oam_entry: &OamEntry) -> Vector2<u8> {
+    let size = oam_entry.attribute1.sprite_size();
+    let sprite_size = match oam_entry.attribute0.shape() {
+        Shape::Square => SPRITE_SIZE_TABLE[0][size],
+        Shape::Wide => SPRITE_SIZE_TABLE[1][size],
+        Shape::Tall => SPRITE_SIZE_TABLE[2][size],
+    };
+
+    Vector2::from(sprite_size)
+}
+
+/// Dimensions of sprite in tiles
 fn get_sprite_tile_size(oam_entry: &OamEntry) -> Vector2<u8> {
     let mut sprite_size = get_sprite_size(oam_entry);
     sprite_size.x /= TILE_PIXEL_SIZE;

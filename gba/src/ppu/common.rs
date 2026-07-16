@@ -63,7 +63,7 @@ pub struct OutputPixel {
     pub priority: u8,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Vector2<T: PrimInt> {
     pub x: T,
     pub y: T,
