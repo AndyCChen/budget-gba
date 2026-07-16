@@ -48,16 +48,32 @@ impl SpriteFetcher {
 
         let (oam, _) = ppu.mem.oam.as_chunks::<OAM_ENTRY_SIZE>();
         let y_coord = ppu.registers.v_counter.scanline_count();
+        let available_render_cycles = ppu.registers.lcd_control.sprite_render_cycles();
+        let mut render_cycle_count = 0;
 
         for (oam_number, oam_entry) in oam.iter().map(OamEntry::new).enumerate() {
-            let Vector2 { y: height, .. } = get_sprite_rect(&oam_entry);
-            let y_start = oam_entry.attribute0.y_coord();
+            let Vector2 {
+                x: width,
+                y: height,
+            } = get_sprite_rect(&oam_entry);
 
+            let y_start = oam_entry.attribute0.y_coord();
             let fine_y = y_coord.wrapping_sub(y_start);
             let sprite_present = fine_y < height;
             let enabled = !matches!(oam_entry.attribute0.object_mode(), ObjectMode::Disabled);
 
+            // TODO: Unsure if only enabled sprites count towards max sprites per scanline
             if sprite_present && enabled {
+                render_cycle_count += if oam_entry.attribute0.is_affine() {
+                    10 + usize::from(width) * 2
+                } else {
+                    usize::from(width)
+                };
+
+                if render_cycle_count > available_render_cycles {
+                    break;
+                }
+
                 sprite_fetcher.sprite_buffer.push(oam_number as u8);
             }
         }
@@ -408,7 +424,7 @@ static SPRITE_SIZE_TABLE: [[(u8, u8); 4]; 3] = [
 
 /// Bounding box size of sprite. For normal sprites this function
 /// and `get_sprite_size()` do the same thing. For affine double sprites however,
-/// the returned size is the sprite size but doubled. Example: a 64x64 sprite in doule mode
+/// the returned size is the sprite size but doubled. Example: a 64x64 sprite in double mode
 /// has a bounding box of size 128x128, but the true sprite size is still 64x64.
 fn get_sprite_rect(oam_entry: &OamEntry) -> Vector2<u8> {
     let mut sprite_size = get_sprite_size(oam_entry);

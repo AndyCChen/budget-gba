@@ -54,6 +54,17 @@ pub struct LcdControl {
     pub obj_window_enable: bool,
 }
 
+impl LcdControl {
+    /// Total available sprite render cycles per scanline
+    pub fn sprite_render_cycles(&self) -> usize {
+        if self.hblank_interval_free() {
+            954
+        } else {
+            1210
+        }
+    }
+}
+
 #[bitenum]
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
