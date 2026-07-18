@@ -4,7 +4,7 @@ use std::array;
 use crate::Rgb5;
 use crate::ppu::common::*;
 use crate::ppu::core::Memory;
-use crate::ppu::registers::{AffineParameters, BgControl, BgScroll};
+use crate::ppu::registers::{AffineParameters, BgControl, BgScroll, OverflowMode};
 
 use BackgroundLayerType::*;
 
@@ -124,12 +124,21 @@ pub fn fetch_affine_pixel(layer: &mut AffineBackgroundLayer, mem: &Memory) -> Op
     texel_coords.x >>= 8;
     texel_coords.y >>= 8;
 
-    if texel_coords.x.is_negative()
-        || texel_coords.y.is_negative()
-        || texel_coords.x >= i32::from(layout_pixel_size.x)
-        || texel_coords.y >= i32::from(layout_pixel_size.y)
+    let is_transparent = matches!(
+        layer.bg_control.display_area_overflow(),
+        OverflowMode::Transparent
+    );
+
+    if is_transparent
+        && (texel_coords.x.is_negative()
+            || texel_coords.y.is_negative()
+            || texel_coords.x >= i32::from(layout_pixel_size.x)
+            || texel_coords.y >= i32::from(layout_pixel_size.y))
     {
         return None;
+    } else {
+        texel_coords.x = texel_coords.x.rem_euclid(i32::from(layout_pixel_size.x));
+        texel_coords.y = texel_coords.y.rem_euclid(i32::from(layout_pixel_size.y));
     }
 
     let texel_coords = Vector2::new(texel_coords.x as usize, texel_coords.y as usize);

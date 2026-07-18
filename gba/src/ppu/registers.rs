@@ -165,10 +165,21 @@ pub struct BgControl {
     #[bits(5)]
     pub screen_base_block: u8,
 
-    __: bool,
+    #[bits(1, default = OverflowMode::Transparent)]
+    /// overflow mode for affine layers
+    pub display_area_overflow: OverflowMode,
 
     #[bits(2, default = ScreenSize::Layout0, from = ScreenSize::from_bits)]
     pub screen_size: ScreenSize,
+}
+
+#[bitenum]
+#[derive(Debug)]
+#[repr(u8)]
+pub enum OverflowMode {
+    #[fallback]
+    Transparent = 0,
+    Wraparound,
 }
 
 #[derive(Debug)]
@@ -190,7 +201,7 @@ impl ScreenSize {
             1 => ScreenSize::Layout1,
             2 => ScreenSize::Layout2,
             3 => ScreenSize::Layout3,
-            _ => panic!("Invallid screen size value"),
+            _ => panic!("Invalid screen size value"),
         }
     }
 
