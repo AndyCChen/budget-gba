@@ -4,7 +4,7 @@ use std::array;
 use crate::Rgb5;
 use crate::ppu::common::*;
 use crate::ppu::core::Memory;
-use crate::ppu::registers::{BgControl, BgScroll};
+use crate::ppu::registers::{AffineParameters, BgControl, BgScroll};
 
 use BackgroundLayerType::*;
 
@@ -37,14 +37,18 @@ impl Default for BackgroundLayerType {
 
 pub struct AffineBackgroundLayer {
     bg_control: BgControl,
+    affine_params: AffineParameters,
+    y_coord: u8,
     pixel_counter_x: u8,
 }
 
 impl AffineBackgroundLayer {
-    pub fn new(bg_control: BgControl) -> Self {
+    pub fn new(bg_control: BgControl, affine_params: AffineParameters, y_coord: u8) -> Self {
         Self {
-            bg_control,
             pixel_counter_x: 0,
+            bg_control,
+            affine_params,
+            y_coord,
         }
     }
 }
@@ -66,13 +70,13 @@ impl BackgroundLayer {
         scroll_x: BgScroll,
         scroll_y: BgScroll,
         mem: &Memory,
-        scanline_y: usize,
+        scanline_y: u8,
     ) -> Self {
         let mut layer = Self {
             bg_control,
             scroll_x,
             tile_x: (scroll_x.offset() / 8) as u8,
-            y_coord: (scanline_y + scroll_y.offset()) as u16,
+            y_coord: u16::from(scanline_y) + scroll_y.offset(),
             pixel_counter_x: 0,
             shifter_type: match bg_control.palette_type() {
                 PaletteType::ColorDepth4Bit => ShifterType4bpp {
@@ -92,8 +96,74 @@ impl BackgroundLayer {
     }
 }
 
+/// Fetch pixel from affine mode background layers.
+/// If pixel is transparent, return None,
+/// else the opaque color is wrapped in Some.
 pub fn fetch_affine_pixel(layer: &mut AffineBackgroundLayer, mem: &Memory) -> Option<OutputPixel> {
-    todo!()
+    // pixel to fetch relative to top left of screen
+    let pixel_to_fetch = Vector2::new(i32::from(layer.pixel_counter_x), i32::from(layer.y_coord));
+    let AffineParameters {
+        reference_x,
+        reference_y,
+        dx: pa,
+        dmx: pb,
+        dy: pc,
+        dmy: pd,
+    } = layer.affine_params;
+
+    layer.pixel_counter_x += 1;
+
+    let rotated_pixel_to_fetch = Vector2 {
+        x: (pa.get_int() * pixel_to_fetch.x + pb.get_int() * pixel_to_fetch.y),
+        y: (pc.get_int() * pixel_to_fetch.x + pd.get_int() * pixel_to_fetch.y),
+    };
+    let displacement = Vector2::new(reference_x.get_int(), reference_y.get_int());
+
+    let layout_pixel_size = layer.bg_control.screen_size().affine_layout_size();
+    let mut texel_coords = rotated_pixel_to_fetch.add(displacement);
+    texel_coords.x >>= 8;
+    texel_coords.y >>= 8;
+
+    if texel_coords.x.is_negative()
+        || texel_coords.y.is_negative()
+        || texel_coords.x >= i32::from(layout_pixel_size.x)
+        || texel_coords.y >= i32::from(layout_pixel_size.y)
+    {
+        return None;
+    }
+
+    let texel_coords = Vector2::new(texel_coords.x as usize, texel_coords.y as usize);
+    let layout_tile_size = layer.bg_control.screen_size().affine_layout_tile_size();
+
+    let tile_x = texel_coords.x / 8;
+    let tile_y = texel_coords.y / 8;
+
+    let char_base = usize::from(layer.bg_control.char_base_block()) * CHAR_BLOCK_SIZE;
+    let screen_base = usize::from(layer.bg_control.screen_base_block()) * SCREEN_BLOCK_SIZE;
+
+    let screen_blocks = &mem.vram[screen_base..];
+    let screen_entry_index = tile_y * usize::from(layout_tile_size.x) + tile_x;
+    let tile_index = usize::from(screen_blocks[screen_entry_index]);
+
+    let fine_x = texel_coords.x % 8;
+    let fine_y = texel_coords.y % 8;
+
+    let tiles = mem.vram[char_base..].as_chunks::<D_TILE_SIZE>().0;
+    let tile_rows = tiles[tile_index].as_chunks::<D_TILE_ROW_SIZE>().0;
+    let pixel_row = tile_rows[fine_y];
+    let color_index = usize::from(pixel_row[fine_x]);
+
+    if color_index != 0 {
+        let color_palette = mem.palette_ram[BG_PALETTE].as_chunks::<RGB5_SIZE>().0;
+        let color_bits = u16::from_le_bytes(color_palette[color_index]);
+
+        Some(OutputPixel {
+            color: Rgb5::from_u16(color_bits),
+            priority: layer.bg_control.bg_priority(),
+        })
+    } else {
+        None
+    }
 }
 
 /// Fetch pixel from normal mode background layers (non-affine).
@@ -105,7 +175,7 @@ fn fetch_normal_pixel(layer: &mut BackgroundLayer, mem: &Memory) -> Option<Outpu
     }
 
     layer.pixel_counter_x += 1;
-    let fine_x = layer.scroll_x.offset() & 7;
+    let fine_x = usize::from(layer.scroll_x.offset()) & 7;
 
     match &mut layer.shifter_type {
         ShifterType4bpp {
@@ -206,14 +276,13 @@ fn fetch_normal_tile(layer: &mut BackgroundLayer, mem: &Memory) {
     let char_base = usize::from(layer.bg_control.char_base_block()) * CHAR_BLOCK_SIZE;
     let screen_base = usize::from(layer.bg_control.screen_base_block()) * SCREEN_BLOCK_SIZE;
     let layout = layer.bg_control.screen_size();
+    let dimensions_tile = layout.layout_tile_size();
 
-    let (layout_width_tiles, layout_height_tiles) = layout.layout_tile_size();
-
-    let tile_x = usize::from(layer.tile_x % layout_width_tiles);
-    let tile_y = usize::from((layer.y_coord / 8) % u16::from(layout_height_tiles));
+    let tile_x = usize::from(layer.tile_x % dimensions_tile.x);
+    let tile_y = usize::from((layer.y_coord / 8) % u16::from(dimensions_tile.y));
 
     let screen_block_index = (tile_y / SCREEN_BLOCK_WIDTH)
-        * (usize::from(layout_width_tiles) / SCREEN_BLOCK_WIDTH)
+        * (usize::from(dimensions_tile.x) / SCREEN_BLOCK_WIDTH)
         + (tile_x / SCREEN_BLOCK_HEIGHT);
 
     let inner_screen_block_index =

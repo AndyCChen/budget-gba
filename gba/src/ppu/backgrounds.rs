@@ -41,7 +41,7 @@ pub fn draw_mode0(ppu: &mut Ppu) {
     });
 }
 
-pub fn _draw_mode1(ppu: &mut Ppu) {
+pub fn draw_mode1(ppu: &mut Ppu) {
     let enabled_backgrounds = [
         Background::new(0, ppu.registers.lcd_control.bg0_enable(), BgType::NormalBg),
         Background::new(1, ppu.registers.lcd_control.bg1_enable(), BgType::NormalBg),
@@ -251,7 +251,7 @@ fn select_tiled_backgrounds(
     ppu: &Ppu,
     enabled_backgrounds: &[Background],
 ) -> ArrayVec<[BackgroundLayerType; 4]> {
-    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+    let scanline_y = ppu.registers.v_counter.scanline_count();
     let bg_controls_iter = enabled_backgrounds.iter().copied().filter_map(
         |Background {
              bg_number,
@@ -274,7 +274,19 @@ fn select_tiled_backgrounds(
                         scanline_y,
                     )))
                 }
-                (true, BgType::AffineBg) => Some(Affine(AffineBackgroundLayer::new(bg_control))),
+                (true, BgType::AffineBg) => {
+                    let affine_params = match bg_number {
+                        2 => &ppu.registers.bg2_affine,
+                        3 => &ppu.registers.bg2_affine,
+                        _ => panic!("Only background layer 2-3 can be affine!"),
+                    };
+
+                    Some(Affine(AffineBackgroundLayer::new(
+                        bg_control,
+                        affine_params.clone(),
+                        scanline_y,
+                    )))
+                }
                 _ => None,
             }
         },
@@ -291,6 +303,7 @@ fn merge_colors(
     bg_color_layers: &[Option<OutputPixel>],
     backdrop_color: Rgb5,
 ) -> Rgb5 {
+    // grab the first opaque bg color, otherwise transparent color is used
     let bg_color = bg_color_layers
         .iter()
         .find(|pixel_type| pixel_type.is_some())

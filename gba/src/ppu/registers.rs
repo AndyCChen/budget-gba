@@ -1,7 +1,7 @@
 use bitfield_struct::bitenum;
 use register_macros::gba_register;
 
-use crate::ppu::common::PaletteType;
+use crate::ppu::common::{PaletteType, Vector2};
 
 pub struct Registers {
     pub lcd_control: LcdControl,
@@ -173,13 +173,9 @@ pub struct BgControl {
 
 #[derive(Debug)]
 pub enum ScreenSize {
-    /// One screen block
     Layout0 = 0,
-    /// Two screen blocks layed out horizontally
     Layout1,
-    /// Two screen blocks layed out verically
     Layout2,
-    /// Four screen blocks layed out as a quad
     Layout3,
 }
 
@@ -198,17 +194,41 @@ impl ScreenSize {
         }
     }
 
-    /// Screen dimmensions in tiles as (x, y) format for text mode.
-    pub fn layout_tile_size(&self) -> (u8, u8) {
+    /// Dimensions of screen in pixels for affine backgrounds.
+    pub fn affine_layout_size(&self) -> Vector2<u16> {
         match self {
-            ScreenSize::Layout0 => (32, 32),
-            ScreenSize::Layout1 => (64, 32),
-            ScreenSize::Layout2 => (32, 64),
-            ScreenSize::Layout3 => (64, 64),
+            ScreenSize::Layout0 => Vector2::new(128, 128),
+            ScreenSize::Layout1 => Vector2::new(256, 256),
+            ScreenSize::Layout2 => Vector2::new(512, 512),
+            ScreenSize::Layout3 => Vector2::new(1024, 1024),
         }
     }
 
-    /// Get number of screen blocks for the specified screen layout
+    /// Dimensions of screen in tiles for affine backgrounds.
+    pub fn affine_layout_tile_size(&self) -> Vector2<u8> {
+        match self {
+            ScreenSize::Layout0 => Vector2::new(16, 16),
+            ScreenSize::Layout1 => Vector2::new(32, 32),
+            ScreenSize::Layout2 => Vector2::new(64, 64),
+            ScreenSize::Layout3 => Vector2::new(128, 128),
+        }
+    }
+
+    /// Screen dimmensions in tiles as for normal backgrounds (non-affine).
+    pub fn layout_tile_size(&self) -> Vector2<u8> {
+        match self {
+            // One screen block
+            ScreenSize::Layout0 => Vector2::new(32, 32),
+            // Two screen blocks layed out horizontally
+            ScreenSize::Layout1 => Vector2::new(64, 32),
+            // Two screen blocks layed out verically
+            ScreenSize::Layout2 => Vector2::new(32, 64),
+            // Four screen blocks layed out as a quad
+            ScreenSize::Layout3 => Vector2::new(64, 64),
+        }
+    }
+
+    /// Get number of screen blocks for the specified screen layout for normal backgrounds.
     pub fn get_block_count(&self) -> usize {
         match self {
             ScreenSize::Layout0 => 1,
@@ -221,41 +241,56 @@ impl ScreenSize {
 #[gba_register(u16)]
 pub struct BgScroll {
     #[bits(9)]
-    pub offset: usize,
+    pub offset: u16,
 
     #[bits(7)]
     __: u8,
 }
 
-#[derive(Default)]
+/// Reference point are similar to scroll registers for normal backgrounds.
+/// Affine transformation matrix.
+/// |dx, dmx|
+/// |dy, dmy|
+#[derive(Default, Clone)]
 pub struct AffineParameters {
     pub reference_x: ReferencePoint,
     pub reference_y: ReferencePoint,
-    pub dx: InternalReferencePoint,
-    pub dmx: InternalReferencePoint,
-    pub dy: InternalReferencePoint,
-    pub dmy: InternalReferencePoint,
+    pub dx: MatrixParameter,
+    pub dmx: MatrixParameter,
+    pub dy: MatrixParameter,
+    pub dmy: MatrixParameter,
 }
 
 #[gba_register(u32)]
 pub struct ReferencePoint {
     pub fraction: u8,
 
-    #[bits(19)]
-    pub integer: u32,
-
-    pub sign: bool,
+    #[bits(20)]
+    pub integer: i32,
 
     #[bits(4)]
     __: u8,
 }
 
+impl ReferencePoint {
+    /// sign extend 28-bit sign integer to a i32.
+    pub fn get_int(&self) -> i32 {
+        const SHIFT: u32 = i32::BITS - 28;
+        ((self.into_bits() as i32) << SHIFT) >> SHIFT
+    }
+}
+
 #[gba_register(u16)]
-pub struct InternalReferencePoint {
+pub struct MatrixParameter {
     pub fraction: u8,
 
-    #[bits(7)]
-    pub integer: u8,
+    #[bits(8)]
+    pub integer: i8,
+}
 
-    pub sign: bool,
+impl MatrixParameter {
+    /// sign extended to i32
+    pub fn get_int(&self) -> i32 {
+        i32::from(self.into_bits() as i16)
+    }
 }

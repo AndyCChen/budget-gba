@@ -98,6 +98,7 @@ pub fn fetch_sprite_pixel(sprite_fetcher: &mut SpriteFetcher, mem: &Memory) -> O
 
     sprite_fetcher.pixel_counter_x += 1;
 
+    // attempt to find the first opaque sprite pixel, else outputs transparent pixel
     sprite_fetcher
         .sprite_buffer
         .iter()
