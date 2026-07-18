@@ -217,10 +217,11 @@ fn fetch_pixel(
 
     let width_tiles = u16::from(get_sprite_tile_size(oam_entry).x);
     let tile_index_base = oam_entry.attribute2.tile_index();
-    let tile_index = match dimension {
+    let tile_index = match (dimension, oam_entry.attribute0.palette_type()) {
         // treats tiles as if they are arranged in a 32 by 32 tile matrix
-        ObjectMapType::D2 => tile_index_base + usize::from(tile_y * 32 + tile_x),
-        ObjectMapType::D1 => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
+        (ObjectMapType::D2, ColorDepth4Bit) => tile_index_base + usize::from(tile_y * 32 + tile_x),
+        (ObjectMapType::D2, ColorDepth8Bit) => tile_index_base + usize::from(tile_y * 16 + tile_x),
+        (ObjectMapType::D1, _) => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
     };
 
     // The first 512 tiles cannot be displayed when rendering bitmap backgrounds.
