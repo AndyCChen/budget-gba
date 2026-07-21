@@ -40,9 +40,6 @@ pub const SCREEN_BLOCK_HEIGHT: usize = 32;
 /// screen entry is 2 bytes
 pub const SCREEN_ENTRY_SIZE: usize = 2;
 
-/// all tiles are composed of 8 by 8 pixel tiles
-pub const TILE_PIXEL_SIZE: u8 = 8;
-
 /// In the best case, up to 128 objects can be displayed on a scanline
 pub const MAX_SPRITES: usize = 128;
 

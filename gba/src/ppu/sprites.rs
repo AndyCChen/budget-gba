@@ -212,16 +212,20 @@ fn fetch_pixel(
     let fine_y = usize::from(sprite_fine.y % 8);
 
     // x and y tile coord inside sprite
-    let tile_x = sprite_fine.x / u16::from(TILE_PIXEL_SIZE);
-    let tile_y = sprite_fine.y / u16::from(TILE_PIXEL_SIZE);
+    let tile_x = usize::from(sprite_fine.x / 8);
+    let tile_y = usize::from(sprite_fine.y / 8);
 
-    let width_tiles = u16::from(get_sprite_tile_size(oam_entry).x);
-    let tile_index_base = oam_entry.attribute2.tile_index();
+    let width_tiles = usize::from(get_sprite_tile_size(oam_entry).x);
+
+    let base_tile = oam_entry.attribute2.tile_index();
     let tile_index = match (dimension, oam_entry.attribute0.palette_type()) {
-        // treats tiles as if they are arranged in a 32 by 32 tile matrix
-        (ObjectMapType::D2, ColorDepth4Bit) => tile_index_base + usize::from(tile_y * 32 + tile_x),
-        (ObjectMapType::D2, ColorDepth8Bit) => tile_index_base + usize::from(tile_y * 16 + tile_x),
-        (ObjectMapType::D1, _) => tile_index_base + usize::from(tile_y * width_tiles + tile_x),
+        (ObjectMapType::D1, ColorDepth4Bit) => base_tile + tile_y * width_tiles + tile_x,
+        (ObjectMapType::D2, ColorDepth4Bit) => base_tile + tile_y * 32 + tile_x,
+
+        // TODO: fix slightly incorrect tile index calculation
+        //  https://mgba-emu.github.io/gbatek/#obj-tile-number
+        (ObjectMapType::D1, ColorDepth8Bit) => base_tile + tile_y * width_tiles + tile_x,
+        (ObjectMapType::D2, ColorDepth8Bit) => base_tile / 2 + tile_y * 16 + tile_x,
     };
 
     // The first 512 tiles cannot be displayed when rendering bitmap backgrounds.
@@ -277,6 +281,7 @@ fn fetch_pixel(
     }
 }
 
+#[derive(Debug)]
 struct OamEntry {
     attribute0: Attribute0,
     attribute1: Attribute1,
@@ -454,8 +459,8 @@ fn get_sprite_size(oam_entry: &OamEntry) -> Vector2<u8> {
 /// Dimensions of sprite in tiles
 fn get_sprite_tile_size(oam_entry: &OamEntry) -> Vector2<u8> {
     let mut sprite_size = get_sprite_size(oam_entry);
-    sprite_size.x /= TILE_PIXEL_SIZE;
-    sprite_size.y /= TILE_PIXEL_SIZE;
+    sprite_size.x /= 8;
+    sprite_size.y /= 8;
     sprite_size
 }
 

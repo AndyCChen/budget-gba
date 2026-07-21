@@ -70,6 +70,34 @@ pub fn draw_mode1(ppu: &mut Ppu) {
     });
 }
 
+pub fn draw_mode2(ppu: &mut Ppu) {
+    let enabled_backgrounds = [
+        Background::new(2, ppu.registers.lcd_control.bg2_enable(), BgType::AffineBg),
+        Background::new(3, ppu.registers.lcd_control.bg3_enable(), BgType::AffineBg),
+    ];
+
+    let mut background_layers = select_tiled_backgrounds(ppu, &enabled_backgrounds);
+    let mut sprite_fetcher = SpriteFetcher::new(ppu);
+
+    if background_layers.is_empty() {
+        disabled_draw(ppu, sprite_fetcher);
+        return;
+    };
+
+    let backdrop_color = backdrop_color(&ppu.mem.palette_ram);
+    let scanline_y = usize::from(ppu.registers.v_counter.scanline_count());
+
+    ppu.display_buffer[scanline_y].fill_with(|| {
+        let sprite_color = fetch_sprite_pixel(&mut sprite_fetcher, &ppu.mem);
+        let bg_color_layers: ArrayVec<[Option<OutputPixel>; 4]> = background_layers
+            .iter_mut()
+            .map(|layer| layer.fetch_pixel(&ppu.mem))
+            .collect();
+
+        merge_colors(sprite_color, &bg_color_layers, backdrop_color)
+    });
+}
+
 // pub fn draw_mode2(ppu: &mut Ppu) {}
 
 pub fn draw_mode3(ppu: &mut Ppu) {
